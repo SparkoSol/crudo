@@ -1,14 +1,17 @@
 import { Link, useNavigate } from "react-router-dom";
+import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardFooter } from "@/components/ui/card";
 import { FormField } from "@/components/ui/form";
 
-import { Mail, Lock, User } from "lucide-react";
-import authUIBgImage from "../../assets/auth_pages_bg.jpg";
+import { Mail, Lock, User, Eye, EyeOff } from "lucide-react";
+import toast from "react-hot-toast";
+import { AuthImageSection } from "@/components/auth";
 
 import { registerSchema } from "@/schemas/auth.schemas";
 import { signupSupabase } from "@/services/SignUpSupabase";
@@ -17,6 +20,7 @@ type RegisterFormValues = z.infer<typeof registerSchema>;
 
 export default function Register() {
   const navigate = useNavigate();
+  const [showPassword, setShowPassword] = useState(false);
 
   const form = useForm<RegisterFormValues>({
     resolver: zodResolver(registerSchema),
@@ -36,10 +40,16 @@ export default function Register() {
   const onSubmit = async (data: RegisterFormValues) => {
     try {
       await signupSupabase(data);
+      toast.success(
+        "Account created successfully! Please check your email to verify your account."
+      );
       form.reset();
       navigate("/auth/login");
     } catch (err: any) {
-      alert(err.message);
+      console.error("Signup error:", err);
+      const errorMessage =
+        err?.message || "Failed to create account. Please try again.";
+      toast.error(errorMessage);
     }
   };
 
@@ -163,11 +173,24 @@ export default function Register() {
                     <Lock className="absolute left-3 top-3.5 h-5 w-5 text-gray-400" />
                     <Input
                       {...field}
-                      type="password"
-                      className="pl-10 h-12 border-gray-300 rounded-lg"
+                      type={showPassword ? "text" : "password"}
+                      className="pl-10 pr-10 h-12 border-gray-300 rounded-lg"
                       placeholder="••••••••"
                       disabled={isSubmitting}
                     />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-3 top-3.5 text-gray-400 hover:text-gray-600 focus:outline-none disabled:opacity-50"
+                      tabIndex={-1}
+                      disabled={isSubmitting}
+                    >
+                      {showPassword ? (
+                        <EyeOff className="h-5 w-5" />
+                      ) : (
+                        <Eye className="h-5 w-5" />
+                      )}
+                    </button>
                   </div>
                   {fieldState.error && (
                     <p className="text-red-500 text-sm mt-1">
@@ -201,24 +224,10 @@ export default function Register() {
           </CardFooter>
         </div>
 
-        {/* RIGHT IMAGE */}
-        <div
-          className="hidden md:block relative"
-          style={{
-            backgroundImage: `url(${authUIBgImage})`,
-            backgroundSize: "cover",
-            backgroundPosition: "center",
-          }}
-        >
-          <div className="absolute inset-0 bg-blue-500/40 p-10 flex flex-col justify-end">
-            <h2 className="text-white text-3xl font-bold leading-snug">
-              Join VoiceFlow and boost your sales insights
-            </h2>
-            <p className="text-white/80 mt-4 text-sm">
-              Automate data collection and generate smart reports effortlessly.
-            </p>
-          </div>
-        </div>
+        <AuthImageSection
+          title="Join VoiceFlow and boost your sales insights"
+          description="Automate data collection and generate smart reports effortlessly."
+        />
       </Card>
     </div>
   );

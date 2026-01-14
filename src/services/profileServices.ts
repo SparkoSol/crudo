@@ -1,22 +1,30 @@
 import { supabase } from "../lib/supabase/client";
 import type { Profile, UpdateProfileData } from "../types/profile.types";
 
-export const getProfile = async (): Promise<Profile | null> => {
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
+export const getProfile = async (userId?: string): Promise<Profile | null> => {
+  let userIdToUse = userId;
 
-  if (!session?.user) {
-    throw new Error("No authenticated user");
+  if (!userIdToUse) {
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+
+    if (!session?.user) {
+      throw new Error("No authenticated user");
+    }
+    userIdToUse = session.user.id;
   }
 
   const { data, error } = await supabase
     .from("profiles")
     .select("*")
-    .eq("id", session.user.id)
+    .eq("id", userIdToUse)
     .single();
 
   if (error) {
+    if (error.code === 'PGRST116') {
+      return null;
+    }
     throw error;
   }
 

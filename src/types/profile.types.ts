@@ -3,6 +3,7 @@ export interface Profile {
   role: 'manager' | 'sales_representative';
   manager_id: string | null;
   full_name: string | null;
+  company_name: string | null;
   email: string;
   created_at: string;
   updated_at: string;

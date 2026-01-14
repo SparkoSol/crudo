@@ -1,3 +1,5 @@
+import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardFooter } from "@/components/ui/card";
 import { FormField } from "@/components/ui/form";
@@ -5,20 +7,43 @@ import { Input } from "@/components/ui/input";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Mail, Lock } from "lucide-react";
+import { Mail, Lock, Loader2, Eye, EyeOff } from "lucide-react";
 import { Link } from "react-router-dom";
-import authUIBgImage from "../../assets/auth_pages_bg.jpg";
 import { loginSchema } from "@/schemas/authSchemas";
+import { AuthImageSection } from "@/components/auth";
+import { signIn } from "@/services/authServices";
+import toast from "react-hot-toast";
+
 type LoginFormValues = z.infer<typeof loginSchema>;
+
 export default function LoginForm() {
+  const navigate = useNavigate();
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+
   const form = useForm<LoginFormValues>({
     resolver: zodResolver(loginSchema),
     defaultValues: { email: "", password: "" },
   });
 
-  const onSubmit = (data: LoginFormValues) => {
-    console.log(data);
-    form.reset();
+  const onSubmit = async (data: LoginFormValues) => {
+    setIsSubmitting(true);
+    try {
+      await signIn({
+        email: data.email,
+        password: data.password,
+      });
+
+      toast.success("Login successful!");
+      navigate("/", { replace: true });
+    } catch (error: any) {
+      console.error("Login error:", error);
+      const errorMessage =
+        error?.message || "Invalid email or password. Please try again.";
+      toast.error(errorMessage);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -82,10 +107,22 @@ export default function LoginForm() {
                     <Lock className="absolute left-3 top-3.5 h-5 w-5 text-gray-400" />
                     <Input
                       {...field}
-                      type="password"
-                      className="pl-10 h-12 border-gray-300 rounded-lg"
+                      type={showPassword ? "text" : "password"}
+                      className="pl-10 pr-10 h-12 border-gray-300 rounded-lg"
                       placeholder="••••••••"
                     />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-3 top-3.5 text-gray-400 hover:text-gray-600 focus:outline-none"
+                      tabIndex={-1}
+                    >
+                      {showPassword ? (
+                        <EyeOff className="h-5 w-5" />
+                      ) : (
+                        <Eye className="h-5 w-5" />
+                      )}
+                    </button>
                   </div>
                   {fieldState.error && (
                     <p className="text-red-500 text-sm mt-1">
@@ -107,10 +144,18 @@ export default function LoginForm() {
 
             <Button
               type="submit"
+              disabled={isSubmitting}
               className="w-full h-12 bg-gradient-to-r from-brand-primary-600 to-brand-primary-700
-               hover:from-brand-primary-700 hover:to-brand-primary-800 text-white font-medium rounded-lg shadow-md"
+               hover:from-brand-primary-700 hover:to-brand-primary-800 text-white font-medium rounded-lg shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              Sign in
+              {isSubmitting ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin mr-2 inline" />
+                  Signing in...
+                </>
+              ) : (
+                "Sign in"
+              )}
             </Button>
           </form>
 
@@ -127,24 +172,10 @@ export default function LoginForm() {
           </CardFooter>
         </div>
 
-        <div
-          className="hidden md:block relative"
-          style={{
-            backgroundImage: `url(${authUIBgImage})`,
-            backgroundSize: "cover",
-            backgroundPosition: "center",
-          }}
-        >
-          <div className="absolute inset-0 bg-blue-500/40 p-10 flex flex-col justify-end">
-            <h2 className="text-white text-3xl font-bold leading-snug">
-              Transform sales conversations into actionable insights
-            </h2>
-            <p className="text-white/80 mt-4 text-sm">
-              VoiceFlow helps your sales team capture field data automatically
-              and turn it into smart reports.
-            </p>
-          </div>
-        </div>
+        <AuthImageSection
+          title="Transform sales conversations into actionable insights"
+          description="VoiceFlow helps your sales team capture field data automatically and turn it into smart reports."
+        />
       </Card>
     </div>
   );

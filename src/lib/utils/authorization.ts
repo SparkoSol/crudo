@@ -7,7 +7,6 @@ export const hasRole = (user: User | null | undefined, role: Role): boolean => {
 };
 
 export const isManager = (user: User | null | undefined): boolean => {
-  console.log("User", user);
   return hasRole(user, Role.MANAGER);
 };
 
