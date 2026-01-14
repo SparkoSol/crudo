@@ -9,7 +9,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { profileSchema, type ProfileFormValues } from '@/schemas/settings.schemas';
 import toast from 'react-hot-toast';
-import { User, Mail, Save, Loader2, Shield, Calendar, UserCircle } from 'lucide-react';
+import { User, Mail, Save, Loader2, Shield, Calendar, UserCircle, Building2 } from 'lucide-react';
 import type { Profile } from '@/types/profile.types';
 import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
 
@@ -154,6 +154,27 @@ export function ProfileInformation() {
               </div>
               <p className="text-xs text-gray-500 mt-1">
                 Email cannot be changed
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="company_name" className="text-sm font-medium">
+                Company Name
+              </Label>
+              <div className="relative">
+                <Building2 className="absolute left-3 top-3 h-5 w-5 text-gray-400" />
+                <Input
+                  id="company_name"
+                  type="text"
+                  value={profile?.company_name || ''}
+                  className="pl-10 h-11 bg-gray-50 cursor-not-allowed"
+                  placeholder="Company name"
+                  disabled
+                  readOnly
+                />
+              </div>
+              <p className="text-xs text-gray-500 mt-1">
+                Company name cannot be changed
               </p>
             </div>
           </div>
