@@ -7,7 +7,7 @@ import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Mail, Lock } from "lucide-react";
 import { Link } from "react-router-dom";
-
+import authUIBgImage from "../../assets/auth_pages_bg.jpg";
 const loginSchema = z.object({
   email: z.string().nonempty("Email is required").email("Invalid email"),
   password: z
@@ -32,7 +32,7 @@ export default function LoginForm() {
       <Card className="w-full max-w-5xl shadow-lg rounded-2xl overflow-hidden grid grid-cols-1 md:grid-cols-2">
         <div className="p-10 bg-white flex flex-col justify-center">
           <div className="flex items-center gap-3 mb-8">
-            <div className="w-10 h-10 rounded-lg bg-blue-600 text-white flex items-center justify-center font-bold text-lg">
+            <div className="w-10 h-10 rounded-lg bg-blue-500 text-white flex items-center justify-center font-bold text-lg">
               V
             </div>
             <span className="text-2xl font-semibold text-gray-800">
@@ -102,7 +102,7 @@ export default function LoginForm() {
             <div className="flex justify-end">
               <Link
                 to="/auth/forgot-password"
-                className="text-sm text-blue-600 hover:underline"
+                className="text-sm text-blue-500 hover:underline"
               >
                 Forgot password?
               </Link>
@@ -110,7 +110,7 @@ export default function LoginForm() {
 
             <Button
               type="submit"
-              className="w-full h-12 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg"
+              className="w-full h-12 bg-blue-500 hover:bg-blue-400 text-white font-medium rounded-lg"
             >
               Sign in
             </Button>
@@ -121,7 +121,7 @@ export default function LoginForm() {
               Don't have an account?{" "}
               <Link
                 to="/auth/register"
-                className="text-blue-600 font-medium hover:underline"
+                className="text-blue-500 font-medium hover:underline"
               >
                 Create an account
               </Link>
@@ -132,8 +132,7 @@ export default function LoginForm() {
         <div
           className="hidden md:block relative"
           style={{
-            backgroundImage:
-              "url(https://images.unsplash.com/photo-1521737604893-d14cc237f11d)",
+            backgroundImage: `url(${authUIBgImage})`,
             backgroundSize: "cover",
             backgroundPosition: "center",
           }}
