@@ -1,4 +1,5 @@
 import { Navigate, useLocation } from "react-router-dom";
+import { useEffect, useState } from "react";
 import { useAuth } from "../contexts/AuthContext";
 import { Loading } from "../components/Loading";
 import { ROUTES } from "./routes";
@@ -14,8 +15,21 @@ export const RoleBasedRoute = ({
   children,
   allowedRoles,
 }: RoleBasedRouteProps) => {
-  const { isAuthenticated, user, isLoading } = useAuth();
+  const { isAuthenticated, user, profile, isLoading, isProfileLoading } =
+    useAuth();
   const location = useLocation();
+  const [profileWaitTimeout, setProfileWaitTimeout] = useState(false);
+
+  // useEffect(() => {
+  //   if (isProfileLoading && !profile) {
+  //     const timer = setTimeout(() => {
+  //       setProfileWaitTimeout(true);
+  //     }, 3000);
+  //     return () => clearTimeout(timer);
+  //   } else {
+  //     setProfileWaitTimeout(false);
+  //   }
+  // }, [isProfileLoading, profile]);
 
   if (isLoading) {
     return <Loading message="Checking authentication..." fullScreen />;
@@ -23,6 +37,10 @@ export const RoleBasedRoute = ({
 
   if (!isAuthenticated) {
     return <Navigate to={ROUTES.LOGIN} state={{ from: location }} replace />;
+  }
+
+  if (isProfileLoading && !profile) {
+    return <Loading message="Loading profile..." fullScreen />;
   }
 
   if (!user || !hasAnyRole(user, allowedRoles)) {

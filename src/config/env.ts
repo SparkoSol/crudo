@@ -13,28 +13,32 @@ const getApiBaseUrl = () => {
 };
 
 const getReduxSecretKey = () => {
-  const key = import.meta.env.VITE_REDUX_SECRET_KEY || "my-super-secret-key-change-in-production";
-  
+  const key =
+    import.meta.env.VITE_REDUX_SECRET_KEY ||
+    "my-super-secret-key-change-in-production";
+
   if (key.length < 16) {
     console.warn(
       "VITE_REDUX_SECRET_KEY should be at least 16 characters long for security."
     );
   }
-  
+
   if (isProduction && key === "my-super-secret-key-change-in-production") {
     console.error(
       "WARNING: Using default Redux secret key in production! " +
         "Please set VITE_REDUX_SECRET_KEY to a secure value."
     );
   }
-  
+
   return key;
 };
 
 const getSupabaseUrl = () => {
   const url = import.meta.env.VITE_SUPABASE_URL;
   if (!url) {
-    throw new Error("VITE_SUPABASE_URL is required. Please set it in your .env file.");
+    throw new Error(
+      "VITE_SUPABASE_URL is required. Please set it in your .env file."
+    );
   }
   return url;
 };
@@ -42,7 +46,25 @@ const getSupabaseUrl = () => {
 const getSupabaseAnonKey = () => {
   const key = import.meta.env.VITE_SUPABASE_ANON_KEY;
   if (!key) {
-    throw new Error("VITE_SUPABASE_ANON_KEY is required. Please set it in your .env file.");
+    throw new Error(
+      "VITE_SUPABASE_ANON_KEY is required. Please set it in your .env file."
+    );
+  }
+  return key;
+};
+
+const getSupabaseServiceRoleKey = () => {
+  const key = import.meta.env.VITE_SUPABASE_SERVICE_ROLE_KEY;
+  if (!key) {
+    throw new Error(
+      "VITE_SUPABASE_SERVICE_ROLE_KEY is required. Please set it in your .env file."
+    );
+  }
+  if (isProduction) {
+    console.warn(
+      "WARNING: Service role key is exposed in the frontend. " +
+        "For production, consider using a backend API endpoint instead."
+    );
   }
   return key;
 };
@@ -52,13 +74,20 @@ export const env = {
   reduxSecretKey: getReduxSecretKey(),
   supabaseUrl: getSupabaseUrl(),
   supabaseAnonKey: getSupabaseAnonKey(),
+  supabaseServiceRoleKey: getSupabaseServiceRoleKey(),
   mode,
   isDevelopment,
   isProduction,
   isStaging,
 } as const;
 
-export const { apiBaseUrl, reduxSecretKey, supabaseUrl, supabaseAnonKey } = env;
+export const {
+  apiBaseUrl,
+  reduxSecretKey,
+  supabaseUrl,
+  supabaseAnonKey,
+  supabaseServiceRoleKey,
+} = env;
 export { mode, isDevelopment, isProduction, isStaging };
 
 export default env;

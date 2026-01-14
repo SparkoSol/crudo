@@ -1,150 +1,233 @@
-import { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
-import { signUp } from '../../services/authServices';
-import { useAuth } from '../../contexts/AuthContext';
-import toast from 'react-hot-toast';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Loader2, Mail, Lock, User } from 'lucide-react';
+import { Link, useNavigate } from "react-router-dom";
+import { useState } from "react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
+
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Card, CardFooter } from "@/components/ui/card";
+import { FormField } from "@/components/ui/form";
+
+import { Mail, Lock, User, Eye, EyeOff } from "lucide-react";
+import toast from "react-hot-toast";
+import { AuthImageSection } from "@/components/auth";
+
+import { registerSchema } from "@/schemas/auth.schemas";
+import { signupSupabase } from "@/services/SignUpSupabase";
+
+type RegisterFormValues = z.infer<typeof registerSchema>;
 
 export default function Register() {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [name, setName] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const navigate = useNavigate();
-  const { setUser } = useAuth();
+  const [showPassword, setShowPassword] = useState(false);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsLoading(true);
-    setError(null);
-    
+  const form = useForm<RegisterFormValues>({
+    resolver: zodResolver(registerSchema),
+    defaultValues: {
+      full_name: "",
+      company_name: "",
+      email: "",
+      password: "",
+    },
+  });
+
+  const {
+    handleSubmit,
+    formState: { isSubmitting },
+  } = form;
+
+  const onSubmit = async (data: RegisterFormValues) => {
     try {
-      const result = await signUp({ email, password, name: name || undefined });
-      setUser(result.user);
-      toast.success('Registration successful!');
-      navigate('/', { replace: true });
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Registration failed';
-      setError(errorMessage);
+      await signupSupabase(data);
+      toast.success(
+        "Account created successfully! Please check your email to verify your account."
+      );
+      form.reset();
+      navigate("/auth/login");
+    } catch (err: any) {
+      console.error("Signup error:", err);
+      const errorMessage =
+        err?.message || "Failed to create account. Please try again.";
       toast.error(errorMessage);
-    } finally {
-      setIsLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background via-background to-muted/20 p-4">
-      <Card className="w-full max-w-md shadow-lg">
-        <CardHeader className="space-y-3 text-center">
-          <div className="flex justify-center">
-            <div className="h-16 w-16 rounded-full bg-primary/10 flex items-center justify-center">
-              <User className="h-8 w-8 text-primary" />
+    <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+      <Card className="w-full max-w-5xl shadow-lg rounded-2xl overflow-hidden grid grid-cols-1 md:grid-cols-2">
+        {/* LEFT */}
+        <div className="p-10 bg-white flex flex-col justify-center">
+          <div className="flex items-center gap-3 mb-8">
+            <div
+              className="w-10 h-10 rounded-lg bg-gradient-to-br from-brand-primary-600
+             to-brand-primary-700 text-white flex items-center justify-center font-bold text-lg shadow-md"
+            >
+              V
             </div>
+            <span className="text-2xl font-semibold text-gray-800">
+              VoiceFlow
+            </span>
           </div>
-          <CardTitle className="text-3xl font-bold tracking-tight">Create an account</CardTitle>
-          <CardDescription className="text-base">
-            Enter your information to get started
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={handleSubmit} className="space-y-4">
-            {error && (
-              <Alert variant="destructive">
-                <AlertDescription>
-                  {error}
-                </AlertDescription>
-              </Alert>
-            )}
-            
-            <div className="space-y-2">
-              <Label htmlFor="name">Full Name</Label>
-              <div className="relative">
-                <User className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  id="name"
-                  name="name"
-                  type="text"
-                  placeholder="John Doe"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  className="pl-10"
-                  disabled={isLoading}
-                />
-              </div>
-              <p className="text-xs text-muted-foreground">Optional</p>
-            </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="email">Email address</Label>
-              <div className="relative">
-                <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  id="email"
-                  name="email"
-                  type="email"
-                  autoComplete="email"
-                  required
-                  placeholder="name@example.com"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="pl-10"
-                  disabled={isLoading}
-                />
-              </div>
-            </div>
+          <h1 className="sm:text-3xl text-2xl font-bold text-gray-900 mb-2">
+            Create your account
+          </h1>
+          <p className="text-gray-500 mb-8">
+            Sign up to start managing your sales reports
+          </p>
 
-            <div className="space-y-2">
-              <Label htmlFor="password">Password</Label>
-              <div className="relative">
-                <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  id="password"
-                  name="password"
-                  type="password"
-                  autoComplete="new-password"
-                  required
-                  placeholder="Create a strong password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="pl-10"
-                  disabled={isLoading}
-                />
-              </div>
-            </div>
+          <form onSubmit={handleSubmit(onSubmit)} className="space-y-3">
+            {/* FULL NAME */}
+            <FormField
+              name="full_name"
+              control={form.control}
+              render={({ field, fieldState }) => (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Full Name
+                  </label>
+                  <div className="relative">
+                    <User className="absolute left-3 top-3.5 h-5 w-5 text-gray-400" />
+                    <Input
+                      {...field}
+                      className="pl-10 h-12 border-gray-300 rounded-lg"
+                      placeholder="John Doe"
+                      disabled={isSubmitting}
+                    />
+                  </div>
+                  {fieldState.error && (
+                    <p className="text-red-500 text-sm mt-1">
+                      {fieldState.error.message}
+                    </p>
+                  )}
+                </div>
+              )}
+            />
+
+            {/* COMPANY NAME */}
+            <FormField
+              name="company_name"
+              control={form.control}
+              render={({ field, fieldState }) => (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Company Name
+                  </label>
+                  <div className="relative">
+                    <User className="absolute left-3 top-3.5 h-5 w-5 text-gray-400" />
+                    <Input
+                      {...field}
+                      className="pl-10 h-12 border-gray-300 rounded-lg"
+                      placeholder="Udev"
+                      disabled={isSubmitting}
+                    />
+                  </div>
+                  {fieldState.error && (
+                    <p className="text-red-500 text-sm mt-1">
+                      {fieldState.error.message}
+                    </p>
+                  )}
+                </div>
+              )}
+            />
+
+            {/* EMAIL */}
+            <FormField
+              name="email"
+              control={form.control}
+              render={({ field, fieldState }) => (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Email
+                  </label>
+                  <div className="relative">
+                    <Mail className="absolute left-3 top-3.5 h-5 w-5 text-gray-400" />
+                    <Input
+                      {...field}
+                      type="email"
+                      className="pl-10 h-12 border-gray-300 rounded-lg"
+                      placeholder="you@company.com"
+                      disabled={isSubmitting}
+                    />
+                  </div>
+                  {fieldState.error && (
+                    <p className="text-red-500 text-sm mt-1">
+                      {fieldState.error.message}
+                    </p>
+                  )}
+                </div>
+              )}
+            />
+
+            {/* PASSWORD */}
+            <FormField
+              name="password"
+              control={form.control}
+              render={({ field, fieldState }) => (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Password
+                  </label>
+                  <div className="relative">
+                    <Lock className="absolute left-3 top-3.5 h-5 w-5 text-gray-400" />
+                    <Input
+                      {...field}
+                      type={showPassword ? "text" : "password"}
+                      className="pl-10 pr-10 h-12 border-gray-300 rounded-lg"
+                      placeholder="••••••••"
+                      disabled={isSubmitting}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-3 top-3.5 text-gray-400 hover:text-gray-600 focus:outline-none disabled:opacity-50"
+                      tabIndex={-1}
+                      disabled={isSubmitting}
+                    >
+                      {showPassword ? (
+                        <EyeOff className="h-5 w-5" />
+                      ) : (
+                        <Eye className="h-5 w-5" />
+                      )}
+                    </button>
+                  </div>
+                  {fieldState.error && (
+                    <p className="text-red-500 text-sm mt-1">
+                      {fieldState.error.message}
+                    </p>
+                  )}
+                </div>
+              )}
+            />
 
             <Button
               type="submit"
-              className="w-full"
-              disabled={isLoading}
+              className="w-full h-12 bg-gradient-to-r from-brand-primary-600 to-brand-primary-700
+               hover:from-brand-primary-700 hover:to-brand-primary-800 text-white font-medium rounded-lg shadow-md"
+              disabled={isSubmitting}
             >
-              {isLoading ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Creating account...
-                </>
-              ) : (
-                'Create account'
-              )}
+              {isSubmitting ? "Creating account..." : "Create account"}
             </Button>
           </form>
-        </CardContent>
-        <CardFooter className="flex flex-col space-y-4">
-          <div className="text-sm text-center text-muted-foreground">
-            Already have an account?{' '}
-            <Link
-              to="/auth/login"
-              className="font-medium text-primary hover:underline"
-            >
-              Sign in
-            </Link>
-          </div>
-        </CardFooter>
+
+          <CardFooter className="flex justify-center items-center mt-3 px-0">
+            <p className="text-center text-gray-600 text-sm">
+              Already have an account?{" "}
+              <Link
+                to="/auth/login"
+                className="text-brand-primary-600 font-medium hover:underline"
+              >
+                Sign in
+              </Link>
+            </p>
+          </CardFooter>
+        </div>
+
+        <AuthImageSection
+          title="Join VoiceFlow and boost your sales insights"
+          description="Automate data collection and generate smart reports effortlessly."
+        />
       </Card>
     </div>
   );
