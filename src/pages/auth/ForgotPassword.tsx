@@ -25,7 +25,7 @@ export default function ForgotPassword() {
       <Card className="w-full max-w-md shadow-lg rounded-2xl p-8 bg-white">
         <Link
           to="/auth/login"
-          className="flex items-center gap-2 text-sm text-gray-600 hover:text-blue-500 mb-6"
+          className="flex items-center gap-2 text-sm text-gray-600 hover:text-brand-primary-600 mb-6"
         >
           <ArrowLeft size={18} />
           Back to Login
@@ -67,7 +67,7 @@ export default function ForgotPassword() {
 
           <Button
             type="submit"
-            className="w-full h-12 bg-blue-500 hover:bg-blue-400 text-white rounded-lg"
+            className="w-full h-12 bg-gradient-to-r from-brand-primary-600 to-brand-primary-700 hover:from-brand-primary-700 hover:to-brand-primary-800 text-white rounded-lg shadow-md"
           >
             Submit
           </Button>
@@ -77,7 +77,7 @@ export default function ForgotPassword() {
           Remember your password?{" "}
           <Link
             to="/auth/login"
-            className="text-blue-500 font-medium hover:underline"
+            className="text-brand-primary-600 font-medium hover:underline"
           >
             Login
           </Link>

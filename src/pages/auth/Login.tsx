@@ -26,7 +26,10 @@ export default function LoginForm() {
       <Card className="w-full max-w-5xl shadow-lg rounded-2xl overflow-hidden grid grid-cols-1 md:grid-cols-2">
         <div className="p-10 bg-white flex flex-col justify-center">
           <div className="flex items-center gap-3 mb-8">
-            <div className="w-10 h-10 rounded-lg bg-blue-500 text-white flex items-center justify-center font-bold text-lg">
+            <div
+              className="w-10 h-10 rounded-lg bg-gradient-to-br from-brand-primary-600
+             to-brand-primary-700 text-white flex items-center justify-center font-bold text-lg shadow-md"
+            >
               V
             </div>
             <span className="text-2xl font-semibold text-gray-800">
@@ -96,7 +99,7 @@ export default function LoginForm() {
             <div className="flex justify-end">
               <Link
                 to="/auth/forgot-password"
-                className="text-sm text-blue-500 hover:underline"
+                className="text-sm text-brand-primary-600 hover:underline"
               >
                 Forgot password?
               </Link>
@@ -104,7 +107,8 @@ export default function LoginForm() {
 
             <Button
               type="submit"
-              className="w-full h-12 bg-blue-500 hover:bg-blue-400 text-white font-medium rounded-lg"
+              className="w-full h-12 bg-gradient-to-r from-brand-primary-600 to-brand-primary-700
+               hover:from-brand-primary-700 hover:to-brand-primary-800 text-white font-medium rounded-lg shadow-md"
             >
               Sign in
             </Button>
@@ -115,7 +119,7 @@ export default function LoginForm() {
               Don't have an account?{" "}
               <Link
                 to="/auth/register"
-                className="text-blue-500 font-medium hover:underline"
+                className="text-brand-primary-600 font-medium hover:underline"
               >
                 Create an account
               </Link>
@@ -131,7 +135,7 @@ export default function LoginForm() {
             backgroundPosition: "center",
           }}
         >
-          <div className="absolute inset-0 bg-blue-900/70 p-10 flex flex-col justify-end">
+          <div className="absolute inset-0 bg-blue-500/40 p-10 flex flex-col justify-end">
             <h2 className="text-white text-3xl font-bold leading-snug">
               Transform sales conversations into actionable insights
             </h2>

@@ -1,6 +1,5 @@
 import { Link, useNavigate } from "react-router-dom";
 import { useForm } from "react-hook-form";
-import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 
 import { Button } from "@/components/ui/button";
@@ -11,8 +10,8 @@ import { FormField } from "@/components/ui/form";
 import { Mail, Lock, User } from "lucide-react";
 import authUIBgImage from "../../assets/auth_pages_bg.jpg";
 
-import { supabase } from "../../lib/supabaseClient";
 import { registerSchema } from "@/schemas/auth.schemas";
+import { signupSupabase } from "@/services/SignUpSupabase";
 
 type RegisterFormValues = z.infer<typeof registerSchema>;
 
@@ -33,29 +32,10 @@ export default function Register() {
     handleSubmit,
     formState: { isSubmitting },
   } = form;
-  // Submit
+
   const onSubmit = async (data: RegisterFormValues) => {
     try {
-      //  Supabase Auth Signup
-      const { data: authData, error } = await supabase.auth.signUp({
-        email: data.email,
-        password: data.password,
-      });
-      if (error) throw error;
-      const user = authData.user;
-      if (!user) return;
-      //  Insert profile
-      const { error: profileError } = await supabase.from("profiles").insert({
-        id: user.id,
-        full_name: data.full_name,
-        company_name: data.company_name,
-        email: data.email,
-        role: "manager",
-        manager_id: null,
-      });
-
-      if (profileError) throw profileError;
-
+      await signupSupabase(data);
       form.reset();
       navigate("/auth/login");
     } catch (err: any) {
@@ -68,7 +48,6 @@ export default function Register() {
       <Card className="w-full max-w-5xl shadow-lg rounded-2xl overflow-hidden grid grid-cols-1 md:grid-cols-2">
         {/* LEFT */}
         <div className="p-10 bg-white flex flex-col justify-center">
-          {/* LOGO */}
           <div className="flex items-center gap-3 mb-8">
             <div
               className="w-10 h-10 rounded-lg bg-gradient-to-br from-brand-primary-600
