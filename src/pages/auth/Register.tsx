@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardFooter } from "@/components/ui/card";
 import { FormField } from "@/components/ui/form";
+import authUIBgImage from "../../assets/auth_pages_bg.jpg";
 
 import { Mail, Lock, User } from "lucide-react";
 
@@ -56,7 +57,7 @@ export default function Register() {
       <Card className="w-full max-w-5xl shadow-xl rounded-2xl overflow-hidden grid grid-cols-1 md:grid-cols-2">
         <div className="p-10 bg-white flex flex-col justify-center">
           <div className="flex items-center gap-3 mb-8">
-            <div className="w-10 h-10 rounded-lg bg-blue-600 text-white flex items-center justify-center font-bold text-lg">
+            <div className="w-10 h-10 rounded-lg bg-blue-500 text-white flex items-center justify-center font-bold text-lg">
               V
             </div>
             <span className="text-2xl font-semibold text-gray-800">
@@ -155,7 +156,7 @@ export default function Register() {
 
             <Button
               type="submit"
-              className="w-full h-12 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg"
+              className="w-full h-12 bg-blue-500 hover:bg-blue-400 text-white font-medium rounded-lg"
               disabled={isSubmitting}
             >
               {isSubmitting ? "Creating account..." : "Create account"}
@@ -167,7 +168,7 @@ export default function Register() {
               Already have an account?{" "}
               <Link
                 to="/auth/login"
-                className="font-medium text-blue-600 hover:underline"
+                className="font-medium text-blue-500 hover:underline"
               >
                 Sign in
               </Link>
@@ -178,8 +179,8 @@ export default function Register() {
         <div
           className="hidden md:block relative"
           style={{
-            backgroundImage:
-              "url(https://images.unsplash.com/photo-1521737604893-d14cc237f11d)",
+            backgroundImage: `url(${authUIBgImage})`,
+
             backgroundSize: "cover",
             backgroundPosition: "center",
           }}
