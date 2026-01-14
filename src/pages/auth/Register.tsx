@@ -56,7 +56,7 @@ export default function Register() {
       <Card className="w-full max-w-5xl shadow-xl rounded-2xl overflow-hidden grid grid-cols-1 md:grid-cols-2">
         <div className="p-10 bg-white flex flex-col justify-center">
           <div className="flex items-center gap-3 mb-8">
-            <div className="w-10 h-10 rounded-lg bg-blue-600 text-white flex items-center justify-center font-bold text-lg">
+            <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-brand-primary-600 to-brand-primary-700 text-white flex items-center justify-center font-bold text-lg shadow-md">
               V
             </div>
             <span className="text-2xl font-semibold text-gray-800">
@@ -155,7 +155,7 @@ export default function Register() {
 
             <Button
               type="submit"
-              className="w-full h-12 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg"
+              className="w-full h-12 bg-gradient-to-r from-brand-primary-600 to-brand-primary-700 hover:from-brand-primary-700 hover:to-brand-primary-800 text-white font-medium rounded-lg shadow-md"
               disabled={isSubmitting}
             >
               {isSubmitting ? "Creating account..." : "Create account"}
@@ -167,7 +167,7 @@ export default function Register() {
               Already have an account?{" "}
               <Link
                 to="/auth/login"
-                className="font-medium text-blue-600 hover:underline"
+                className="font-medium text-brand-primary-600 hover:underline"
               >
                 Sign in
               </Link>

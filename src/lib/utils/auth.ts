@@ -33,9 +33,6 @@ export const getAuthToken = (): string | null => {
 };
 
 
-/**
- * Remove auth token - signs out from Supabase
- */
 export const removeAuthToken = async (): Promise<void> => {
   cachedToken = null;
   tokenCacheTime = 0;

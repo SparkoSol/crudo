@@ -3,21 +3,21 @@ import { type RouteObject } from "react-router-dom";
 import { Layout } from "../components/Layout";
 import { ProtectedRoute } from "./ProtectedRoute";
 import { PublicRoute } from "./PublicRoute";
-import { RoleBasedRoute } from "./RoleBasedRoute";
-import { Role } from "../types/auth.types";
 import ForgetPassword from "@/pages/auth/ForgotPassword";
 
-const Home = lazy(() => import("../pages/Home"));
-const RTKQueryTest = lazy(() => import("../pages/RTKQueryTest"));
-const ManagerDashboard = lazy(() => import("../pages/ManagerDashboard"));
+const Dashboard = lazy(() => import("../pages/Dashboard"));
+const Settings = lazy(() => import("../pages/Settings"));
+const Salespeople = lazy(() => import("../pages/Salespeople"));
+const Templates = lazy(() => import("../pages/Templates"));
 const Login = lazy(() => import("../pages/auth/Login"));
 const Register = lazy(() => import("../pages/auth/Register"));
 const NotFound = lazy(() => import("../pages/NotFound"));
 
 export const ROUTES = {
-  HOME: "/",
-  RTK_TEST: "/rtk-test",
-  MANAGER_DASHBOARD: "/manager/dashboard",
+  DASHBOARD: "/",
+  SETTINGS: "/settings",
+  SALESPEOPLE: "/salespeople",
+  TEMPLATES: "/templates",
   LOGIN: "/auth/login",
   REGISTER: "/auth/register",
   FORGET_PASSWORD: "/auth/forgot-password",
@@ -25,34 +25,40 @@ export const ROUTES = {
 
 export const routes: RouteObject[] = [
   {
+    path: ROUTES.DASHBOARD,
+    element: (
+      <ProtectedRoute>
+        <Dashboard />
+      </ProtectedRoute>
+    ),
+  },
+  {
+    path: ROUTES.SETTINGS,
+    element: (
+      <ProtectedRoute>
+        <Settings />
+      </ProtectedRoute>
+    ),
+  },
+  {
+    path: ROUTES.SALESPEOPLE,
+    element: (
+      <ProtectedRoute>
+        <Salespeople />
+      </ProtectedRoute>
+    ),
+  },
+  {
+    path: ROUTES.TEMPLATES,
+    element: (
+      <ProtectedRoute>
+        <Templates />
+      </ProtectedRoute>
+    ),
+  },
+  {
     element: <Layout />,
     children: [
-      {
-        path: ROUTES.HOME,
-        element: (
-          <ProtectedRoute>
-            <Home />
-          </ProtectedRoute>
-        ),
-      },
-      {
-        path: ROUTES.RTK_TEST,
-        element: (
-          <ProtectedRoute>
-            <RTKQueryTest />
-          </ProtectedRoute>
-        ),
-      },
-      {
-        path: ROUTES.MANAGER_DASHBOARD,
-        element: (
-          <ProtectedRoute>
-            <RoleBasedRoute allowedRoles={[Role.MANAGER]}>
-              <ManagerDashboard />
-            </RoleBasedRoute>
-          </ProtectedRoute>
-        ),
-      },
       {
         path: ROUTES.LOGIN,
         element: (
