@@ -33,6 +33,7 @@ export default function Login() {
     setIsLoading(true);
     setError(null);
     
+    
     try {
       const result = await signIn({ email, password });
       setUser(result.user);
