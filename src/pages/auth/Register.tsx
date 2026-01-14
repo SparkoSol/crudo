@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardFooter } from "@/components/ui/card";
 import { FormField } from "@/components/ui/form";
+import authUIBgImage from "../../assets/auth_pages_bg.jpg";
 
 import { Mail, Lock, User } from "lucide-react";
 
@@ -46,7 +47,7 @@ export default function Register() {
     formState: { isSubmitting },
   } = form;
 
-  const onSubmit = (data) => {
+  const onSubmit = (data: RegisterFormValues) => {
     console.log(data);
     form.reset();
   };
@@ -178,8 +179,8 @@ export default function Register() {
         <div
           className="hidden md:block relative"
           style={{
-            backgroundImage:
-              "url(https://images.unsplash.com/photo-1521737604893-d14cc237f11d)",
+            backgroundImage: `url(${authUIBgImage})`,
+
             backgroundSize: "cover",
             backgroundPosition: "center",
           }}

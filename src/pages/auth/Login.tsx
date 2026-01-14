@@ -7,7 +7,7 @@ import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Mail, Lock } from "lucide-react";
 import { Link } from "react-router-dom";
-
+import authUIBgImage from "../../assets/auth_pages_bg.jpg";
 const loginSchema = z.object({
   email: z.string().nonempty("Email is required").email("Invalid email"),
   password: z
@@ -15,14 +15,14 @@ const loginSchema = z.object({
     .nonempty("Password is required")
     .min(6, "Minimum 6 characters"),
 });
-
+type LoginFormValues = z.infer<typeof loginSchema>;
 export default function LoginForm() {
-  const form = useForm({
+  const form = useForm<LoginFormValues>({
     resolver: zodResolver(loginSchema),
     defaultValues: { email: "", password: "" },
   });
 
-  const onSubmit = (data) => {
+  const onSubmit = (data: LoginFormValues) => {
     console.log(data);
     form.reset();
   };
@@ -132,8 +132,7 @@ export default function LoginForm() {
         <div
           className="hidden md:block relative"
           style={{
-            backgroundImage:
-              "url(https://images.unsplash.com/photo-1521737604893-d14cc237f11d)",
+            backgroundImage: `url(${authUIBgImage})`,
             backgroundSize: "cover",
             backgroundPosition: "center",
           }}

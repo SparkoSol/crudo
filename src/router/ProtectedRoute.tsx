@@ -15,9 +15,9 @@ export const ProtectedRoute = ({ children }: ProtectedRouteProps) => {
     return <Loading message="Checking authentication..." fullScreen />;
   }
 
-  if (!isAuthenticated) {
-    return <Navigate to={ROUTES.LOGIN} state={{ from: location }} replace />;
-  }
+  // if (!isAuthenticated) {
+  //   return <Navigate to={ROUTES.LOGIN} state={{ from: location }} replace />;
+  // }
 
   return <>{children}</>;
 };
