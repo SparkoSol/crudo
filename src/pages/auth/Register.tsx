@@ -9,29 +9,8 @@ import { FormField } from "@/components/ui/form";
 import authUIBgImage from "../../assets/auth_pages_bg.jpg";
 
 import { Mail, Lock, User } from "lucide-react";
-
-const registerSchema = z.object({
-  name: z
-    .string()
-    .min(3, "Name must be at least 3 characters")
-    .optional()
-    .or(z.literal("")),
-  email: z
-    .string()
-    .trim()
-    .nonempty("Email is required")
-    .email("Invalid email address"),
-  password: z
-    .string()
-    .trim()
-    .nonempty("Password is required")
-    .min(6, "Password must be at least 6 characters")
-    .regex(/[A-Z]/, "Must contain at least one uppercase letter")
-    .regex(/[0-9]/, "Must contain at least one number"),
-});
-
+import { registerSchema } from "@/schemas/authSchemas";
 type RegisterFormValues = z.infer<typeof registerSchema>;
-
 export default function Register() {
   const form = useForm<RegisterFormValues>({
     resolver: zodResolver(registerSchema),
