@@ -1,0 +1,1 @@
+export { AuthImageSection } from "./AuthImageSection";

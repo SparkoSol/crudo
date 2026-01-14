@@ -3,25 +3,80 @@ import { type RouteObject } from "react-router-dom";
 import { Layout } from "../components/Layout";
 import { ProtectedRoute } from "./ProtectedRoute";
 import { PublicRoute } from "./PublicRoute";
+import ForgetPassword from "@/pages/auth/ForgotPassword";
+import Home from "@/pages/Home";
 import { RoleBasedRoute } from "./RoleBasedRoute";
-import { Role } from "../types/auth.types";
+import { Role } from "@/types/auth.types";
 
-const Home = lazy(() => import("../pages/Home"));
-const RTKQueryTest = lazy(() => import("../pages/RTKQueryTest"));
-const ManagerDashboard = lazy(() => import("../pages/ManagerDashboard"));
+const Dashboard = lazy(() => import("../pages/Dashboard"));
+const Settings = lazy(() => import("../pages/Settings"));
+const Salespeople = lazy(() => import("../pages/Salespeople"));
+const Templates = lazy(() => import("../pages/Templates"));
+const Invite = lazy(() => import("../pages/Invite"));
 const Login = lazy(() => import("../pages/auth/Login"));
 const Register = lazy(() => import("../pages/auth/Register"));
+const ResetPassword = lazy(() => import("../pages/auth/ResetPassword"));
 const NotFound = lazy(() => import("../pages/NotFound"));
 
 export const ROUTES = {
+  DASHBOARD: "/",
+  SETTINGS: "/settings",
+  SALESPEOPLE: "/salespeople",
+  TEMPLATES: "/templates",
   HOME: "/",
-  RTK_TEST: "/rtk-test",
-  MANAGER_DASHBOARD: "/manager/dashboard",
+  INVITE: "/invite",
   LOGIN: "/auth/login",
   REGISTER: "/auth/register",
+  FORGET_PASSWORD: "/auth/forgot-password",
+  RESET_PASSWORD: "/auth/reset-password",
 } as const;
 
 export const routes: RouteObject[] = [
+  {
+    path: ROUTES.DASHBOARD,
+    element: (
+      <ProtectedRoute>
+        <Dashboard />
+      </ProtectedRoute>
+    ),
+  },
+  {
+    path: ROUTES.SETTINGS,
+    element: (
+      <ProtectedRoute>
+        <Settings />
+      </ProtectedRoute>
+    ),
+  },
+  {
+    path: ROUTES.SALESPEOPLE,
+    element: (
+      <ProtectedRoute>
+        <Salespeople />
+      </ProtectedRoute>
+    ),
+  },
+  {
+    path: ROUTES.TEMPLATES,
+    element: (
+      <ProtectedRoute>
+        <Templates />
+      </ProtectedRoute>
+    ),
+  },
+  {
+    element: <Layout />,
+    children: [
+      {
+        path: ROUTES.INVITE,
+        element: (
+          <RoleBasedRoute allowedRoles={[Role.MANAGER]}>
+            <Invite />
+          </RoleBasedRoute>
+        ),
+      },
+    ],
+  },
   {
     element: <Layout />,
     children: [
@@ -30,24 +85,6 @@ export const routes: RouteObject[] = [
         element: (
           <ProtectedRoute>
             <Home />
-          </ProtectedRoute>
-        ),
-      },
-      {
-        path: ROUTES.RTK_TEST,
-        element: (
-          <ProtectedRoute>
-            <RTKQueryTest />
-          </ProtectedRoute>
-        ),
-      },
-      {
-        path: ROUTES.MANAGER_DASHBOARD,
-        element: (
-          <ProtectedRoute>
-            <RoleBasedRoute allowedRoles={[Role.MANAGER]}>
-              <ManagerDashboard />
-            </RoleBasedRoute>
           </ProtectedRoute>
         ),
       },
@@ -64,6 +101,22 @@ export const routes: RouteObject[] = [
         element: (
           <PublicRoute>
             <Register />
+          </PublicRoute>
+        ),
+      },
+      {
+        path: ROUTES.FORGET_PASSWORD,
+        element: (
+          <PublicRoute>
+            <ForgetPassword />
+          </PublicRoute>
+        ),
+      },
+      {
+        path: ROUTES.RESET_PASSWORD,
+        element: (
+          <PublicRoute>
+            <ResetPassword />
           </PublicRoute>
         ),
       },

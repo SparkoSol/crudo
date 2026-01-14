@@ -20,7 +20,7 @@ export const AppProviders = ({ children }: AppProvidersProps) => {
   return (
     <AuthProvider>
       <Toaster
-            position="top-center"
+            position="top-right"
             containerClassName="toaster"
             toastOptions={{
               duration: 3000,

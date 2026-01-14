@@ -132,3 +132,24 @@ export const onAuthStateChange = (
     callback(event, session);
   });
 };
+
+export const resetPassword = async (email: string): Promise<void> => {
+  const { error } = await supabase.auth.resetPasswordForEmail(email, {
+    redirectTo: `${window.location.origin}/auth/reset-password`,
+  });
+
+  if (error) {
+    throw error;
+  }
+};
+
+
+export const updatePassword = async (newPassword: string): Promise<void> => {
+  const { error } = await supabase.auth.updateUser({
+    password: newPassword,
+  });
+
+  if (error) {
+    throw error;
+  }
+};

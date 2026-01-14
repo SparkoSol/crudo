@@ -1,14 +1,11 @@
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { signOut } from '../services/authServices';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Loader2, LogOut, User as UserIcon, Mail, Settings, Shield, UserCircle } from 'lucide-react';
-import { isManager } from '../lib/utils/authorization';
-import { ROUTES } from '../router/routes';
+import { Loader2, LogOut, User as UserIcon, Mail, UserCircle } from 'lucide-react';
 
 export default function Home() {
   const { user, setUser } = useAuth();
@@ -114,48 +111,6 @@ export default function Home() {
           </Card>
         )}
 
-        <div className="grid gap-4 md:grid-cols-2">
-          <Card className="hover:shadow-lg hover:scale-[1.02] transition-all duration-200 cursor-pointer group border-2 hover:border-primary/20">
-            <Link to="/rtk-test" className="block">
-              <CardHeader>
-                <div className="flex items-center gap-3">
-                  <div className="h-12 w-12 rounded-lg bg-primary/10 group-hover:bg-primary/20 flex items-center justify-center transition-colors">
-                    <Settings className="h-6 w-6 text-primary" />
-                  </div>
-                  <div className="flex-1">
-                    <CardTitle className="text-lg group-hover:text-primary transition-colors">
-                      RTK Query Test
-                    </CardTitle>
-                    <CardDescription>
-                      Test RTK Query functionality and features
-                    </CardDescription>
-                  </div>
-                </div>
-              </CardHeader>
-            </Link>
-          </Card>
-          {isManager(displayUser) && (
-            <Card className="hover:shadow-lg hover:scale-[1.02] transition-all duration-200 cursor-pointer group border-2 hover:border-primary/20">
-              <Link to={ROUTES.MANAGER_DASHBOARD} className="block">
-                <CardHeader>
-                  <div className="flex items-center gap-3">
-                    <div className="h-12 w-12 rounded-lg bg-primary/10 group-hover:bg-primary/20 flex items-center justify-center transition-colors">
-                      <Shield className="h-6 w-6 text-primary" />
-                    </div>
-                    <div className="flex-1">
-                      <CardTitle className="text-lg group-hover:text-primary transition-colors">
-                        Manager Dashboard
-                      </CardTitle>
-                      <CardDescription>
-                        Access manager-only features and analytics
-                      </CardDescription>
-                    </div>
-                  </div>
-                </CardHeader>
-              </Link>
-            </Card>
-          )}
-        </div>
       </div>
     </div>
   );
