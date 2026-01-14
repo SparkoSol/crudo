@@ -132,3 +132,16 @@ export const onAuthStateChange = (
     callback(event, session);
   });
 };
+
+/**
+ * Update user password
+ */
+export const updatePassword = async (newPassword: string): Promise<void> => {
+  const { error } = await supabase.auth.updateUser({
+    password: newPassword,
+  });
+
+  if (error) {
+    throw error;
+  }
+};
