@@ -11,14 +11,14 @@ import { Link } from "react-router-dom";
 const forgotPasswordSchema = z.object({
   email: z.string().nonempty("Email is required").email("Invalid email"),
 });
-
+type ForgotPasswordFormValues = z.infer<typeof forgotPasswordSchema>;
 export default function ForgotPassword() {
-  const form = useForm({
+  const form = useForm<ForgotPasswordFormValues>({
     resolver: zodResolver(forgotPasswordSchema),
     defaultValues: { email: "" },
   });
 
-  const onSubmit = (data) => {
+  const onSubmit = (data: ForgotPasswordFormValues) => {
     console.log("Forgot Password Email:", data);
     form.reset();
   };
