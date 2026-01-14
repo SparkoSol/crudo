@@ -5,6 +5,7 @@ import { ProtectedRoute } from "./ProtectedRoute";
 import { PublicRoute } from "./PublicRoute";
 import { RoleBasedRoute } from "./RoleBasedRoute";
 import { Role } from "../types/auth.types";
+import ForgetPassword from "@/pages/auth/ForgotPassword";
 
 const Home = lazy(() => import("../pages/Home"));
 const RTKQueryTest = lazy(() => import("../pages/RTKQueryTest"));
@@ -19,6 +20,7 @@ export const ROUTES = {
   MANAGER_DASHBOARD: "/manager/dashboard",
   LOGIN: "/auth/login",
   REGISTER: "/auth/register",
+  FORGET_PASSWORD: "/auth/forgot-password",
 } as const;
 
 export const routes: RouteObject[] = [
@@ -64,6 +66,14 @@ export const routes: RouteObject[] = [
         element: (
           <PublicRoute>
             <Register />
+          </PublicRoute>
+        ),
+      },
+      {
+        path: ROUTES.FORGET_PASSWORD,
+        element: (
+          <PublicRoute>
+            <ForgetPassword />
           </PublicRoute>
         ),
       },
