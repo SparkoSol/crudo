@@ -141,18 +141,30 @@ export default function ResetPassword() {
     setIsSubmitting(true);
     try {
       await updatePassword(data.password);
+      
+      // Sign out immediately to prevent auto-login
+      await supabase.auth.signOut();
+      
+      // Clear the URL hash to prevent session restoration
+      window.history.replaceState(
+        null,
+        "",
+        window.location.pathname
+      );
+      
       setIsSuccess(true);
       toast.success("Password reset successfully! Redirecting to login...");
 
-      await supabase.auth.signOut();
-
+      // Navigate to login immediately (reduced delay)
       setTimeout(() => {
         navigate("/auth/login", { replace: true });
-      }, 2000);
-    } catch (error: any) {
+      }, 1000);
+    } catch (error: unknown) {
       console.error("Password reset error:", error);
       const errorMessage =
-        error?.message || "Failed to reset password. Please try again.";
+        error instanceof Error
+          ? error.message
+          : "Failed to reset password. Please try again.";
       toast.error(errorMessage);
     } finally {
       setIsSubmitting(false);
