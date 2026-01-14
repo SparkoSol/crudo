@@ -8,13 +8,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { Mail, Lock } from "lucide-react";
 import { Link } from "react-router-dom";
 import authUIBgImage from "../../assets/auth_pages_bg.jpg";
-const loginSchema = z.object({
-  email: z.string().nonempty("Email is required").email("Invalid email"),
-  password: z
-    .string()
-    .nonempty("Password is required")
-    .min(6, "Minimum 6 characters"),
-});
+import { loginSchema } from "@/schemas/authSchemas";
 type LoginFormValues = z.infer<typeof loginSchema>;
 export default function LoginForm() {
   const form = useForm<LoginFormValues>({
