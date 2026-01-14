@@ -67,9 +67,9 @@ export function ProfileInformation() {
 
     try {
       setIsSavingProfile(true);
+      // Only update full_name, email is read-only
       const updatedProfile = await updateProfile({
         full_name: pendingFormData.full_name || undefined,
-        email: pendingFormData.email,
       });
       setProfile(updatedProfile);
       
@@ -146,15 +146,15 @@ export function ProfileInformation() {
                   id="email"
                   type="email"
                   {...registerProfile('email')}
-                  className="pl-10 h-11"
+                  className="pl-10 h-11 bg-gray-50 cursor-not-allowed"
                   placeholder="Enter your email"
+                  disabled
+                  readOnly
                 />
               </div>
-              {profileErrors.email && (
-                <p className="text-sm text-red-500 mt-1">
-                  {profileErrors.email.message}
-                </p>
-              )}
+              <p className="text-xs text-gray-500 mt-1">
+                Email cannot be changed
+              </p>
             </div>
           </div>
 
