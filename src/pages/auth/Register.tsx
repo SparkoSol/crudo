@@ -47,7 +47,7 @@ export default function Register() {
     formState: { isSubmitting },
   } = form;
 
-  const onSubmit = (data) => {
+  const onSubmit = (data: RegisterFormValues) => {
     console.log(data);
     form.reset();
   };

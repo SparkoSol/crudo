@@ -15,14 +15,14 @@ const loginSchema = z.object({
     .nonempty("Password is required")
     .min(6, "Minimum 6 characters"),
 });
-
+type LoginFormValues = z.infer<typeof loginSchema>;
 export default function LoginForm() {
-  const form = useForm({
+  const form = useForm<LoginFormValues>({
     resolver: zodResolver(loginSchema),
     defaultValues: { email: "", password: "" },
   });
 
-  const onSubmit = (data) => {
+  const onSubmit = (data: LoginFormValues) => {
     console.log(data);
     form.reset();
   };
