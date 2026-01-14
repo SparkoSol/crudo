@@ -9,7 +9,6 @@ import { FormField } from "@/components/ui/form";
 
 import { Mail, Lock, User } from "lucide-react";
 
-/* ---------------- ZOD SCHEMA ---------------- */
 const registerSchema = z.object({
   name: z
     .string()
@@ -55,9 +54,7 @@ export default function Register() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
       <Card className="w-full max-w-5xl shadow-xl rounded-2xl overflow-hidden grid grid-cols-1 md:grid-cols-2">
-        {/* LEFT – FORM */}
         <div className="p-10 bg-white flex flex-col justify-center">
-          {/* Logo */}
           <div className="flex items-center gap-3 mb-8">
             <div className="w-10 h-10 rounded-lg bg-blue-600 text-white flex items-center justify-center font-bold text-lg">
               V
@@ -67,7 +64,6 @@ export default function Register() {
             </span>
           </div>
 
-          {/* Heading */}
           <h1 className="sm:text-3xl text-2xl font-bold text-gray-900 mb-2">
             Create your account
           </h1>
@@ -75,9 +71,7 @@ export default function Register() {
             Sign up to start managing your sales reports
           </p>
 
-          {/* Form */}
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-3">
-            {/* Name */}
             <FormField
               name="name"
               control={form.control}
@@ -105,7 +99,6 @@ export default function Register() {
               )}
             />
 
-            {/* Email */}
             <FormField
               name="email"
               control={form.control}
@@ -133,7 +126,6 @@ export default function Register() {
               )}
             />
 
-            {/* Password */}
             <FormField
               name="password"
               control={form.control}
@@ -161,7 +153,6 @@ export default function Register() {
               )}
             />
 
-            {/* Submit */}
             <Button
               type="submit"
               className="w-full h-12 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg"
@@ -171,7 +162,6 @@ export default function Register() {
             </Button>
           </form>
 
-          {/* Footer */}
           <CardFooter className="flex justify-center mt-3 px-0">
             <p className="text-center text-gray-600 text-sm">
               Already have an account?{" "}
@@ -185,7 +175,6 @@ export default function Register() {
           </CardFooter>
         </div>
 
-        {/* RIGHT – IMAGE */}
         <div
           className="hidden md:block relative"
           style={{

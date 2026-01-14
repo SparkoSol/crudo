@@ -30,9 +30,7 @@ export default function LoginForm() {
   return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
       <Card className="w-full max-w-5xl shadow-lg rounded-2xl overflow-hidden grid grid-cols-1 md:grid-cols-2">
-        {/* LEFT – FORM */}
         <div className="p-10 bg-white flex flex-col justify-center">
-          {/* Logo */}
           <div className="flex items-center gap-3 mb-8">
             <div className="w-10 h-10 rounded-lg bg-blue-600 text-white flex items-center justify-center font-bold text-lg">
               V
@@ -42,7 +40,6 @@ export default function LoginForm() {
             </span>
           </div>
 
-          {/* Heading */}
           <h1 className="sm:text-3xl text-2xl font-bold text-gray-900 mb-2">
             Welcome Back
           </h1>
@@ -50,9 +47,7 @@ export default function LoginForm() {
             Login to manage your sales reports
           </p>
 
-          {/* Form */}
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-3">
-            {/* Email */}
             <FormField
               name="email"
               control={form.control}
@@ -78,7 +73,6 @@ export default function LoginForm() {
               )}
             />
 
-            {/* Password */}
             <FormField
               name="password"
               control={form.control}
@@ -105,7 +99,6 @@ export default function LoginForm() {
               )}
             />
 
-            {/* Forgot Password */}
             <div className="flex justify-end">
               <Link
                 to="/auth/forgot-password"
@@ -115,7 +108,6 @@ export default function LoginForm() {
               </Link>
             </div>
 
-            {/* Submit */}
             <Button
               type="submit"
               className="w-full h-12 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg"
@@ -124,7 +116,6 @@ export default function LoginForm() {
             </Button>
           </form>
 
-          {/* Footer */}
           <CardFooter className="flex justify-center items-center mt-3 px-0">
             <p className="text-center text-gray-600 text-sm">
               Don't have an account?{" "}
@@ -138,7 +129,6 @@ export default function LoginForm() {
           </CardFooter>
         </div>
 
-        {/* RIGHT – IMAGE */}
         <div
           className="hidden md:block relative"
           style={{

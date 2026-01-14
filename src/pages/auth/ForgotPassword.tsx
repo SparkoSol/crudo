@@ -26,7 +26,6 @@ export default function ForgotPassword() {
   return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
       <Card className="w-full max-w-md shadow-lg rounded-2xl p-8 bg-white">
-        {/* Back to Login */}
         <Link
           to="/auth/login"
           className="flex items-center gap-2 text-sm text-gray-600 hover:text-blue-600 mb-6"
@@ -35,7 +34,6 @@ export default function ForgotPassword() {
           Back to Login
         </Link>
 
-        {/* Heading */}
         <h1 className="sm:text-3xl text-2xl  font-bold text-gray-900 mb-2">
           Forgot your password?
         </h1>
@@ -44,7 +42,6 @@ export default function ForgotPassword() {
           password.
         </p>
 
-        {/* Form */}
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5">
           <FormField
             name="email"
@@ -79,7 +76,6 @@ export default function ForgotPassword() {
           </Button>
         </form>
 
-        {/* Footer */}
         <p className="text-center text-sm text-gray-500 mt-6">
           Remember your password?{" "}
           <Link
