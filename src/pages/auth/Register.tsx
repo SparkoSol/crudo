@@ -1,150 +1,210 @@
-import { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
-import { signUp } from '../../services/authServices';
-import { useAuth } from '../../contexts/AuthContext';
-import toast from 'react-hot-toast';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Loader2, Mail, Lock, User } from 'lucide-react';
+import { Link } from "react-router-dom";
+import { useForm } from "react-hook-form";
+import { z } from "zod";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Card, CardFooter } from "@/components/ui/card";
+import { FormField } from "@/components/ui/form";
+
+import { Mail, Lock, User } from "lucide-react";
+
+/* ---------------- ZOD SCHEMA ---------------- */
+const registerSchema = z.object({
+  name: z
+    .string()
+    .min(3, "Name must be at least 3 characters")
+    .optional()
+    .or(z.literal("")),
+  email: z
+    .string()
+    .trim()
+    .nonempty("Email is required")
+    .email("Invalid email address"),
+  password: z
+    .string()
+    .trim()
+    .nonempty("Password is required")
+    .min(6, "Password must be at least 6 characters")
+    .regex(/[A-Z]/, "Must contain at least one uppercase letter")
+    .regex(/[0-9]/, "Must contain at least one number"),
+});
+
+type RegisterFormValues = z.infer<typeof registerSchema>;
 
 export default function Register() {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [name, setName] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const navigate = useNavigate();
-  const { setUser } = useAuth();
+  const form = useForm<RegisterFormValues>({
+    resolver: zodResolver(registerSchema),
+    defaultValues: {
+      name: "",
+      email: "",
+      password: "",
+    },
+  });
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsLoading(true);
-    setError(null);
-    
-    try {
-      const result = await signUp({ email, password, name: name || undefined });
-      setUser(result.user);
-      toast.success('Registration successful!');
-      navigate('/', { replace: true });
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Registration failed';
-      setError(errorMessage);
-      toast.error(errorMessage);
-    } finally {
-      setIsLoading(false);
-    }
+  const {
+    handleSubmit,
+    formState: { isSubmitting },
+  } = form;
+
+  const onSubmit = (data) => {
+    console.log(data);
+    form.reset();
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background via-background to-muted/20 p-4">
-      <Card className="w-full max-w-md shadow-lg">
-        <CardHeader className="space-y-3 text-center">
-          <div className="flex justify-center">
-            <div className="h-16 w-16 rounded-full bg-primary/10 flex items-center justify-center">
-              <User className="h-8 w-8 text-primary" />
+    <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
+      <Card className="w-full max-w-5xl shadow-xl rounded-2xl overflow-hidden grid grid-cols-1 md:grid-cols-2">
+        {/* LEFT – FORM */}
+        <div className="p-10 bg-white flex flex-col justify-center">
+          {/* Logo */}
+          <div className="flex items-center gap-3 mb-8">
+            <div className="w-10 h-10 rounded-lg bg-blue-600 text-white flex items-center justify-center font-bold text-lg">
+              V
             </div>
+            <span className="text-2xl font-semibold text-gray-800">
+              VoiceFlow
+            </span>
           </div>
-          <CardTitle className="text-3xl font-bold tracking-tight">Create an account</CardTitle>
-          <CardDescription className="text-base">
-            Enter your information to get started
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={handleSubmit} className="space-y-4">
-            {error && (
-              <Alert variant="destructive">
-                <AlertDescription>
-                  {error}
-                </AlertDescription>
-              </Alert>
-            )}
-            
-            <div className="space-y-2">
-              <Label htmlFor="name">Full Name</Label>
-              <div className="relative">
-                <User className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  id="name"
-                  name="name"
-                  type="text"
-                  placeholder="John Doe"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  className="pl-10"
-                  disabled={isLoading}
-                />
-              </div>
-              <p className="text-xs text-muted-foreground">Optional</p>
-            </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="email">Email address</Label>
-              <div className="relative">
-                <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  id="email"
-                  name="email"
-                  type="email"
-                  autoComplete="email"
-                  required
-                  placeholder="name@example.com"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="pl-10"
-                  disabled={isLoading}
-                />
-              </div>
-            </div>
+          {/* Heading */}
+          <h1 className="sm:text-3xl text-2xl font-bold text-gray-900 mb-2">
+            Create your account
+          </h1>
+          <p className="text-gray-500 mb-8">
+            Sign up to start managing your sales reports
+          </p>
 
-            <div className="space-y-2">
-              <Label htmlFor="password">Password</Label>
-              <div className="relative">
-                <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  id="password"
-                  name="password"
-                  type="password"
-                  autoComplete="new-password"
-                  required
-                  placeholder="Create a strong password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="pl-10"
-                  disabled={isLoading}
-                />
-              </div>
-            </div>
+          {/* Form */}
+          <form onSubmit={handleSubmit(onSubmit)} className="space-y-3">
+            {/* Name */}
+            <FormField
+              name="name"
+              control={form.control}
+              render={({ field, fieldState }) => (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Full Name
+                  </label>
+                  <div className="relative">
+                    <User className="absolute left-3 top-3.5 h-5 w-5 text-gray-400" />
+                    <Input
+                      {...field}
+                      placeholder="John Doe"
+                      className="pl-10 h-12 border-gray-300 rounded-lg"
+                      disabled={isSubmitting}
+                    />
+                  </div>
+                  {fieldState.error && (
+                    <p className="text-red-500 text-sm mt-1">
+                      {fieldState.error.message}
+                    </p>
+                  )}
+                  <p className="text-xs text-gray-400 mt-1">Optional</p>
+                </div>
+              )}
+            />
 
+            {/* Email */}
+            <FormField
+              name="email"
+              control={form.control}
+              render={({ field, fieldState }) => (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Email
+                  </label>
+                  <div className="relative">
+                    <Mail className="absolute left-3 top-3.5 h-5 w-5 text-gray-400" />
+                    <Input
+                      {...field}
+                      type="email"
+                      placeholder="you@company.com"
+                      className="pl-10 h-12 border-gray-300 rounded-lg"
+                      disabled={isSubmitting}
+                    />
+                  </div>
+                  {fieldState.error && (
+                    <p className="text-red-500 text-sm mt-1">
+                      {fieldState.error.message}
+                    </p>
+                  )}
+                </div>
+              )}
+            />
+
+            {/* Password */}
+            <FormField
+              name="password"
+              control={form.control}
+              render={({ field, fieldState }) => (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Password
+                  </label>
+                  <div className="relative">
+                    <Lock className="absolute left-3 top-3.5 h-5 w-5 text-gray-400" />
+                    <Input
+                      {...field}
+                      type="password"
+                      placeholder="Create a strong password"
+                      className="pl-10 h-12 border-gray-300 rounded-lg"
+                      disabled={isSubmitting}
+                    />
+                  </div>
+                  {fieldState.error && (
+                    <p className="text-red-500 text-sm mt-1">
+                      {fieldState.error.message}
+                    </p>
+                  )}
+                </div>
+              )}
+            />
+
+            {/* Submit */}
             <Button
               type="submit"
-              className="w-full"
-              disabled={isLoading}
+              className="w-full h-12 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg"
+              disabled={isSubmitting}
             >
-              {isLoading ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Creating account...
-                </>
-              ) : (
-                'Create account'
-              )}
+              {isSubmitting ? "Creating account..." : "Create account"}
             </Button>
           </form>
-        </CardContent>
-        <CardFooter className="flex flex-col space-y-4">
-          <div className="text-sm text-center text-muted-foreground">
-            Already have an account?{' '}
-            <Link
-              to="/auth/login"
-              className="font-medium text-primary hover:underline"
-            >
-              Sign in
-            </Link>
+
+          {/* Footer */}
+          <CardFooter className="flex justify-center mt-3 px-0">
+            <p className="text-center text-gray-600 text-sm">
+              Already have an account?{" "}
+              <Link
+                to="/auth/login"
+                className="font-medium text-blue-600 hover:underline"
+              >
+                Sign in
+              </Link>
+            </p>
+          </CardFooter>
+        </div>
+
+        {/* RIGHT – IMAGE */}
+        <div
+          className="hidden md:block relative"
+          style={{
+            backgroundImage:
+              "url(https://images.unsplash.com/photo-1521737604893-d14cc237f11d)",
+            backgroundSize: "cover",
+            backgroundPosition: "center",
+          }}
+        >
+          <div className="absolute inset-0 bg-blue-900/70 p-10 flex flex-col justify-end">
+            <h2 className="text-white text-3xl font-bold leading-snug">
+              Join VoiceFlow and boost your sales insights
+            </h2>
+            <p className="text-white/80 mt-4 text-sm">
+              Automate data collection for your team and generate actionable
+              reports effortlessly.
+            </p>
           </div>
-        </CardFooter>
+        </div>
       </Card>
     </div>
   );
