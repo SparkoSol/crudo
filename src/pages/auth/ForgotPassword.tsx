@@ -7,10 +7,7 @@ import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Mail, ArrowLeft } from "lucide-react";
 import { Link } from "react-router-dom";
-
-const forgotPasswordSchema = z.object({
-  email: z.string().nonempty("Email is required").email("Invalid email"),
-});
+import { forgotPasswordSchema } from "@/schemas/authSchemas";
 type ForgotPasswordFormValues = z.infer<typeof forgotPasswordSchema>;
 export default function ForgotPassword() {
   const form = useForm<ForgotPasswordFormValues>({
@@ -28,7 +25,7 @@ export default function ForgotPassword() {
       <Card className="w-full max-w-md shadow-lg rounded-2xl p-8 bg-white">
         <Link
           to="/auth/login"
-          className="flex items-center gap-2 text-sm text-gray-600 hover:text-blue-600 mb-6"
+          className="flex items-center gap-2 text-sm text-gray-600 hover:text-blue-500 mb-6"
         >
           <ArrowLeft size={18} />
           Back to Login
@@ -70,7 +67,7 @@ export default function ForgotPassword() {
 
           <Button
             type="submit"
-            className="w-full h-12 bg-blue-600 hover:bg-blue-700 text-white rounded-lg"
+            className="w-full h-12 bg-blue-500 hover:bg-blue-400 text-white rounded-lg"
           >
             Submit
           </Button>
@@ -80,7 +77,7 @@ export default function ForgotPassword() {
           Remember your password?{" "}
           <Link
             to="/auth/login"
-            className="text-blue-600 font-medium hover:underline"
+            className="text-blue-500 font-medium hover:underline"
           >
             Login
           </Link>
