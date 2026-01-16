@@ -13,6 +13,7 @@ import { loginSchema } from "@/schemas/authSchemas";
 import { AuthImageSection } from "@/components/auth";
 import { signIn } from "@/services/authServices";
 import toast from "react-hot-toast";
+import iNotusLogo from "@/assets/iNotus-color.svg";
 
 type LoginFormValues = z.infer<typeof loginSchema>;
 
@@ -51,15 +52,12 @@ export default function LoginForm() {
       <Card className="w-full max-w-5xl shadow-lg rounded-2xl overflow-hidden grid grid-cols-1 md:grid-cols-2">
         <div className="p-10 bg-white flex flex-col justify-center">
           <div className="flex items-center gap-3 mb-8">
-            <div
-              className="w-10 h-10 rounded-lg bg-gradient-to-br from-brand-primary-600
-             to-brand-primary-700 text-white flex items-center justify-center font-bold text-lg shadow-md"
-            >
-              V
-            </div>
-            <span className="text-2xl font-semibold text-gray-800">
-              VoiceFlow
-            </span>
+            <img 
+              src={iNotusLogo} 
+              alt="iNotus Logo" 
+              className="w-10 h-10 rounded-lg object-contain"
+            />
+            <span className="text-2xl font-semibold text-gray-800">iNotus</span>
           </div>
 
           <h1 className="sm:text-3xl text-2xl font-bold text-gray-900 mb-2">
@@ -174,7 +172,7 @@ export default function LoginForm() {
 
         <AuthImageSection
           title="Transform sales conversations into actionable insights"
-          description="VoiceFlow helps your sales team capture field data automatically and turn it into smart reports."
+          description="iNotus helps your sales team capture field data automatically and turn it into smart reports."
         />
       </Card>
     </div>

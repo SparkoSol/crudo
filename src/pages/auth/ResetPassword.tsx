@@ -12,6 +12,7 @@ import { FormField } from "@/components/ui/form";
 import { Lock, Loader2, CheckCircle2, ArrowLeft } from "lucide-react";
 import toast from "react-hot-toast";
 import { AuthImageSection } from "@/components/auth";
+import iNotusLogo from "@/assets/iNotus-color.svg";
 
 import { resetPasswordSchema } from "@/schemas/auth.schemas";
 import { updatePassword } from "@/services/authServices";
@@ -141,17 +142,13 @@ export default function ResetPassword() {
     setIsSubmitting(true);
     try {
       await updatePassword(data.password);
-      
+
       // Sign out immediately to prevent auto-login
       await supabase.auth.signOut();
-      
+
       // Clear the URL hash to prevent session restoration
-      window.history.replaceState(
-        null,
-        "",
-        window.location.pathname
-      );
-      
+      window.history.replaceState(null, "", window.location.pathname);
+
       setIsSuccess(true);
       toast.success("Password reset successfully! Redirecting to login...");
 
@@ -198,15 +195,12 @@ export default function ResetPassword() {
           </Link>
 
           <div className="flex items-center gap-3 mb-8">
-            <div
-              className="w-10 h-10 rounded-lg bg-gradient-to-br from-brand-primary-600
-             to-brand-primary-700 text-white flex items-center justify-center font-bold text-lg shadow-md"
-            >
-              V
-            </div>
-            <span className="text-2xl font-semibold text-gray-800">
-              VoiceFlow
-            </span>
+            <img 
+              src={iNotusLogo} 
+              alt="iNotus Logo" 
+              className="w-10 h-10 rounded-lg object-contain"
+            />
+            <span className="text-2xl font-semibold text-gray-800">iNotus</span>
           </div>
 
           <h1 className="sm:text-3xl text-2xl font-bold text-gray-900 mb-2">

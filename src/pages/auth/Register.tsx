@@ -12,6 +12,7 @@ import { FormField } from "@/components/ui/form";
 import { Mail, Lock, User, Eye, EyeOff } from "lucide-react";
 import toast from "react-hot-toast";
 import { AuthImageSection } from "@/components/auth";
+import iNotusLogo from "@/assets/iNotus-color.svg";
 
 import { registerSchema } from "@/schemas/auth.schemas";
 import { signupSupabase } from "@/services/SignUpSupabase";
@@ -59,15 +60,12 @@ export default function Register() {
         {/* LEFT */}
         <div className="p-10 bg-white flex flex-col justify-center">
           <div className="flex items-center gap-3 mb-8">
-            <div
-              className="w-10 h-10 rounded-lg bg-gradient-to-br from-brand-primary-600
-             to-brand-primary-700 text-white flex items-center justify-center font-bold text-lg shadow-md"
-            >
-              V
-            </div>
-            <span className="text-2xl font-semibold text-gray-800">
-              VoiceFlow
-            </span>
+            <img 
+              src={iNotusLogo} 
+              alt="iNotus Logo" 
+              className="w-10 h-10 rounded-lg object-contain"
+            />
+            <span className="text-2xl font-semibold text-gray-800">iNotus</span>
           </div>
 
           <h1 className="sm:text-3xl text-2xl font-bold text-gray-900 mb-2">
@@ -225,7 +223,7 @@ export default function Register() {
         </div>
 
         <AuthImageSection
-          title="Join VoiceFlow and boost your sales insights"
+          title="Join iNotus and boost your sales insights"
           description="Automate data collection and generate smart reports effortlessly."
         />
       </Card>
