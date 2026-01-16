@@ -12,27 +12,6 @@ const getApiBaseUrl = () => {
   return "https://api.example.com/api";
 };
 
-const getReduxSecretKey = () => {
-  const key =
-    import.meta.env.VITE_REDUX_SECRET_KEY ||
-    "my-super-secret-key-change-in-production";
-
-  if (key.length < 16) {
-    console.warn(
-      "VITE_REDUX_SECRET_KEY should be at least 16 characters long for security."
-    );
-  }
-
-  if (isProduction && key === "my-super-secret-key-change-in-production") {
-    console.error(
-      "WARNING: Using default Redux secret key in production! " +
-        "Please set VITE_REDUX_SECRET_KEY to a secure value."
-    );
-  }
-
-  return key;
-};
-
 const getSupabaseUrl = () => {
   const url = import.meta.env.VITE_SUPABASE_URL;
   if (!url) {
@@ -71,7 +50,6 @@ const getSupabaseServiceRoleKey = () => {
 
 export const env = {
   apiBaseUrl: getApiBaseUrl(),
-  reduxSecretKey: getReduxSecretKey(),
   supabaseUrl: getSupabaseUrl(),
   supabaseAnonKey: getSupabaseAnonKey(),
   supabaseServiceRoleKey: getSupabaseServiceRoleKey(),
@@ -83,7 +61,6 @@ export const env = {
 
 export const {
   apiBaseUrl,
-  reduxSecretKey,
   supabaseUrl,
   supabaseAnonKey,
   supabaseServiceRoleKey,
