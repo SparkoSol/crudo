@@ -11,9 +11,9 @@ import {
   LogOut,
   Menu,
   X,
-  MessageSquare,
   UserPlus,
 } from "lucide-react";
+import iNotusLogo from "@/assets/iNotus-color.svg";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import toast from "react-hot-toast";
@@ -139,12 +139,14 @@ export const Sidebar = () => {
               onClick={() => setIsMobileOpen(false)}
               className="flex items-center gap-3 hover:opacity-80 transition-opacity cursor-pointer"
             >
-              <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-brand-primary-600 to-brand-primary-700 text-white flex items-center justify-center font-bold text-lg shadow-md">
-                <MessageSquare className="h-6 w-6" />
-              </div>
+              <img 
+                src={iNotusLogo} 
+                alt="iNotus Logo" 
+                className="w-10 h-10 rounded-lg object-contain"
+              />
               <div>
                 <h1 className="text-xl font-semibold text-gray-900">
-                  VoiceFlow
+                iNotus
                 </h1>
                 <p className="text-xs text-gray-500">Sales Reports</p>
               </div>
