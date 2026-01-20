@@ -1,5 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { supabaseUrl, supabaseServiceRoleKey } from "../config/env";
+import { BrevoUtils, BrevoTemplates } from "./brevo";
 
 export interface InviteSalesRepresentativeData {
   email: string;
@@ -92,14 +93,6 @@ const createProfile = async (
   }
 };
 
-// Email service is not implemented yet
-// const sendInvitationEmail = async (
-//   email: string,
-//   password: string
-// ): Promise<void> => {
-//   // TODO: Implement email sending service
-// };
-
 export const inviteSalesRepresentative = async (
   data: InviteSalesRepresentativeData
 ): Promise<InviteResponse> => {
@@ -128,7 +121,21 @@ export const inviteSalesRepresentative = async (
     console.log("Password:", password);
     console.log("=".repeat(60));
 
-    // await sendInvitationEmail(data.email, password);
+    try {
+      await BrevoUtils.send(
+        BrevoTemplates.InviteSalesPerson,
+        {
+          company_name: data.managerCompanyName || "iNotus",
+          user_name: fullName,
+          password: password,
+        },
+        data.email,
+        fullName
+      );
+      console.log("Invitation email sent successfully");
+    } catch (emailError) {
+      console.error("Failed to send invitation email:", emailError);
+    }
 
     return {
       userId,
