@@ -119,7 +119,7 @@ export const inviteSalesRepresentative = async (
         BrevoTemplates.InviteSalesPerson,
         {
           company_name: data.managerCompanyName || "iNotus",
-          user_name: fullName,
+          user_name: data.email,
           password: password,
         },
         data.email,
