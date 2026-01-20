@@ -21,50 +21,45 @@ export interface BrevoTemplateParams {
 
 export class BrevoUtils {
   static async send(
-    template: BrevoTemplate,
+    template: number,
     data: BrevoTemplateParams,
     to: string,
     toName?: string,
     attachment?: BrevoAttachment[]
   ): Promise<boolean> {
-    try {
-      const { data: responseData, error } = await supabase.functions.invoke(
-        "send-email",
-        {
-          body: {
-            templateId: template,
-            to: to,
-            toName: toName,
-            params: data,
-            attachment: attachment,
-          },
-        }
-      );
-
-      if (error) {
-        console.error("Brevo service error:", error);
-        throw new Error(error.message || "Failed to send email");
-      }
-
-      if (responseData?.error) {
-        const errorMessage =
-          typeof responseData.error === "string"
-            ? responseData.error
-            : responseData.error?.message || "Email API error";
-        throw new Error(errorMessage);
-      }
-
-      if (responseData?.messageId) {
-        return true;
-      }
-
-      return false;
-    } catch (error) {
-      console.error("Error sending email via Brevo:", error);
-      if (error instanceof Error) {
-        throw error;
-      }
-      throw new Error("An unexpected error occurred while sending email");
+    const {
+      data: { session },
+      error,
+    } = await supabase.auth.getSession();
+    
+    if (error || !session) {
+      throw new Error("User not authenticated");
     }
+
+    const functionUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/send-email`;
+
+    const res = await fetch(functionUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${session.access_token}`,
+        apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
+      },
+      body: JSON.stringify({
+        templateId: template,
+        to,
+        toName,
+        params: data,
+        attachment,
+      }),
+    });
+
+    const json = await res.json();
+    if (!res.ok) {
+      throw new Error(json?.error || json?.message || "Failed to send email");
+    }
+
+    return json?.success === true;
   }
 }
+
