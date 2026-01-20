@@ -114,13 +114,6 @@ export const inviteSalesRepresentative = async (
       data.managerCompanyName || null
     );
 
-    console.log("=".repeat(60));
-    console.log("NEW USER INVITATION CREDENTIALS");
-    console.log("=".repeat(60));
-    console.log("Email:", data.email);
-    console.log("Password:", password);
-    console.log("=".repeat(60));
-
     try {
       await BrevoUtils.send(
         BrevoTemplates.InviteSalesPerson,

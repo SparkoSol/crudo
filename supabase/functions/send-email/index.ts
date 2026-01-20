@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -10,64 +11,86 @@ interface BrevoEmailRequest {
   templateId: number;
   to: string;
   toName?: string;
-  params: {
-    company_name?: string;
-    user_name?: string;
-    password?: string;
-    [key: string]: any;
-  };
+  params?: Record<string, any>;
   attachment?: Array<{
     name: string;
-    content: string;
+    content: string; 
     contentType?: string;
   }>;
 }
 
 serve(async (req) => {
+
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
 
   try {
-    const brevoApiKey = Deno.env.get("BREVO_KEY");
-
-    if (!brevoApiKey) {
-      throw new Error("BREVO_KEY is not set in Supabase secrets");
-    }
-
-    const requestData: BrevoEmailRequest = await req.json();
-    const { templateId, to, toName, params, attachment } = requestData;
-
-    if (!templateId) {
+    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    const authHeader = req.headers.get("Authorization");
+    
+    if (!authHeader) {
       return new Response(
-        JSON.stringify({ error: "templateId is required" }),
-        {
-          status: 400,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
+        JSON.stringify({ error: "Missing Authorization header" }),
+        { status: 401, headers: corsHeaders }
       );
     }
 
-    if (!to) {
-      return new Response(JSON.stringify({ error: "to email is required" }), {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+    const supabaseKey = serviceRoleKey || Deno.env.get("SUPABASE_ANON_KEY")!;
+    const supabase = createClient(
+      Deno.env.get("SUPABASE_URL")!,
+      supabaseKey,
+      {
+        global: {
+          headers: { Authorization: authHeader },
+        },
+      }
+    );
+    
+    const { data: userData, error: userError } = await supabase.auth.getUser();
+
+    if (userError || !userData?.user) {
+      return new Response(
+        JSON.stringify({ 
+          error: userError?.message || "Unauthorized",
+          code: userError?.status || 401,
+          details: userError 
+        }),
+        { status: 401, headers: corsHeaders }
+      );
+    }
+
+    const brevoApiKey = Deno.env.get("BREVO_KEY");
+    if (!brevoApiKey) {
+      throw new Error("BREVO_KEY is not set");
+    }
+
+    const body: BrevoEmailRequest = await req.json();
+
+    const { templateId, to, toName, params = {}, attachment } = body;
+
+    if (!templateId || !to) {
+      return new Response(
+        JSON.stringify({ error: "templateId and to are required" }),
+        { status: 400, headers: corsHeaders }
+      );
     }
 
     const brevoPayload: any = {
-      templateId: templateId,
+      templateId,
       to: [{ email: to, name: toName || to }],
-      params: params || {},
+      params,
     };
 
-    if (attachment && attachment.length > 0) {
-      brevoPayload.attachment = attachment;
+    if (attachment?.length) {
+      brevoPayload.attachment = attachment.map((a) => ({
+        name: a.name,
+        content: a.content,
+        contentType: a.contentType,
+      }));
     }
 
-    const brevoApiUrl = "https://api.brevo.com/v3/smtp/email";
-
-    const response = await fetch(brevoApiUrl, {
+    const response = await fetch("https://api.brevo.com/v3/smtp/email", {
       method: "POST",
       headers: {
         "api-key": brevoApiKey,
@@ -76,30 +99,25 @@ serve(async (req) => {
       body: JSON.stringify(brevoPayload),
     });
 
-    const responseData = await response.json();
+    const result = await response.json();
 
     if (!response.ok) {
-      console.error("Brevo API error:", responseData);
-      return new Response(JSON.stringify({ error: responseData }), {
-        status: response.status,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return new Response(
+        JSON.stringify({
+          error: result?.message || "Brevo email failed",
+          details: result,
+        }),
+        { status: response.status, headers: corsHeaders }
+      );
     }
-
-    return new Response(JSON.stringify(responseData), {
-      status: 200,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
-  } catch (error: any) {
-    console.error("Edge function error:", error);
     return new Response(
-      JSON.stringify({
-        error: error.message || "An unexpected error occurred",
-      }),
-      {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      }
+      JSON.stringify({ success: true, messageId: result.messageId }),
+      { status: 200, headers: corsHeaders }
+    );
+  } catch (err: any) {
+    return new Response(
+      JSON.stringify({ error: err.message || "Server error" }),
+      { status: 500, headers: corsHeaders }
     );
   }
 });
