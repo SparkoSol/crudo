@@ -12,6 +12,7 @@ const Dashboard = lazy(() => import("../pages/Dashboard"));
 const Settings = lazy(() => import("../pages/Settings"));
 const Salespeople = lazy(() => import("../pages/Salespeople"));
 const Templates = lazy(() => import("../pages/Templates"));
+const WhatsApp = lazy(() => import("../pages/WhatsApp"));
 const Invite = lazy(() => import("../pages/Invite"));
 const Login = lazy(() => import("../pages/auth/Login"));
 const Register = lazy(() => import("../pages/auth/Register"));
@@ -23,6 +24,7 @@ export const ROUTES = {
   SETTINGS: "/settings",
   SALESPEOPLE: "/salespeople",
   TEMPLATES: "/templates",
+  WHATSAPP: "/whatsapp",
   HOME: "/",
   INVITE: "/invite",
   LOGIN: "/auth/login",
@@ -61,6 +63,14 @@ export const routes: RouteObject[] = [
     element: (
       <ProtectedRoute>
         <Templates />
+      </ProtectedRoute>
+    ),
+  },
+  {
+    path: ROUTES.WHATSAPP,
+    element: (
+      <ProtectedRoute>
+        <WhatsApp />
       </ProtectedRoute>
     ),
   },
