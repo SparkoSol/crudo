@@ -13,43 +13,6 @@ export function WhatsAppIntegration() {
   const [connectionStatus, setConnectionStatus] = useState<'idle' | 'success' | 'error'>('idle');
   const [lastTestResult, setLastTestResult] = useState<string | null>(null);
 
-  const handleTestConnection = async () => {
-    if (!testPhoneNumber) {
-      toast.error('Please enter a phone number');
-      return;
-    }
-
-    if (!testPhoneNumber.match(/^\+[1-9]\d{1,14}$/)) {
-      toast.error('Invalid phone number format. Use (e.g., +2376209233)');
-      return;
-    }
-
-    setIsTesting(true);
-    setConnectionStatus('idle');
-    setLastTestResult(null);
-
-    try {
-      const success = await WhatsAppUtils.testConnection(testPhoneNumber);
-
-      if (success) {
-        setConnectionStatus('success');
-        setLastTestResult('Test message sent successfully! Check your WhatsApp.');
-        toast.success('WhatsApp test message sent successfully!');
-      } else {
-        setConnectionStatus('error');
-        setLastTestResult('Failed to send test message');
-        toast.error('Failed to send test message');
-      }
-    } catch (error: unknown) {
-      setConnectionStatus('error');
-      const errorMessage = error instanceof Error ? error.message : 'Failed to test WhatsApp connection';
-      setLastTestResult(errorMessage);
-      toast.error(errorMessage);
-    } finally {
-      setIsTesting(false);
-    }
-  };
-
   const handleSendMessage = async () => {
     if (!testPhoneNumber) {
       toast.error('Please enter a phone number');
@@ -69,10 +32,18 @@ export function WhatsAppIntegration() {
       const result = await WhatsAppUtils.sendMessage({
         messaging_product: 'whatsapp',
         to: testPhoneNumber,
-        type: 'text',
-        text: {
-          body: 'Hello! This is a test message from your WhatsApp Business integration.',
-        },
+        type: 'template',
+        templateName: 'sales_script_generation',
+        templateParams: [
+          'John',
+          '123 Maple St',
+          '2025-12-31',
+          '10:00 AM',
+          '2:00 PM'
+        ],
+        // text: {
+        //   body: 'Hello! This is a test message from your WhatsApp Business integration.',
+        // },
       });
 
       if (result.success) {
@@ -170,23 +141,6 @@ export function WhatsAppIntegration() {
           </div>
 
           <div className="flex flex-col sm:flex-row gap-3 pt-4 border-t border-gray-200">
-            <Button
-              onClick={handleTestConnection}
-              disabled={isTesting || !testPhoneNumber}
-              className="flex-1 gap-2 bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 shadow-md"
-            >
-              {isTesting ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Testing...
-                </>
-              ) : (
-                <>
-                  <CheckCircle2 className="h-4 w-4" />
-                  Test Connection
-                </>
-              )}
-            </Button>
             <Button
               onClick={handleSendMessage}
               disabled={isTesting || !testPhoneNumber}
