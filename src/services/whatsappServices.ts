@@ -30,7 +30,7 @@ export class WhatsAppUtils {
         template: {
           name: params.templateName,
           language: {
-            code: "en",
+            code: "en_US",
           },
           ...(params.templateParams && params.templateParams.length > 0 && {
             components: [
