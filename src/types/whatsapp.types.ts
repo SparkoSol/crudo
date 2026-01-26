@@ -73,6 +73,11 @@ export interface WhatsAppWebhookRequest {
                         sha256: string;
                         id: string;
                     };
+                    voice?: {
+                        mime_type: string;
+                        sha256: string;
+                        id: string;
+                    };
                     video?: {
                         caption?: string;
                         mime_type: string;
