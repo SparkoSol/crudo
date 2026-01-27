@@ -1,5 +1,4 @@
 import { Navigate, useLocation } from "react-router-dom";
-import { useEffect, useState } from "react";
 import { useAuth } from "../contexts/AuthContext";
 import { Loading } from "../components/Loading";
 import { ROUTES } from "./routes";
@@ -18,18 +17,6 @@ export const RoleBasedRoute = ({
   const { isAuthenticated, user, profile, isLoading, isProfileLoading } =
     useAuth();
   const location = useLocation();
-  const [profileWaitTimeout, setProfileWaitTimeout] = useState(false);
-
-  // useEffect(() => {
-  //   if (isProfileLoading && !profile) {
-  //     const timer = setTimeout(() => {
-  //       setProfileWaitTimeout(true);
-  //     }, 3000);
-  //     return () => clearTimeout(timer);
-  //   } else {
-  //     setProfileWaitTimeout(false);
-  //   }
-  // }, [isProfileLoading, profile]);
 
   if (isLoading) {
     return <Loading message="Checking authentication..." fullScreen />;
@@ -43,6 +30,21 @@ export const RoleBasedRoute = ({
     return <Loading message="Loading profile..." fullScreen />;
   }
 
+  const checkProfileRole = (): boolean => {
+    if (!profile) return false;
+    const profileRole = profile.role?.toLowerCase();
+    const isManagerRole = profileRole === 'manager' && allowedRoles.includes(Role.MANAGER);
+    const isSalesRepRole = (profileRole === 'sales_representative' || profileRole === 'salesrepresentative') 
+      && allowedRoles.includes(Role.SALES_REPRESENTATIVE);
+    return isManagerRole || isSalesRepRole;
+  };
+
+    if (profile && checkProfileRole()) {
+    if (!user || !user.role) {
+      return <>{children}</>;
+    }
+    }
+  
   if (!user || !hasAnyRole(user, allowedRoles)) {
     return <Navigate to={ROUTES.HOME} replace />;
   }
