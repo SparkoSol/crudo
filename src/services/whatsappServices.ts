@@ -17,11 +17,17 @@ export class WhatsAppUtils {
     const functionUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/whatsapp`;
 
     const messageType = params.type || "text";
-    // console.log("messageType", messageType);
-    // console.log("params", params);
     let whatsappPayload: WhatsAppSendRequest;
 
-    if (messageType === "template" && params.templateName) {
+    if (messageType === "interactive" && params.interactive) {
+      whatsappPayload = {
+        messaging_product: "whatsapp",
+        recipient_type: "individual",
+        to: params.to,
+        type: "interactive",
+        interactive: params.interactive,
+      };
+    } else if (messageType === "template" && params.templateName) {
       whatsappPayload = {
         messaging_product: "whatsapp",
         recipient_type: "individual",
@@ -73,6 +79,33 @@ export class WhatsAppUtils {
     }
 
     return json;
+  }
+
+  static async sendInteractiveMessage(
+    to: string,
+    bodyText: string,
+    buttons: Array<{ id: string; title: string }>
+  ): Promise<WhatsAppSendResponse> {
+    return this.sendMessage({
+      messaging_product: "whatsapp",
+      to,
+      type: "interactive",
+      interactive: {
+        type: "button",
+        body: {
+          text: bodyText,
+        },
+        action: {
+          buttons: buttons.map((btn) => ({
+            type: "reply",
+            reply: {
+              id: btn.id,
+              title: btn.title,
+            },
+          })),
+        },
+      },
+    });
   }
 
   static async testConnection(testPhoneNumber: string): Promise<boolean> {

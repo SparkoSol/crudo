@@ -1,3 +1,4 @@
+
 import { supabase } from "../lib/supabase/client";
 import type { Profile, UpdateProfileData } from "../types/profile.types";
 
