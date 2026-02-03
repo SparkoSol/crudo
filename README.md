@@ -33,18 +33,20 @@ The application is built on **Vite 6** with React 19, which provides lightning-f
 Clone the repository to your local machine using Git. Navigate to the project directory in your terminal. Install all project dependencies by running the `npm install` command, which will download and set up all required packages defined in `package.json`.
 
 Configure environment variables by creating a `.env` file in the project root. The file must contain:
+
 - `VITE_SUPABASE_URL` - Your Supabase project URL
 - `VITE_SUPABASE_ANON_KEY` - Your Supabase anonymous/public key
 
 These values can be found in your Supabase project settings under API. The anonymous key is safe to use in client-side code.
 
 For WhatsApp integration with voice transcription, configure the following environment variables in your Supabase Edge Function (via Supabase Dashboard or CLI):
+
 - `WHATSAPP_ACCESS_TOKEN` - Your WhatsApp Business API access token
 - `WHATSAPP_PHONE_NUMBER_ID` - Your WhatsApp Business phone number ID
 - `WHATSAPP_VERIFY_TOKEN` - Token for webhook verification (optional, defaults to "whatsapp_verify_token")
 - `WHATSAPP_API_VERSION` - WhatsApp API version (optional, defaults to "v24.0")
 - `OPENAI_API_KEY` - Your OpenAI API key for Whisper AI transcription
-- `WHATSAPP_TRANSCRIPT_TEMPLATE_NAME` - Template name for sending transcripts (optional, defaults to "voice_transcript")
+- `WHATSAPP_TRANSCRIPT_TEMPLATE_NAME` - Template name for sending transcripts with buttons (optional, defaults to "sales_report_transcript")
 
 Start the development server using `npm run dev`, which launches the Vite development server with hot module replacement. The application will be available at `http://localhost:5173` (or the next available port). Changes to source files will automatically trigger browser refresh.
 
@@ -100,23 +102,37 @@ The application includes WhatsApp Business API integration with automatic voice 
 
 2. **OpenAI API Key**: Sign up at [OpenAI](https://platform.openai.com/) and create an API key with access to Whisper API
 
-3. **WhatsApp Template**: Create a WhatsApp message template named "voice_transcript" (or configure a custom name via `WHATSAPP_TRANSCRIPT_TEMPLATE_NAME`) that accepts one body parameter for the transcript text
+3. **WhatsApp Template**: Create a WhatsApp message template named "sales_report_transcript" (or configure a custom name via `WHATSAPP_TRANSCRIPT_TEMPLATE_NAME`) with:
+   - **Body**: One parameter for the transcript text (e.g., `{{1}}`)
+   - **Buttons**: Two quick reply buttons:
+     - "Confirm" (or "✅ Confirm")
+     - "Retake" (or "🔄 Retake")
+
+   Example template structure:
+
+   ```
+   Body: 📝 Transcript:\n\n{{1}}\n\nPlease confirm or retake:
+   Buttons: [Confirm] [Retake]
+   ```
 
 ### How It Works
 
 The WhatsApp webhook handler (`supabase/functions/whatsapp/index.ts`) processes incoming messages:
+
 - Detects audio/voice message types
 - Downloads the media file from WhatsApp
 - Sends it to OpenAI Whisper API for transcription
-- Returns the transcript to the user via WhatsApp
-
-The system gracefully falls back to sending a plain text message if the template message fails, ensuring users always receive their transcript.
+- Sends the transcript via WhatsApp template message with Confirm/Retake buttons
+- When user clicks "Confirm": Processes transcript with GPT to fill user's template, stores in database
+- When user clicks "Retake": Marks transcript as retaken (user can send new voice)
+- Falls back to plain text message if template fails
 
 ## API Architecture
 
 API communication follows a service-based architecture using **Supabase**, which provides a complete backend solution including authentication, database, and real-time capabilities. All API interactions are centralized in the `src/services` directory.
 
 The **`authServices.ts`** file contains all authentication-related operations:
+
 - `signIn` - Authenticate user with email and password
 - `signUp` - Register new user with email and password
 - `signOut` - Sign out the current user
@@ -136,6 +152,7 @@ The **`authServices.ts`** file contains all authentication-related operations:
 React Context API is used to provide predictable state management with minimal boilerplate. The `AuthContext` provides authentication state including user data and authentication status through a simple `useAuth` hook.
 
 **State structure** follows a simple pattern where the `AuthProvider` component manages authentication state and provides it through Context. The `useAuth` hook provides access to:
+
 - `user` - Current user object or null
 - `isLoading` - Loading state during initialization
 - `isAuthenticated` - Boolean indicating authentication status

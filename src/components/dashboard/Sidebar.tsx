@@ -13,6 +13,7 @@ import {
   X,
   UserPlus,
   MessageSquare,
+  Mic,
 } from "lucide-react";
 import iNotusLogo from "@/assets/iNotus-color.svg";
 import { Button } from "@/components/ui/button";
@@ -51,6 +52,12 @@ const navItems: NavItem[] = [
     icon: MessageSquare,
     path: "/whatsapp",
     description: "Test and manage your WhatsApp Business API integration"
+  },
+  {
+    label: "Voice Transcripts",
+    icon: Mic,
+    path: "/voice-transcripts",
+    description: "View and manage your voice message transcripts"
   },
   {
     label: "Settings",
