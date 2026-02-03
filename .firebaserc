@@ -1,5 +1,14 @@
 {
   "projects": {
     "default": "voiceflow-ee12b"
+  },
+  "targets": {
+    "voiceflow-ee12b": {
+      "hosting": {
+        "wearecrudo": [
+          "wearecrudo"
+        ]
+      }
+    }
   }
 }
