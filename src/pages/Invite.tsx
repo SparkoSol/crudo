@@ -92,7 +92,7 @@ export default function Invite() {
     <div className="flex h-screen bg-gray-50 overflow-hidden">
       <Sidebar />
       <main className="flex-1 overflow-y-auto lg:ml-0">
-        <div className="p-6 lg:p-8 max-w-5xl mx-auto pt-20 lg:pt-6">
+        <div className="p-6 lg:p-8 pt-20 lg:pt-6 max-w-7xl mx-auto">
           <div className="mb-8">
             <h1 className="text-3xl font-bold text-gray-900 mb-2">
               Invite Sales Representative
@@ -133,7 +133,7 @@ export default function Invite() {
                         className={cn(
                           "pl-10 h-11",
                           errors.email &&
-                            "border-red-500 focus:border-red-500 focus:ring-red-500"
+                          "border-red-500 focus:border-red-500 focus:ring-red-500"
                         )}
                         placeholder="sales.representative@example.com"
                         disabled={isSubmitting}
