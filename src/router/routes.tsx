@@ -87,6 +87,14 @@ export const routes: RouteObject[] = [
     ),
   },
   {
+    path: ROUTES.SUBSCRIPTION,
+    element: (
+      <ProtectedRoute>
+        <Subscription />
+      </ProtectedRoute>
+    ),
+  },
+  {
     element: <Layout />,
     children: [
       {
