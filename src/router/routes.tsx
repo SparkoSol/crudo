@@ -18,6 +18,7 @@ const Invite = lazy(() => import("../pages/Invite"));
 const Login = lazy(() => import("../pages/auth/Login"));
 const Register = lazy(() => import("../pages/auth/Register"));
 const ResetPassword = lazy(() => import("../pages/auth/ResetPassword"));
+const Subscription = lazy(() => import("../pages/Subscription"));
 const NotFound = lazy(() => import("../pages/NotFound"));
 
 export const ROUTES = {
@@ -33,6 +34,7 @@ export const ROUTES = {
   REGISTER: "/auth/register",
   FORGET_PASSWORD: "/auth/forgot-password",
   RESET_PASSWORD: "/auth/reset-password",
+  SUBSCRIPTION: "/subscription",
 } as const;
 
 export const routes: RouteObject[] = [

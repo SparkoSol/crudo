@@ -14,6 +14,7 @@ import {
   UserPlus,
   MessageSquare,
   Mic,
+  CreditCard,
 } from "lucide-react";
 import iNotusLogo from "@/assets/iNotus-color.svg";
 import { Button } from "@/components/ui/button";
@@ -58,6 +59,12 @@ const navItems: NavItem[] = [
     icon: Mic,
     path: "/voice-transcripts",
     description: "View and manage your voice message transcripts"
+  },
+  {
+    label: "Subscription",
+    icon: CreditCard,
+    path: "/subscription",
+    description: "Manage your plan and billing details"
   },
   {
     label: "Settings",
