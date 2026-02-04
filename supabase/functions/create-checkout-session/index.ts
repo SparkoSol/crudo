@@ -12,6 +12,13 @@ const corsHeaders = {
     "Access-Control-Allow-Headers": "Content-Type, Authorization",
 };
 
+
+const PRICES = {
+    monthly: "price_1Sx6Tk1oLMDtpFQP7qjtx2bh", // €10/mo
+    annual: "price_1Sx6UH1oLMDtpFQPijGSna4W",   // €120/yr
+    metered: "price_1Sx6Y91oLMDtpFQPtPweMLxl",         // €5/credit
+};
+
 serve(async (req) => {
     const { method } = req;
 
@@ -20,25 +27,32 @@ serve(async (req) => {
     }
 
     try {
-        const { price_id, user_id, plan_type, success_url, cancel_url } = await req.json();
+        const { user_id, plan_type, success_url, cancel_url } = await req.json();
 
-        if (!price_id || !user_id || !plan_type) {
+        if (!user_id || !plan_type || !['monthly', 'annual'].includes(plan_type)) {
             return new Response(
-                JSON.stringify({ error: "Missing required fields: price_id, user_id, or plan_type" }),
+                JSON.stringify({ error: "Missing or invalid required fields: user_id, plan_type (monthly|annual)" }),
                 { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
             );
         }
 
-        console.log(`🎟️ Creating checkout session for user: ${user_id}, plan: ${plan_type}`);
+        console.log(`🎟️ Creating 'Platform Access' checkout session for user: ${user_id}, plan: ${plan_type}`);
+
+        const basePriceId = plan_type === 'monthly' ? PRICES.monthly : PRICES.annual;
+
+        const line_items = [
+            {
+                price: basePriceId,
+                quantity: 1,
+            },
+            {
+                price: PRICES.metered,
+            }
+        ];
 
         const session = await stripe.checkout.sessions.create({
             payment_method_types: ["card"],
-            line_items: [
-                {
-                    price: price_id,
-                    quantity: 1,
-                },
-            ],
+            line_items: line_items,
             mode: "subscription",
             success_url: success_url || `${req.headers.get("origin")}/dashboard?session_id={CHECKOUT_SESSION_ID}`,
             cancel_url: cancel_url || `${req.headers.get("origin")}/subscription`,
