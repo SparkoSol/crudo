@@ -14,9 +14,9 @@ const corsHeaders = {
 
 
 const PRICES = {
-    monthly: "price_1Sx6Tk1oLMDtpFQP7qjtx2bh", // €10/mo
-    annual: "price_1Sx6UH1oLMDtpFQPijGSna4W",   // €120/yr
-    metered: "price_1Sx6Y91oLMDtpFQPtPweMLxl",         // €5/credit
+    monthly: Deno.env.get("STRIPE_PRICE_MONTHLY")!,
+    annual: Deno.env.get("STRIPE_PRICE_ANNUAL")!,
+    metered_monthly_annual: Deno.env.get("STRIPE_PRICE_METERED_MONTHLY_ANNUAL")!,
 };
 
 serve(async (req) => {
@@ -39,31 +39,35 @@ serve(async (req) => {
         console.log(`🎟️ Creating 'Platform Access' checkout session for user: ${user_id}, plan: ${plan_type}`);
 
         const basePriceId = plan_type === 'monthly' ? PRICES.monthly : PRICES.annual;
+        const subscriptionRole = plan_type === 'annual' ? "platform" : "monthly_bundled";
 
-        const line_items = [
+        const line_items: any[] = [
             {
                 price: basePriceId,
                 quantity: 1,
-            },
-            {
-                price: PRICES.metered,
             }
         ];
+
+        if (plan_type === 'monthly') {
+            line_items.push({ price: PRICES.metered_monthly_annual });
+        }
 
         const session = await stripe.checkout.sessions.create({
             payment_method_types: ["card"],
             line_items: line_items,
             mode: "subscription",
-            success_url: success_url || `${req.headers.get("origin")}/dashboard?session_id={CHECKOUT_SESSION_ID}`,
+            success_url: success_url || `${req.headers.get("origin")}/dashboard/status?session_id={CHECKOUT_SESSION_ID}`,
             cancel_url: cancel_url || `${req.headers.get("origin")}/subscription`,
             metadata: {
                 user_id,
                 plan_type,
+                subscription_role: subscriptionRole,
             },
             subscription_data: {
                 metadata: {
                     user_id,
                     plan_type,
+                    subscription_role: subscriptionRole,
                 },
             },
         });

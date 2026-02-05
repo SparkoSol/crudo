@@ -19,6 +19,12 @@ const corsHeaders = {
     "Access-Control-Allow-Headers": "Content-Type, stripe-signature",
 };
 
+const PRICES = {
+    monthly: Deno.env.get("STRIPE_PRICE_MONTHLY")!,
+    annual: Deno.env.get("STRIPE_PRICE_ANNUAL")!,
+    metered_monthly_annual: Deno.env.get("STRIPE_PRICE_METERED_MONTHLY_ANNUAL")!,
+};
+
 serve(async (req) => {
     const { method } = req;
 
@@ -48,7 +54,7 @@ serve(async (req) => {
                 endpointSecret!,
                 undefined
             );
-        } catch (err) {
+        } catch (err: any) {
             console.error(`❌ Webhook signature verification failed: ${err.message}`);
             return new Response(`Webhook Error: ${err.message}`, { status: 400, headers: corsHeaders });
         }
@@ -59,35 +65,86 @@ serve(async (req) => {
             case "checkout.session.completed": {
                 const session = event.data.object as Stripe.Checkout.Session;
                 console.log(`💰 Checkout Session completed: ${session.id}`);
+                console.log("Metadata received:", JSON.stringify(session.metadata));
 
                 const subscriptionId = session.subscription as string;
                 const userId = session.metadata?.user_id;
                 const planType = session.metadata?.plan_type;
+                const role = session.metadata?.subscription_role;
 
                 if (!subscriptionId || !userId) {
-                    console.error("Missing subscription info in session metadata");
+                    console.error("Missing subscription info or user_id in session metadata");
                     break;
                 }
 
-                const subscription = await stripe.subscriptions.retrieve(subscriptionId);
-                const creditsItem = subscription.items.data.find(item => item.price.nickname?.toLowerCase().includes("credit") || item.price.product); // Adjust heuristic if needed
+                try {
+                    const subscription = await stripe.subscriptions.retrieve(subscriptionId);
 
-                // Actually, we should probably fetch the item ID more reliably. 
-                // For now, let's take the first item if there is only one, or look for metadata.
-                const creditsItemId = subscription.items.data[0].id;
+                    const creditsItem = subscription.items.data.find(item =>
+                        item.price.recurring?.usage_type === 'metered'
+                    );
+                    const creditsItemId = creditsItem?.id;
 
-                const { error } = await supabase
-                    .from("subscriptions")
-                    .upsert({
+                    const upsertData = {
                         subscription_id: subscriptionId,
                         user_id: userId,
-                        credits_subscription_item_id: creditsItemId,
+                        credits_subscription_item_id: creditsItemId || null,
                         plan_type: planType,
+                        subscription_role: role === 'platform' ? 'platform' : 'usage',
                         status: subscription.status,
                         updated_at: new Date().toISOString(),
-                    }, { onConflict: 'subscription_id' });
+                    };
 
-                if (error) console.error("Error updating subscription:", error);
+                    console.log("Upserting subscription data:", JSON.stringify(upsertData));
+
+                    const { error } = await supabase
+                        .from("subscriptions")
+                        .upsert(upsertData, { onConflict: 'subscription_id' });
+
+                    if (error) {
+                        console.error("Error updating primary subscription:", error);
+                    } else {
+                        console.log("Successfully upserted primary subscription.");
+                    }
+
+                    if (role === "platform") {
+                        console.log(`Split flow: Creating usage subscription for customer ${session.customer}`);
+
+                        try {
+                            const usageSub = await stripe.subscriptions.create({
+                                customer: session.customer as string,
+                                items: [
+                                    {
+                                        price: PRICES.metered_monthly_annual,
+                                    },
+                                ],
+                                metadata: {
+                                    user_id: userId,
+                                    subscription_role: "usage",
+                                },
+                            });
+
+                            const { error: usageError } = await supabase.from("subscriptions").insert([
+                                {
+                                    user_id: userId,
+                                    subscription_id: usageSub.id,
+                                    credits_subscription_item_id: usageSub.items.data[0].id,
+                                    subscription_role: "usage",
+                                    plan_type: "metered",
+                                    status: "active",
+                                    updated_at: new Date().toISOString(),
+                                }
+                            ]);
+
+                            if (usageError) console.error("Error creating usage subscription record:", usageError);
+                            else console.log(`✅ Created usage subscription: ${usageSub.id}`);
+                        } catch (usageApiErr: any) {
+                            console.error("Failed to create usage subscription via API:", usageApiErr.message);
+                        }
+                    }
+                } catch (subErr: any) {
+                    console.error("Error retrieving subscription or processing logic:", subErr.message);
+                }
                 break;
             }
 
@@ -98,32 +155,43 @@ serve(async (req) => {
 
                 const userId = subscription.metadata?.user_id;
                 const planType = subscription.metadata?.plan_type;
-                const creditsItemId = subscription.items.data[0].id;
+                const role = subscription.metadata?.subscription_role;
 
-                if (!userId) {
-                    // If userId is not in metadata, try to find it in Supabase by subscription_id first
+                let targetUserId = userId;
+
+                if (!targetUserId) {
                     const { data: existingSub } = await supabase
                         .from("subscriptions")
                         .select("user_id")
                         .eq("subscription_id", subscription.id)
-                        .single();
+                        .maybeSingle();
 
-                    if (!existingSub) {
-                        console.warn(`No user_id found for subscription ${subscription.id}`);
+                    if (existingSub) {
+                        targetUserId = existingSub.user_id;
+                    } else {
+                        console.warn(`No user_id found for subscription ${subscription.id}, skipping update.`);
                         break;
                     }
                 }
 
+                const creditsItem = subscription.items.data.find(item =>
+                    item.price.recurring?.usage_type === 'metered'
+                );
+                const creditsItemId = creditsItem?.id;
+
+                const upsertData = {
+                    subscription_id: subscription.id,
+                    user_id: targetUserId,
+                    credits_subscription_item_id: creditsItemId || null,
+                    plan_type: planType,
+                    subscription_role: role || (planType === 'annual' ? 'platform' : 'usage'),
+                    status: subscription.status,
+                    updated_at: new Date().toISOString(),
+                };
+
                 const { error } = await supabase
                     .from("subscriptions")
-                    .upsert({
-                        subscription_id: subscription.id,
-                        user_id: userId || undefined, // Don't overwrite if null
-                        credits_subscription_item_id: creditsItemId,
-                        plan_type: planType || undefined,
-                        status: subscription.status,
-                        updated_at: new Date().toISOString(),
-                    }, { onConflict: 'subscription_id' });
+                    .upsert(upsertData, { onConflict: 'subscription_id' });
 
                 if (error) console.error("Error updating subscription:", error);
                 break;
@@ -179,9 +247,8 @@ serve(async (req) => {
             status: 200,
             headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
-    } catch (err) {
+    } catch (err: any) {
         console.error(`Unexpected error: ${err.message}`);
-        return new Response(`Internal Server Error`, { status: 500, headers: corsHeaders });
+        return new Response(`Internal Server Error: ${err.message}`, { status: 500, headers: corsHeaders });
     }
 });
-
