@@ -45,6 +45,8 @@ serve(async (req) => {
             .select("subscription_id, credits_subscription_item_id")
             .eq("user_id", user.id)
             .in("status", ["active", "trialing", "past_due"])
+            .order('updated_at', { ascending: false })
+            .limit(1)
             .maybeSingle();
 
         if (subError || !subscription) {

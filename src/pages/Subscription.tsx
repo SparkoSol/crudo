@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react';
-import { supabase } from '@/lib/supabaseClient';
 import { Sidebar } from '@/components/dashboard/Sidebar';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
@@ -7,23 +6,24 @@ import { Check, Loader2, Zap, CreditCard, ChevronRight } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import toast from 'react-hot-toast';
 import { SUBSCRIPTION_PLAN } from '@/constants/subscription';
+import { subscriptionService } from '@/services/subscriptionService';
+import type { SubscriptionData } from '@/types';
 
 export default function Subscription() {
     const { user } = useAuth();
     const [isAnnual, setIsAnnual] = useState(false);
     const [loading, setLoading] = useState(false);
-    const [subscription, setSubscription] = useState<any>(null);
+    const [subscription, setSubscription] = useState<SubscriptionData | null>(null);
 
     useEffect(() => {
         if (!user) return;
         const fetchSub = async () => {
-            const { data } = await supabase
-                .from('subscriptions')
-                .select('plan_type, status')
-                .eq('user_id', user.id)
-                .in('status', ['active', 'past_due'])
-                .maybeSingle();
-            if (data) setSubscription(data);
+            try {
+                const data = await subscriptionService.getUserSubscription(user.id);
+                setSubscription(data);
+            } catch (err) {
+                console.error('Failed to fetch subscription:', err);
+            }
         };
         fetchSub();
     }, [user]);
@@ -37,23 +37,11 @@ export default function Subscription() {
         setLoading(true);
         try {
             const planType = isAnnual ? 'annual' : 'monthly';
-
-            const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-checkout-session`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${user?.access_token || ''}`,
-                },
-                body: JSON.stringify({
-                    user_id: user.id,
-                    email: user.email,
-                    plan_type: planType,
-                }),
+            const { url } = await subscriptionService.createCheckoutSession({
+                userId: user.id,
+                email: user.email || '',
+                planType,
             });
-
-            const { url, error } = await response.json();
-
-            if (error) throw new Error(error);
 
             if (url) {
                 window.location.href = url;
@@ -111,7 +99,6 @@ export default function Subscription() {
 
                         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
 
-                            {/* Main Subscription Card */}
                             <Card className="lg:col-span-2 border border-gray-200 shadow-lg bg-white overflow-hidden rounded-2xl">
                                 <CardHeader className="p-8 pb-0">
                                     <div className="flex justify-between items-start">

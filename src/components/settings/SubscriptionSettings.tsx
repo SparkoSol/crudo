@@ -1,24 +1,25 @@
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { supabase } from '@/lib/supabaseClient';
 import { useAuth } from '@/contexts/AuthContext';
 import { Loader2, Zap, CreditCard, AlertTriangle } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
+import { subscriptionService } from '@/services/subscriptionService';
+import type { SubscriptionData, SubscriptionDetails } from '@/types';
 
 interface SubscriptionSettingsProps {
-    initialSubscription?: any;
-    initialDetails?: { next_billing_date: string | null, usage_credits: number } | null;
+    initialSubscription?: SubscriptionData | null;
+    initialDetails?: SubscriptionDetails | null;
 }
 
 export function SubscriptionSettings({ initialSubscription, initialDetails }: SubscriptionSettingsProps) {
     const { user } = useAuth();
     const navigate = useNavigate();
     const [loading, setLoading] = useState(!initialSubscription);
-    const [subscription, setSubscription] = useState<any>(initialSubscription || null);
-    const [details, setDetails] = useState<{ next_billing_date: string | null, usage_credits: number }>(
+    const [subscription, setSubscription] = useState<SubscriptionData | null>(initialSubscription || null);
+    const [details, setDetails] = useState<SubscriptionDetails>(
         initialDetails || { next_billing_date: null, usage_credits: 0 }
     );
     const [cancelLoading, setCancelLoading] = useState(false);
@@ -36,34 +37,18 @@ export function SubscriptionSettings({ initialSubscription, initialDetails }: Su
 
         const fetchSub = async () => {
             setLoading(true);
-            const { data, error } = await supabase
-                .from('subscriptions')
-                .select('*')
-                .eq('user_id', user.id)
-                .in('status', ['active', 'trialing', 'past_due'])
-                .order('updated_at', { ascending: false })
-                .maybeSingle();
-
-            if (data) {
-                setSubscription(data);
-                try {
-                    const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/get-subscription-details`, {
-                        headers: {
-                            'Authorization': `Bearer ${user.access_token}`,
-                        },
-                    });
-                    const detailData = await response.json();
-                    if (detailData.next_billing_date) {
-                        setDetails({
-                            next_billing_date: detailData.next_billing_date,
-                            usage_credits: detailData.usage_credits || 0
-                        });
-                    }
-                } catch (err) {
-                    console.error("Failed to fetch subscription details", err);
+            try {
+                const subData = await subscriptionService.getUserSubscription(user.id);
+                if (subData) {
+                    setSubscription(subData);
+                    const detailData = await subscriptionService.getSubscriptionDetails();
+                    setDetails(detailData);
                 }
+            } catch (err) {
+                console.error("Failed to fetch subscription data", err);
+            } finally {
+                setLoading(false);
             }
-            setLoading(false);
         };
         fetchSub();
     }, [user, initialSubscription, initialDetails]);
@@ -73,25 +58,15 @@ export function SubscriptionSettings({ initialSubscription, initialDetails }: Su
     };
 
     const executeCancellation = async () => {
+        if (!user) return;
         setCancelLoading(true);
         try {
-            const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/cancel-subscription`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${user?.access_token || ''}`,
-                },
-            });
-
-            const result = await response.json();
-            if (response.ok) {
-                toast.success("Subscription canceled successfully");
+            await subscriptionService.cancelSubscription();
+            toast.success("Subscription canceled successfully");
+            if (subscription) {
                 setSubscription({ ...subscription, status: 'canceled' });
-                setShowCancelDialog(false);
-            } else {
-                throw new Error(result.error || "Failed to cancel subscription");
             }
-
+            setShowCancelDialog(false);
         } catch (err: any) {
             console.error(err);
             toast.error(err.message || "Failed to cancel subscription");

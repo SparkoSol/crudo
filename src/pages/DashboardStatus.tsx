@@ -5,7 +5,8 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { CheckCircle2, Loader2, Home } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
-import { supabase } from '@/lib/supabaseClient';
+import { subscriptionService } from '@/services/subscriptionService';
+import type { SubscriptionData } from '@/types';
 
 export default function DashboardStatus() {
     const [searchParams] = useSearchParams();
@@ -13,7 +14,7 @@ export default function DashboardStatus() {
     const sessionId = searchParams.get('session_id');
     const { user } = useAuth();
     const [verifying, setVerifying] = useState(true);
-    const [subscription, setSubscription] = useState<any>(null);
+    const [subscription, setSubscription] = useState<SubscriptionData | null>(null);
 
     useEffect(() => {
         const verifySession = async () => {
@@ -27,21 +28,15 @@ export default function DashboardStatus() {
                 const maxAttempts = 5;
 
                 while (attempts < maxAttempts) {
-                    const { data, error } = await supabase
-                        .from('subscriptions')
-                        .select('*')
-                        .eq('user_id', user.id)
-                        .in('status', ['active', 'trialing'])
-                        .order('updated_at', { ascending: false })
-                        .limit(1)
-                        .maybeSingle();
-
-                    if (data) {
-                        setSubscription(data);
-                        break;
+                    try {
+                        const data = await subscriptionService.getUserSubscription(user.id);
+                        if (data && (data.status === 'active' || data.status === 'trialing')) {
+                            setSubscription(data);
+                            break;
+                        }
+                    } catch (err) {
+                        console.error("Error fetching sub:", err);
                     }
-
-                    if (error) console.error("Error fetching sub:", error);
 
                     await new Promise(r => setTimeout(r, 2000));
                     attempts++;
