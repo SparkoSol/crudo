@@ -45,7 +45,9 @@ serve(async (req) => {
             .select("credits_subscription_item_id")
             .eq("user_id", user_id)
             .eq("status", "active")
-            .single();
+            .not('credits_subscription_item_id', 'is', null)
+            .limit(1)
+            .maybeSingle();
 
         if (fetchError || !subscription) {
             console.error("Error fetching active subscription:", fetchError);

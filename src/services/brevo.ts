@@ -1,23 +1,5 @@
 import { supabase } from "../lib/supabase/client";
-
-export const BrevoTemplates = {
-  InviteSalesPerson: 1,
-} as const;
-
-export type BrevoTemplate = typeof BrevoTemplates[keyof typeof BrevoTemplates];
-
-export interface BrevoAttachment {
-  name: string;
-  content: string;
-  contentType?: string;
-}
-
-export interface BrevoTemplateParams {
-  company_name?: string;
-  user_name?: string;
-  password?: string;
-  [key: string]: string | undefined;
-}
+import type { BrevoTemplateParams, BrevoAttachment } from "@/types";
 
 export class BrevoUtils {
   static async send(
@@ -31,7 +13,7 @@ export class BrevoUtils {
       data: { session },
       error,
     } = await supabase.auth.getSession();
-    
+
     if (error || !session) {
       throw new Error("User not authenticated");
     }

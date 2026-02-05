@@ -5,15 +5,16 @@ import { ChangePassword } from '@/components/settings/ChangePassword';
 import { SubscriptionSettings } from '@/components/settings/SubscriptionSettings';
 import { SettingsSkeleton } from '@/components/settings/SettingsSkeleton';
 import { getProfile } from '@/services/profileServices';
-import { supabase } from '@/lib/supabaseClient';
 import { useAuth } from '@/contexts/AuthContext';
+import { subscriptionService } from '@/services/subscriptionService';
+import type { SubscriptionData, SubscriptionDetails } from '@/types';
 
 export default function Settings() {
   const { user } = useAuth();
   const [loading, setLoading] = useState(true);
   const [profileData, setProfileData] = useState<any>(null);
-  const [subscriptionData, setSubscriptionData] = useState<any>(null);
-  const [subDetails, setSubDetails] = useState<any>(null);
+  const [subscriptionData, setSubscriptionData] = useState<SubscriptionData | null>(null);
+  const [subDetails, setSubDetails] = useState<SubscriptionDetails | null>(null);
 
   useEffect(() => {
     if (!user) return;
@@ -21,27 +22,14 @@ export default function Settings() {
     const fetchData = async () => {
       setLoading(true);
       try {
-        const [profile, { data: sub }] = await Promise.all([
-          getProfile(),
-          supabase
-            .from('subscriptions')
-            .select('*')
-            .eq('user_id', user.id)
-            .in('status', ['active', 'trialing', 'past_due'])
-            .order('updated_at', { ascending: false })
-            .maybeSingle()
-        ]);
-
+        const profile = await getProfile();
         setProfileData(profile);
+
+        const sub = await subscriptionService.getUserSubscription(user.id);
         setSubscriptionData(sub);
 
         if (sub) {
-          const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/get-subscription-details`, {
-            headers: {
-              'Authorization': `Bearer ${user.access_token}`,
-            },
-          });
-          const detailData = await response.json();
+          const detailData = await subscriptionService.getSubscriptionDetails();
           setSubDetails(detailData);
         }
       } catch (error) {

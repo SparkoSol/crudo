@@ -1,19 +1,8 @@
 import { createClient } from "@supabase/supabase-js";
 import { supabaseUrl, supabaseServiceRoleKey } from "../config/env";
-import { BrevoUtils, BrevoTemplates } from "./brevo";
-
-export interface InviteSalesRepresentativeData {
-  email: string;
-  managerId: string;
-  managerFullName: string | null;
-  managerCompanyName?: string | null;
-}
-
-export interface InviteResponse {
-  userId: string;
-  email: string;
-  password: string;
-}
+import { BrevoUtils } from "./brevo";
+import { BrevoTemplates } from "@/types";
+import type { InviteSalesRepresentativeData, InviteResponse } from "@/types";
 
 const supabaseAdmin = createClient(supabaseUrl, supabaseServiceRoleKey, {
   auth: {
