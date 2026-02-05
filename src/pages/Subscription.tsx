@@ -6,6 +6,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Check, Loader2, Zap, CreditCard, ChevronRight } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import toast from 'react-hot-toast';
+import { SUBSCRIPTION_PLAN } from '@/constants/subscription';
 
 export default function Subscription() {
     const { user } = useAuth();
@@ -26,21 +27,6 @@ export default function Subscription() {
         };
         fetchSub();
     }, [user]);
-
-    const PLAN = {
-        name: 'Platform Access',
-        description: 'Complete sales reporting and management suite.',
-        monthlyPrice: 10,
-        annualPrice: 120,
-        creditPrice: 5,
-        features: [
-            'Sales Reporting Dashboard',
-            'Team Management & Roles',
-            'Unlimited Historical Data',
-            'Export to CSV/PDF',
-            'Priority Email Support'
-        ],
-    };
 
     const handleSubscribe = async () => {
         if (!user) {
@@ -130,9 +116,9 @@ export default function Subscription() {
                                 <CardHeader className="p-8 pb-0">
                                     <div className="flex justify-between items-start">
                                         <div>
-                                            <CardTitle className="text-2xl font-bold text-gray-900">{PLAN.name}</CardTitle>
+                                            <CardTitle className="text-2xl font-bold text-gray-900">{SUBSCRIPTION_PLAN.name}</CardTitle>
                                             <CardDescription className="text-gray-500 mt-2 text-base">
-                                                {PLAN.description}
+                                                {SUBSCRIPTION_PLAN.description}
                                             </CardDescription>
                                         </div>
                                         <div className="h-12 w-12 rounded-xl bg-blue-50 flex items-center justify-center">
@@ -141,7 +127,7 @@ export default function Subscription() {
                                     </div>
                                     <div className="mt-6 flex items-baseline gap-1">
                                         <span className="text-5xl font-extrabold text-gray-900 tracking-tight">
-                                            €{isAnnual ? PLAN.annualPrice : PLAN.monthlyPrice}
+                                            €{isAnnual ? SUBSCRIPTION_PLAN.annualPrice : SUBSCRIPTION_PLAN.monthlyPrice}
                                         </span>
                                         <span className="text-gray-500 text-lg">
                                             / {isAnnual ? 'year' : 'month'}
@@ -151,7 +137,7 @@ export default function Subscription() {
                                 <CardContent className="p-8 pt-6">
                                     <div className="h-px w-full bg-gray-100 mb-6"></div>
                                     <ul className="space-y-4">
-                                        {PLAN.features.map((feature, i) => (
+                                        {SUBSCRIPTION_PLAN.features.map((feature, i) => (
                                             <li key={i} className="flex items-center gap-3">
                                                 <div className="h-5 w-5 rounded-full bg-green-100 flex items-center justify-center flex-shrink-0">
                                                     <Check className="h-3 w-3 text-green-600" />
@@ -189,7 +175,6 @@ export default function Subscription() {
                                 </CardFooter>
                             </Card>
 
-                            {/* Metered Credits Card */}
                             <Card className="border border-gray-200 shadow-md bg-white rounded-2xl h-full flex flex-col">
                                 <CardHeader className="p-6">
                                     <div className="h-10 w-10 rounded-lg bg-orange-100 flex items-center justify-center mb-4">
@@ -202,7 +187,7 @@ export default function Subscription() {
                                 </CardHeader>
                                 <CardContent className="p-6 pt-2 flex-1">
                                     <div className="flex items-baseline gap-1 mb-4">
-                                        <span className="text-3xl font-bold text-gray-900">€{PLAN.creditPrice}</span>
+                                        <span className="text-3xl font-bold text-gray-900">€{SUBSCRIPTION_PLAN.creditPrice}</span>
                                         <span className="text-gray-500">/ credit</span>
                                     </div>
                                     <p className="text-sm text-gray-600 leading-relaxed">

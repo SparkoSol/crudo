@@ -54,10 +54,8 @@ serve(async (req) => {
             );
         }
 
-        // Cancel in Stripe
         const deletedSubscription = await stripe.subscriptions.cancel(subscription.subscription_id);
 
-        // Update Supabase
         const { error: updateError } = await supabase
             .from("subscriptions")
             .update({ status: 'canceled', updated_at: new Date().toISOString() })

@@ -23,8 +23,6 @@ export default function DashboardStatus() {
             }
 
             try {
-                // Poll for the subscription record in our DB
-                // Since the webhook takes a moment to fire and process
                 let attempts = 0;
                 const maxAttempts = 5;
 
@@ -45,7 +43,6 @@ export default function DashboardStatus() {
 
                     if (error) console.error("Error fetching sub:", error);
 
-                    // Wait 2 seconds before retry
                     await new Promise(r => setTimeout(r, 2000));
                     attempts++;
                 }
