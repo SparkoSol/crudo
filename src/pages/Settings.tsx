@@ -1,6 +1,7 @@
 import { Sidebar } from '@/components/dashboard/Sidebar';
 import { ProfileInformation } from '@/components/settings/ProfileInformation';
 import { ChangePassword } from '@/components/settings/ChangePassword';
+import { SubscriptionSettings } from '@/components/settings/SubscriptionSettings';
 
 export default function Settings() {
 
@@ -18,6 +19,7 @@ export default function Settings() {
 
           <div className="space-y-6">
             <ProfileInformation />
+            <SubscriptionSettings />
             <ChangePassword />
           </div>
         </div>

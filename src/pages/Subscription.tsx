@@ -2,85 +2,47 @@ import { useState } from 'react';
 import { Sidebar } from '@/components/dashboard/Sidebar';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import { Check, Loader2, Sparkles, Zap } from 'lucide-react';
+import { Check, Loader2, Zap, CreditCard, ChevronRight } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import toast from 'react-hot-toast';
-
-const PLANS = [
-    {
-        name: 'Starter',
-        description: 'Perfect for small teams getting started.',
-        monthlyPrice: 29,
-        annualPrice: 290,
-        priceIdMonthly: 'price_starter_monthly', // Replace with real Stripe Price ID
-        priceIdAnnual: 'price_starter_annual',   // Replace with real Stripe Price ID
-        features: [
-            'Up to 5 salespeople',
-            'Basic report templates',
-            'Voice transcripts (100/mo)',
-            'WhatsApp integration',
-            'Email support',
-        ],
-    },
-    {
-        name: 'Pro',
-        description: 'Advanced features for growing businesses.',
-        monthlyPrice: 79,
-        annualPrice: 790,
-        priceIdMonthly: 'price_pro_monthly', // Replace with real Stripe Price ID
-        priceIdAnnual: 'price_pro_annual',   // Replace with real Stripe Price ID
-        popular: true,
-        features: [
-            'Up to 20 salespeople',
-            'Unlimited report templates',
-            'Unlimited voice transcripts',
-            'Priority WhatsApp API',
-            'Advanced analytics',
-            '24/7 Priority support',
-        ],
-    },
-    {
-        name: 'Enterprise',
-        description: 'Full-scale solution for large organizations.',
-        monthlyPrice: 199,
-        annualPrice: 1990,
-        priceIdMonthly: 'price_enterprise_monthly', // Replace with real Stripe Price ID
-        priceIdAnnual: 'price_enterprise_annual',   // Replace with real Stripe Price ID
-        features: [
-            'Unlimited salespeople',
-            'Custom integrations',
-            'Dedicated account manager',
-            'SLA guarantees',
-            'Audit logs & compliance',
-            'Custom AI models',
-        ],
-    },
-];
 
 export default function Subscription() {
     const { user } = useAuth();
     const [isAnnual, setIsAnnual] = useState(false);
-    const [loadingPlan, setLoadingPlan] = useState<string | null>(null);
+    const [loading, setLoading] = useState(false);
 
-    const handleSubscribe = async (plan: typeof PLANS[0]) => {
+    const PLAN = {
+        name: 'Platform Access',
+        description: 'Complete sales reporting and management suite.',
+        monthlyPrice: 10,
+        annualPrice: 120,
+        creditPrice: 5,
+        features: [
+            'Sales Reporting Dashboard',
+            'Team Management & Roles',
+            'Unlimited Historical Data',
+            'Export to CSV/PDF',
+            'Priority Email Support'
+        ],
+    };
+
+    const handleSubscribe = async () => {
         if (!user) {
             toast.error('Please login to subscribe');
             return;
         }
 
-        setLoadingPlan(plan.name);
+        setLoading(true);
         try {
-            const priceId = isAnnual ? plan.priceIdAnnual : plan.priceIdMonthly;
             const planType = isAnnual ? 'annual' : 'monthly';
 
             const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-checkout-session`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${user?.access_token || ''}`, // Depending on your auth setup
+                    'Authorization': `Bearer ${user?.access_token || ''}`,
                 },
                 body: JSON.stringify({
-                    price_id: priceId,
                     user_id: user.id,
                     plan_type: planType,
                 }),
@@ -95,111 +57,153 @@ export default function Subscription() {
             }
         } catch (err: any) {
             console.error(err);
-            toast.error('Failed to initiate checkout. Please check your Stripe logs.');
+            toast.error(err instanceof Error ? err.message : 'Failed to initiate checkout');
         } finally {
-            setLoadingPlan(null);
+            setLoading(false);
         }
     };
 
     return (
         <div className="flex h-screen bg-gray-50 overflow-hidden text-gray-900">
             <Sidebar />
-            <main className="flex-1 overflow-y-auto">
+            <main className="flex-1 overflow-y-auto lg:ml-0">
                 <div className="p-6 lg:p-8 pt-20 lg:pt-6 max-w-7xl mx-auto">
-                    <div className="text-center mb-12">
-                        <h1 className="text-4xl font-extrabold tracking-tight text-gray-900 sm:text-5xl mb-4">
-                            Simple, transparent pricing
-                        </h1>
-                        <p className="text-xl text-gray-600 max-w-2xl mx-auto font-medium">
-                            Choose the plan that's right for your business and start automating your sales reports today.
-                        </p>
 
-                        <div className="mt-10 flex items-center justify-center gap-4">
-                            <span className={`text-sm font-semibold transition-colors ${!isAnnual ? 'text-gray-900' : 'text-gray-400'}`}>
-                                Monthly
-                            </span>
-                            <button
-                                onClick={() => setIsAnnual(!isAnnual)}
-                                className="relative inline-flex h-6 w-11 items-center rounded-full bg-brand-primary-600 transition-colors focus:outline-none ring-2 ring-brand-primary-100 ring-offset-2"
-                            >
-                                <span
-                                    className={`${isAnnual ? 'translate-x-6' : 'translate-x-1'
-                                        } inline-block h-4 w-4 transform rounded-full bg-white transition-transform ease-in-out duration-200`}
-                                />
-                            </button>
-                            <span className={`text-sm font-semibold transition-colors ${isAnnual ? 'text-gray-900' : 'text-gray-400'}`}>
-                                Annual <span className="text-green-600 text-xs ml-1">(Save 20%)</span>
-                            </span>
-                        </div>
+                    {/* Consistent Header Section */}
+                    <div className="mb-8">
+                        <h1 className="text-3xl font-bold text-gray-900 mb-2">Subscription</h1>
+                        <p className="text-gray-600">
+                            Manage your plan and billing details
+                        </p>
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-                        {PLANS.map((plan) => (
-                            <Card
-                                key={plan.name}
-                                className={`flex flex-col relative transition-all duration-300 hover:shadow-xl hover:-translate-y-1 border-2 ${plan.popular ? 'border-brand-primary-600 ring-4 ring-brand-primary-50 shadow-lg' : 'border-gray-100'
-                                    }`}
-                            >
-                                {plan.popular && (
-                                    <div className="absolute top-0 right-1/2 translate-x-1/2 -translate-y-1/2 bg-brand-primary-600 text-white text-xs font-bold px-4 py-1.5 rounded-full flex items-center gap-1 shadow-md">
-                                        <Sparkles className="w-3 h-3" />
-                                        MOST POPULAR
+                    <div className="max-w-5xl mx-auto">
+
+                        {/* Billing Toggle */}
+                        <div className="flex justify-center mb-10">
+                            <div className="bg-gray-100 p-1 rounded-xl inline-flex items-center gap-1 shadow-inner">
+                                <button
+                                    onClick={() => setIsAnnual(false)}
+                                    className={`px-6 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${!isAnnual
+                                        ? 'bg-white text-gray-900 shadow-sm'
+                                        : 'text-gray-500 hover:text-gray-700'
+                                        }`}
+                                >
+                                    Monthly
+                                </button>
+                                <button
+                                    onClick={() => setIsAnnual(true)}
+                                    className={`px-6 py-2 rounded-lg text-sm font-medium transition-all duration-200 flex items-center gap-2 ${isAnnual
+                                        ? 'bg-white text-gray-900 shadow-sm'
+                                        : 'text-gray-500 hover:text-gray-700'
+                                        }`}
+                                >
+                                    Annual
+                                    <span className="bg-green-100 text-green-700 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wide">
+                                        -20%
+                                    </span>
+                                </button>
+                            </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
+
+                            {/* Main Subscription Card */}
+                            <Card className="lg:col-span-2 border border-gray-200 shadow-lg bg-white overflow-hidden rounded-2xl">
+                                <CardHeader className="p-8 pb-0">
+                                    <div className="flex justify-between items-start">
+                                        <div>
+                                            <CardTitle className="text-2xl font-bold text-gray-900">{PLAN.name}</CardTitle>
+                                            <CardDescription className="text-gray-500 mt-2 text-base">
+                                                {PLAN.description}
+                                            </CardDescription>
+                                        </div>
+                                        <div className="h-12 w-12 rounded-xl bg-blue-50 flex items-center justify-center">
+                                            <Zap className="h-6 w-6 text-brand-primary-600" />
+                                        </div>
                                     </div>
-                                )}
-                                <CardHeader className="pt-8 px-8">
-                                    <div className="mb-4">
-                                        <CardTitle className="text-2xl font-bold">{plan.name}</CardTitle>
-                                        <CardDescription className="mt-2 text-gray-500 min-h-[40px]">
-                                            {plan.description}
-                                        </CardDescription>
-                                    </div>
-                                    <div className="flex items-baseline gap-1 mt-2">
-                                        <span className="text-5xl font-extrabold tracking-tight">
-                                            ${isAnnual ? plan.annualPrice : plan.monthlyPrice}
+                                    <div className="mt-6 flex items-baseline gap-1">
+                                        <span className="text-5xl font-extrabold text-gray-900 tracking-tight">
+                                            €{isAnnual ? PLAN.annualPrice : PLAN.monthlyPrice}
                                         </span>
-                                        <span className="text-gray-500 font-medium">/{isAnnual ? 'year' : 'month'}</span>
+                                        <span className="text-gray-500 text-lg">
+                                            / {isAnnual ? 'year' : 'month'}
+                                        </span>
                                     </div>
                                 </CardHeader>
-                                <CardContent className="flex-1 px-8">
-                                    <div className="space-y-4 pt-4 border-t border-gray-100">
-                                        {plan.features.map((feature) => (
-                                            <div key={feature} className="flex items-start gap-3">
-                                                <div className="p-1 rounded-full bg-brand-primary-50 mt-0.5">
-                                                    <Check className="w-4 h-4 text-brand-primary-600 shrink-0" />
+                                <CardContent className="p-8 pt-6">
+                                    <div className="h-px w-full bg-gray-100 mb-6"></div>
+                                    <ul className="space-y-4">
+                                        {PLAN.features.map((feature, i) => (
+                                            <li key={i} className="flex items-center gap-3">
+                                                <div className="h-5 w-5 rounded-full bg-green-100 flex items-center justify-center flex-shrink-0">
+                                                    <Check className="h-3 w-3 text-green-600" />
                                                 </div>
-                                                <span className="text-sm font-medium text-gray-700 leading-tight">{feature}</span>
-                                            </div>
+                                                <span className="text-gray-700">{feature}</span>
+                                            </li>
                                         ))}
-                                    </div>
+                                    </ul>
                                 </CardContent>
-                                <CardFooter className="pb-8 px-8 flex justify-center mt-auto">
-                                    <Button
-                                        onClick={() => handleSubscribe(plan)}
-                                        disabled={loadingPlan !== null}
-                                        className={`w-full h-12 text-lg font-bold rounded-xl transition-all active:scale-95 ${plan.popular
-                                                ? 'bg-brand-primary-600 hover:bg-brand-primary-700 text-white shadow-brand-primary-200'
-                                                : 'bg-white border-2 border-brand-primary-600 text-brand-primary-600 hover:bg-brand-primary-50'
-                                            }`}
-                                    >
-                                        {loadingPlan === plan.name ? (
-                                            <Loader2 className="w-6 h-6 animate-spin" />
-                                        ) : (
-                                            <>
-                                                <Zap className={`w-5 h-5 mr-2 ${plan.popular ? 'fill-white' : ''}`} />
-                                                Subscribe Now
-                                            </>
-                                        )}
-                                    </Button>
+                                <CardFooter className="p-8 pt-0 bg-gray-50/50 mt-auto border-t border-gray-100">
+                                    <div className="w-full pt-6">
+                                        <Button
+                                            onClick={handleSubscribe}
+                                            disabled={loading}
+                                            className="w-full h-12 text-base font-semibold bg-brand-primary-600 hover:bg-brand-primary-700 text-white rounded-lg shadow-md transition-all"
+                                        >
+                                            {loading ? (
+                                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                            ) : (
+                                                <>
+                                                    Subscribe Now
+                                                    <ChevronRight className="ml-2 h-4 w-4" />
+                                                </>
+                                            )}
+                                        </Button>
+                                        <p className="text-xs text-center text-gray-400 mt-4">
+                                            Secure payments via Stripe. Cancel anytime in your dashboard.
+                                        </p>
+                                    </div>
                                 </CardFooter>
                             </Card>
-                        ))}
-                    </div>
 
-                    <div className="mt-16 text-center text-gray-500 bg-white/50 backdrop-blur-sm p-8 rounded-2xl border border-gray-100 shadow-sm max-w-3xl mx-auto">
-                        <p className="text-sm font-medium italic">
-                            All plans include free future updates, secure data encryption, and cross-platform syncing.
-                            Billing occurs monthly or annually depending on your selection. Cancel anytime.
-                        </p>
+                            {/* Metered Credits Card */}
+                            <Card className="border border-gray-200 shadow-md bg-white rounded-2xl h-full flex flex-col">
+                                <CardHeader className="p-6">
+                                    <div className="h-10 w-10 rounded-lg bg-orange-100 flex items-center justify-center mb-4">
+                                        <CreditCard className="h-5 w-5 text-orange-600" />
+                                    </div>
+                                    <CardTitle className="text-lg font-bold text-gray-900">Metered Credits</CardTitle>
+                                    <CardDescription className="text-gray-500">
+                                        Additional usage on demand
+                                    </CardDescription>
+                                </CardHeader>
+                                <CardContent className="p-6 pt-2 flex-1">
+                                    <div className="flex items-baseline gap-1 mb-4">
+                                        <span className="text-3xl font-bold text-gray-900">€{PLAN.creditPrice}</span>
+                                        <span className="text-gray-500">/ credit</span>
+                                    </div>
+                                    <p className="text-sm text-gray-600 leading-relaxed">
+                                        Credits are billed automatically at the end of each cycle based on your actual consumption.
+                                    </p>
+                                    <div className="mt-6 space-y-3">
+                                        <div className="flex items-start gap-2.5">
+                                            <Check className="w-4 h-4 text-orange-500 mt-0.5" />
+                                            <span className="text-sm text-gray-600">Pay only for what you use</span>
+                                        </div>
+                                        <div className="flex items-start gap-2.5">
+                                            <Check className="w-4 h-4 text-orange-500 mt-0.5" />
+                                            <span className="text-sm text-gray-600">No expiration on credits</span>
+                                        </div>
+                                    </div>
+                                </CardContent>
+                                <div className="p-4 bg-orange-50/50 border-t border-orange-100 rounded-b-2xl">
+                                    <p className="text-xs text-orange-700 text-center font-medium">
+                                        Included automatically with your plan
+                                    </p>
+                                </div>
+                            </Card>
+                        </div>
                     </div>
                 </div>
             </main>
