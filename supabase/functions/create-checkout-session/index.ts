@@ -1,9 +1,7 @@
-import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
-import Stripe from "https://esm.sh/stripe@13.10.0?target=deno";
+import Stripe from "npm:stripe@^13.10.0";
 
 const stripe = new Stripe(Deno.env.get("STRIPE_API_KEY") || "", {
     apiVersion: "2023-10-16",
-    httpClient: Stripe.createFetchHttpClient(),
 });
 
 const corsHeaders = {
@@ -19,7 +17,7 @@ const PRICES = {
     metered_monthly_annual: Deno.env.get("STRIPE_PRICE_METERED_MONTHLY_ANNUAL")!,
 };
 
-serve(async (req) => {
+Deno.serve(async (req) => {
     const { method } = req;
 
     if (method === "OPTIONS") {
@@ -27,7 +25,7 @@ serve(async (req) => {
     }
 
     try {
-        const { user_id, plan_type, success_url, cancel_url } = await req.json();
+        const { user_id, email, plan_type, success_url, cancel_url } = await req.json();
 
         if (!user_id || !plan_type || !['monthly', 'annual'].includes(plan_type)) {
             return new Response(
@@ -36,7 +34,7 @@ serve(async (req) => {
             );
         }
 
-        console.log(`🎟️ Creating 'Platform Access' checkout session for user: ${user_id}, plan: ${plan_type}`);
+        console.log(`🎟️ Creating 'Platform Access' checkout session for user: ${user_id}, plan: ${plan_type}, email: ${email}`);
 
         const basePriceId = plan_type === 'monthly' ? PRICES.monthly : PRICES.annual;
         const subscriptionRole = plan_type === 'annual' ? "platform" : "monthly_bundled";
@@ -54,6 +52,7 @@ serve(async (req) => {
 
         const session = await stripe.checkout.sessions.create({
             payment_method_types: ["card"],
+            customer_email: email,
             line_items: line_items,
             mode: "subscription",
             success_url: success_url || `${req.headers.get("origin")}/dashboard/status?session_id={CHECKOUT_SESSION_ID}`,

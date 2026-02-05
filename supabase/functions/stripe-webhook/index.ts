@@ -1,10 +1,8 @@
-import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
-import Stripe from "https://esm.sh/stripe@13.10.0?target=deno";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import Stripe from "npm:stripe@^13.10.0";
+import { createClient } from "npm:@supabase/supabase-js@^2";
 
 const stripe = new Stripe(Deno.env.get("STRIPE_API_KEY") || "", {
     apiVersion: "2023-10-16",
-    httpClient: Stripe.createFetchHttpClient(),
 });
 
 const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
@@ -25,7 +23,7 @@ const PRICES = {
     metered_monthly_annual: Deno.env.get("STRIPE_PRICE_METERED_MONTHLY_ANNUAL")!,
 };
 
-serve(async (req) => {
+Deno.serve(async (req) => {
     const { method } = req;
 
     // Handle CORS
@@ -74,8 +72,9 @@ serve(async (req) => {
 
                 if (!subscriptionId || !userId) {
                     console.error("Missing subscription info or user_id in session metadata");
-                    break;
+                    return new Response("Missing subscription info or user_id", { status: 400, headers: corsHeaders });
                 }
+
 
                 try {
                     const subscription = await stripe.subscriptions.retrieve(subscriptionId);
@@ -103,6 +102,7 @@ serve(async (req) => {
 
                     if (error) {
                         console.error("Error updating primary subscription:", error);
+                        throw new Error(`Supabase Upsert Error: ${error.message}`);
                     } else {
                         console.log("Successfully upserted primary subscription.");
                     }
@@ -144,6 +144,7 @@ serve(async (req) => {
                     }
                 } catch (subErr: any) {
                     console.error("Error retrieving subscription or processing logic:", subErr.message);
+                    return new Response(`Processing Error: ${subErr.message}`, { status: 500, headers: corsHeaders });
                 }
                 break;
             }
@@ -193,7 +194,10 @@ serve(async (req) => {
                     .from("subscriptions")
                     .upsert(upsertData, { onConflict: 'subscription_id' });
 
-                if (error) console.error("Error updating subscription:", error);
+                if (error) {
+                    console.error("Error updating subscription:", error);
+                    throw new Error(`Supabase Join Error: ${error.message}`);
+                }
                 break;
             }
 
@@ -240,7 +244,11 @@ serve(async (req) => {
             }
 
             default:
-                console.log(`Unhandled event type ${event.type}`);
+                if (event.type.startsWith('v2.')) {
+                    console.error(`⚠️  WARNING: Received Stripe v2 event '${event.type}'. This webhook expects v1 events (e.g., checkout.session.completed). Please check your Stripe Webhook settings to ensure you are sending 'checkout.session.completed' and related events.`);
+                } else {
+                    console.log(`Unhandled event type ${event.type}`);
+                }
         }
 
         return new Response(JSON.stringify({ received: true }), {
