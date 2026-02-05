@@ -13,10 +13,14 @@ import { User, Mail, Save, Loader2, Shield, Calendar, UserCircle, Building2 } fr
 import type { Profile } from '@/types/profile.types';
 import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
 
-export function ProfileInformation() {
+interface ProfileInformationProps {
+  initialData?: Profile | null;
+}
+
+export function ProfileInformation({ initialData }: ProfileInformationProps) {
   const { refreshProfile } = useAuth();
-  const [profile, setProfile] = useState<Profile | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [profile, setProfile] = useState<Profile | null>(initialData || null);
+  const [isLoading, setIsLoading] = useState(!initialData);
   const [isSavingProfile, setIsSavingProfile] = useState(false);
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   const [pendingFormData, setPendingFormData] = useState<ProfileFormValues | null>(null);
@@ -35,6 +39,16 @@ export function ProfileInformation() {
   });
 
   useEffect(() => {
+    if (initialData) {
+      setProfile(initialData);
+      resetProfile({
+        full_name: initialData.full_name || '',
+        email: initialData.email,
+      });
+      setIsLoading(false);
+      return;
+    }
+
     const loadProfile = async () => {
       try {
         setIsLoading(true);
@@ -55,7 +69,7 @@ export function ProfileInformation() {
     };
 
     loadProfile();
-  }, [resetProfile]);
+  }, [resetProfile, initialData]);
 
   const onProfileSubmit = (data: ProfileFormValues) => {
     setPendingFormData(data);
@@ -72,7 +86,7 @@ export function ProfileInformation() {
         full_name: pendingFormData.full_name || undefined,
       });
       setProfile(updatedProfile);
-      
+
       await refreshProfile();
 
       toast.success('Profile updated successfully');
@@ -209,9 +223,9 @@ export function ProfileInformation() {
           )}
 
           <div className="flex justify-end pt-4 border-t border-gray-200">
-            <Button 
-              type="submit" 
-              disabled={isSavingProfile} 
+            <Button
+              type="submit"
+              disabled={isSavingProfile}
               className="gap-2 bg-gradient-to-r from-brand-primary-600 to-brand-primary-700 hover:from-brand-primary-700 hover:to-brand-primary-800 shadow-md"
             >
               {isSavingProfile ? (
