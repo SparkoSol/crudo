@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { supabase } from '@/lib/supabaseClient';
 import { Sidebar } from '@/components/dashboard/Sidebar';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
@@ -10,6 +11,21 @@ export default function Subscription() {
     const { user } = useAuth();
     const [isAnnual, setIsAnnual] = useState(false);
     const [loading, setLoading] = useState(false);
+    const [subscription, setSubscription] = useState<any>(null);
+
+    useEffect(() => {
+        if (!user) return;
+        const fetchSub = async () => {
+            const { data } = await supabase
+                .from('subscriptions')
+                .select('plan_type, status')
+                .eq('user_id', user.id)
+                .in('status', ['active', 'past_due'])
+                .maybeSingle();
+            if (data) setSubscription(data);
+        };
+        fetchSub();
+    }, [user]);
 
     const PLAN = {
         name: 'Platform Access',
@@ -44,6 +60,7 @@ export default function Subscription() {
                 },
                 body: JSON.stringify({
                     user_id: user.id,
+                    email: user.email,
                     plan_type: planType,
                 }),
             });
@@ -148,15 +165,20 @@ export default function Subscription() {
                                     <div className="w-full pt-6">
                                         <Button
                                             onClick={handleSubscribe}
-                                            disabled={loading}
-                                            className="w-full h-12 text-base font-semibold bg-brand-primary-600 hover:bg-brand-primary-700 text-white rounded-lg shadow-md transition-all"
+                                            disabled={loading || (subscription?.plan_type === (isAnnual ? 'annual' : 'monthly') && subscription?.status === 'active')}
+                                            className="w-full h-12 text-base font-semibold bg-brand-primary-600 hover:bg-brand-primary-700 text-white rounded-lg shadow-md transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                                         >
                                             {loading ? (
                                                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                                             ) : (
                                                 <>
-                                                    Subscribe Now
-                                                    <ChevronRight className="ml-2 h-4 w-4" />
+                                                    {subscription?.plan_type === (isAnnual ? 'annual' : 'monthly') && subscription?.status === 'active'
+                                                        ? "Current Plan"
+                                                        : subscription
+                                                            ? `Switch to ${isAnnual ? 'Annual' : 'Monthly'}`
+                                                            : "Subscribe Now"
+                                                    }
+                                                    {!(subscription?.plan_type === (isAnnual ? 'annual' : 'monthly') && subscription?.status === 'active') && <ChevronRight className="ml-2 h-4 w-4" />}
                                                 </>
                                             )}
                                         </Button>
