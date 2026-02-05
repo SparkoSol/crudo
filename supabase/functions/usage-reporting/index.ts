@@ -20,7 +20,6 @@ const corsHeaders = {
 serve(async (req) => {
     const { method } = req;
 
-    // Handle CORS
     if (method === "OPTIONS") {
         return new Response("ok", { headers: corsHeaders });
     }
@@ -41,7 +40,6 @@ serve(async (req) => {
 
         console.log(`📊 Reporting usage for user: ${user_id}, quantity: ${quantity}`);
 
-        // Fetch the subscription item ID from Supabase
         const { data: subscription, error: fetchError } = await supabase
             .from("subscriptions")
             .select("credits_subscription_item_id")
@@ -59,7 +57,6 @@ serve(async (req) => {
 
         const { credits_subscription_item_id } = subscription;
 
-        // Call Stripe API to report usage
         const usageRecord = await stripe.usageRecords.create(
             credits_subscription_item_id,
             {

@@ -79,7 +79,6 @@ serve(async (req) => {
       );
     }
 
-    // Fetch transcript data
     const { data: transcript, error: transcriptError } = await adminClient
       .from("voice_transcripts")
       .select(`
@@ -105,9 +104,8 @@ serve(async (req) => {
       );
     }
 
-    // Create PDF document
     const pdfDoc = await PDFDocument.create();
-    const page = pdfDoc.addPage([612, 792]); // US Letter size
+    const page = pdfDoc.addPage([612, 792]);
     const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
     const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
 
@@ -118,7 +116,6 @@ serve(async (req) => {
     const lineHeight = 20;
     const sectionSpacing = 30;
 
-    // Helper function to add text with word wrapping
     const addText = (
       text: string,
       x: number,
@@ -176,7 +173,6 @@ serve(async (req) => {
       }
     };
 
-    // Title
     yPosition = addText(
       "Voice Transcript Report",
       margin,
@@ -186,12 +182,9 @@ serve(async (req) => {
     );
     yPosition -= sectionSpacing;
 
-    // Date
     const dateStr = new Date(transcript.created_at).toLocaleString();
     yPosition = addText(`Generated: ${dateStr}`, margin, yPosition, 10, font);
     yPosition -= sectionSpacing;
-
-    // Template name if available
     if (transcript.user_templates && typeof transcript.user_templates === 'object' && 'name' in transcript.user_templates) {
       const templateName = (transcript.user_templates as any).name;
       yPosition = addText(
@@ -204,7 +197,6 @@ serve(async (req) => {
       yPosition -= sectionSpacing;
     }
 
-    // Transcript section
     yPosition = addText("Transcript:", margin, yPosition, 14, boldFont);
     yPosition -= 10;
     yPosition = addText(
@@ -217,7 +209,6 @@ serve(async (req) => {
     );
     yPosition -= sectionSpacing;
 
-    // Filled template data section
     if (transcript.filled_data && typeof transcript.filled_data === 'object') {
       yPosition = addText("Filled Template Data:", margin, yPosition, 14, boldFont);
       yPosition -= 10;
@@ -239,10 +230,7 @@ serve(async (req) => {
       }
     }
 
-    // Generate PDF bytes
     const pdfBytes = await pdfDoc.save();
-
-    // Return PDF as base64
     const base64Pdf = btoa(
       String.fromCharCode(...new Uint8Array(pdfBytes))
     );

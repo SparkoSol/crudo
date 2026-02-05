@@ -95,7 +95,6 @@ serve(async (req) => {
       );
     }
 
-    // Build the prompt for GPT
     const fieldsDescription = body.templateFields
       .map(
         (field) =>
@@ -117,7 +116,6 @@ ${fieldsDescription}
 
 Extract and fill all template fields from the transcript. Return a JSON object with field names as keys.`;
 
-    // Call OpenAI GPT API
     const gptResponse = await fetch(OPENAI_API_URL, {
       method: "POST",
       headers: {

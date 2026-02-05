@@ -36,7 +36,6 @@ export default function Settings() {
         setSubscriptionData(sub);
 
         if (sub) {
-          // Fetch additional stripe details
           const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/get-subscription-details`, {
             headers: {
               'Authorization': `Bearer ${user.access_token}`,

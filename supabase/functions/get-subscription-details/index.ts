@@ -54,14 +54,11 @@ serve(async (req) => {
             );
         }
 
-        // Fetch subscription from Stripe
         const stripeSub = await stripe.subscriptions.retrieve(subscription.subscription_id);
         const currentPeriodEnd = new Date(stripeSub.current_period_end * 1000).toISOString();
 
         let usageCredits = 0;
 
-        // Fetch usage if we have an item ID
-        // Even if DB doesn't have it, we can try to find it in the stripeSub object
         let creditsItemId = subscription.credits_subscription_item_id;
         if (!creditsItemId) {
             const creditsItem = stripeSub.items.data.find(item =>
@@ -71,7 +68,6 @@ serve(async (req) => {
         }
 
         if (creditsItemId) {
-            // Fetch usage record summaries
             const usageSummaries = await stripe.subscriptionItems.listUsageRecordSummaries(
                 creditsItemId,
                 { limit: 1 }
