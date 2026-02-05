@@ -19,6 +19,7 @@ const Login = lazy(() => import("../pages/auth/Login"));
 const Register = lazy(() => import("../pages/auth/Register"));
 const ResetPassword = lazy(() => import("../pages/auth/ResetPassword"));
 const Subscription = lazy(() => import("../pages/Subscription"));
+const DashboardStatus = lazy(() => import("../pages/DashboardStatus"));
 const NotFound = lazy(() => import("../pages/NotFound"));
 
 export const ROUTES = {
@@ -35,9 +36,18 @@ export const ROUTES = {
   FORGET_PASSWORD: "/auth/forgot-password",
   RESET_PASSWORD: "/auth/reset-password",
   SUBSCRIPTION: "/subscription",
+  DASHBOARD_STATUS: "/dashboard/status",
 } as const;
 
 export const routes: RouteObject[] = [
+  {
+    path: ROUTES.DASHBOARD_STATUS,
+    element: (
+      <ProtectedRoute>
+        <DashboardStatus />
+      </ProtectedRoute>
+    ),
+  },
   {
     path: ROUTES.DASHBOARD,
     element: (
