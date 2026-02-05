@@ -1,5 +1,5 @@
 import { Sidebar } from '@/components/dashboard/Sidebar';
-import { WhatsAppIntegration } from '@/components/settings/WhatsAppIntegration';
+import { WhatsAppIntegration } from '@/components/whatsapp';
 
 export default function WhatsApp() {
   return (
