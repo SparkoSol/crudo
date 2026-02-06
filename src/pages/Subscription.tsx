@@ -90,9 +90,6 @@ export default function Subscription() {
                                         }`}
                                 >
                                     Annual
-                                    <span className="bg-green-100 text-green-700 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wide">
-                                        -20%
-                                    </span>
                                 </button>
                             </div>
                         </div>

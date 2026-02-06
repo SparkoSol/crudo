@@ -4,16 +4,27 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Download, FileText, Clock, CheckCircle2, RefreshCw, Loader2 } from 'lucide-react';
-import { useAuth } from '@/contexts/AuthContext';
-import { getTranscripts, downloadPDF, type VoiceTranscript } from '@/services/transcriptServices';
+import { getTranscripts, downloadPDF } from '@/services/transcriptServices';
+import type { VoiceTranscript } from '@/types';
 import toast from 'react-hot-toast';
 import { format } from 'date-fns';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { subscriptionService } from '@/services/subscriptionService';
 
 export default function VoiceTranscripts() {
-  const { user } = useAuth();
   const [transcripts, setTranscripts] = useState<VoiceTranscript[]>([]);
   const [loading, setLoading] = useState(true);
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
+  const [isIncrementing, setIsIncrementing] = useState(false);
+  const [isModalOpen, setIsModalOpen] = useState(false);
 
   useEffect(() => {
     loadTranscripts();
@@ -37,7 +48,6 @@ export default function VoiceTranscripts() {
       setDownloadingId(transcriptId);
       const result = await downloadPDF(transcriptId);
 
-      // Convert base64 to blob and download
       const byteCharacters = atob(result.pdf);
       const byteNumbers = new Array(byteCharacters.length);
       for (let i = 0; i < byteCharacters.length; i++) {
@@ -97,11 +107,67 @@ export default function VoiceTranscripts() {
       <Sidebar />
       <main className="flex-1 overflow-y-auto lg:ml-0">
         <div className="p-6 lg:p-8 max-w-7xl mx-auto pt-20 lg:pt-6">
-          <div className="mb-8">
-            <h1 className="text-3xl font-bold text-gray-900 mb-2">Voice Transcripts</h1>
-            <p className="text-gray-600">
-              View and manage your voice message transcripts
-            </p>
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-8 gap-4">
+            <div>
+              <h1 className="text-3xl font-bold text-gray-900 mb-2">Voice Transcripts</h1>
+              <p className="text-gray-600">
+                View and manage your voice message transcripts
+              </p>
+            </div>
+
+            <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
+              <DialogTrigger asChild>
+                <Button variant="outline" className="gap-2">
+                  <RefreshCw className="h-4 w-4" />
+                  Test Credits
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Add Test Credits</DialogTitle>
+                  <DialogDescription>
+                    This is for testing purposes only. Click the button below to increment your usage credits.
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="py-6 flex justify-center">
+                  <Button
+                    onClick={async () => {
+                      try {
+                        setIsIncrementing(true);
+                        const result = await subscriptionService.incrementCredits(1);
+                        if (result.total_usage !== undefined) {
+                          toast.success(`Credits incremented. New Total: ${result.total_usage}`);
+                        } else {
+                          toast.success('Credits incremented successfully');
+                        }
+                        setIsModalOpen(false);
+                      } catch (error) {
+                        console.error('Failed to increment credits:', error);
+                        toast.error('Failed to increment credits');
+                      } finally {
+                        setIsIncrementing(false);
+                      }
+                    }}
+                    disabled={isIncrementing}
+                    className="w-full sm:w-auto"
+                  >
+                    {isIncrementing ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Incrementing...
+                      </>
+                    ) : (
+                      'Increment Credit (+1)'
+                    )}
+                  </Button>
+                </div>
+                <DialogFooter className="sm:justify-start">
+                  <p className="text-xs text-gray-500">
+                    Depending on Stripe latency, it might take a moment to reflect in subscription details.
+                  </p>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
           </div>
 
           {loading ? (

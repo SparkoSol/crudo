@@ -104,5 +104,25 @@ export const subscriptionService = {
         }
 
         return result;
+    },
+
+    incrementCredits: async (amount: number = 1, token?: string): Promise<any> => {
+        const accessToken = token || await subscriptionService.getAccessToken();
+
+        const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/increment-credits`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${accessToken}`,
+            },
+            body: JSON.stringify({ amount }),
+        });
+
+        const result = await response.json();
+        if (!response.ok) {
+            throw new Error(result.error || "Failed to increment credits");
+        }
+
+        return result;
     }
 };

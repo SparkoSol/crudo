@@ -7,14 +7,15 @@ import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
 import { subscriptionService } from '@/services/subscriptionService';
-import type { SubscriptionData, SubscriptionDetails } from '@/types';
+import type { SubscriptionData, SubscriptionDetails, CreditsWallet } from '@/types';
 
 interface SubscriptionSettingsProps {
     initialSubscription?: SubscriptionData | null;
     initialDetails?: SubscriptionDetails | null;
+    initialWallet?: CreditsWallet | null;
 }
 
-export function SubscriptionSettings({ initialSubscription, initialDetails }: SubscriptionSettingsProps) {
+export function SubscriptionSettings({ initialSubscription, initialDetails, initialWallet }: SubscriptionSettingsProps) {
     const { user } = useAuth();
     const navigate = useNavigate();
     const [loading, setLoading] = useState(!initialSubscription);
@@ -22,6 +23,7 @@ export function SubscriptionSettings({ initialSubscription, initialDetails }: Su
     const [details, setDetails] = useState<SubscriptionDetails>(
         initialDetails || { next_billing_date: null, usage_credits: 0 }
     );
+    const [wallet, setWallet] = useState<CreditsWallet | null>(initialWallet || null);
     const [cancelLoading, setCancelLoading] = useState(false);
     const [showCancelDialog, setShowCancelDialog] = useState(false);
 
@@ -31,6 +33,7 @@ export function SubscriptionSettings({ initialSubscription, initialDetails }: Su
         if (initialSubscription) {
             setSubscription(initialSubscription);
             if (initialDetails) setDetails(initialDetails);
+            if (initialWallet) setWallet(initialWallet);
             setLoading(false);
             return;
         }
@@ -41,8 +44,12 @@ export function SubscriptionSettings({ initialSubscription, initialDetails }: Su
                 const subData = await subscriptionService.getUserSubscription(user.id);
                 if (subData) {
                     setSubscription(subData);
-                    const detailData = await subscriptionService.getSubscriptionDetails();
+                    const [detailData, walletData] = await Promise.all([
+                        subscriptionService.getSubscriptionDetails(),
+                        import('@/services/creditService').then(m => m.creditService.getWallet())
+                    ]);
                     setDetails(detailData);
+                    setWallet(walletData);
                 }
             } catch (err) {
                 console.error("Failed to fetch subscription data", err);
@@ -51,7 +58,7 @@ export function SubscriptionSettings({ initialSubscription, initialDetails }: Su
             }
         };
         fetchSub();
-    }, [user, initialSubscription, initialDetails]);
+    }, [user, initialSubscription, initialDetails, initialWallet]);
 
     const handleCancel = () => {
         setShowCancelDialog(true);
@@ -151,13 +158,22 @@ export function SubscriptionSettings({ initialSubscription, initialDetails }: Su
                     <div className="p-4 bg-gray-50 rounded-xl border border-gray-100 flex flex-col justify-between">
                         <div>
                             <p className="text-xs font-medium text-gray-500 mb-1 uppercase tracking-wider">Credits Usage</p>
-                            <p className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-                                {details.usage_credits}
-                                <span className="text-sm font-normal text-gray-500">used</span>
-                                <CreditCard className="h-5 w-5 text-orange-500" />
-                            </p>
+                            <div className="flex items-end gap-2">
+                                <p className="text-2xl font-bold text-gray-900">
+                                    {wallet ? wallet.used_credits_this_month : details.usage_credits}
+                                </p>
+                                <p className="text-sm font-normal text-gray-500 mb-1">used this month</p>
+                                <CreditCard className="h-5 w-5 text-orange-500 mb-1 ml-auto" />
+                            </div>
+                            {wallet && (
+                                <p className="text-xs text-gray-400 mt-1">
+                                    Total used: {wallet.used_credits} credits
+                                </p>
+                            )}
                         </div>
-                        <p className="text-xs text-gray-500 mt-2">Usage is calculated monthly. You are billed for {details.usage_credits} credits.</p>
+                        <p className="text-xs text-gray-500 mt-2">
+                            Usage is calculated monthly. You are billed for {wallet ? wallet.used_credits_this_month : details.usage_credits} credits.
+                        </p>
                     </div>
                 </div>
 

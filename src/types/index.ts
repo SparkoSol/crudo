@@ -7,3 +7,4 @@ export * from './invite.types';
 export * from './brevo.types';
 export * from './whatsapp.types';
 export * from './signup.types';
+export * from './credits.types';
