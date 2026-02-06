@@ -3,7 +3,7 @@ import { useSearchParams, useNavigate } from 'react-router-dom';
 import { Sidebar } from '@/components/dashboard/Sidebar';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import { CheckCircle2, Loader2, Home } from 'lucide-react';
+import { CheckCircle2, Loader2, Settings } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { subscriptionService } from '@/services/subscriptionService';
 import type { SubscriptionData } from '@/types';
@@ -51,7 +51,7 @@ export default function DashboardStatus() {
         verifySession();
     }, [user, sessionId]);
 
-    const handleGoDashboard = () => navigate('/');
+    const handleGoToSettings = () => navigate('/settings');
 
     return (
         <div className="flex h-screen bg-gray-50 overflow-hidden text-gray-900">
@@ -102,11 +102,11 @@ export default function DashboardStatus() {
 
                     <CardFooter className="px-8 pb-10 flex flex-col gap-3">
                         <Button
-                            onClick={handleGoDashboard}
+                            onClick={handleGoToSettings}
                             className="w-full h-12 text-base font-semibold bg-brand-primary-600 hover:bg-brand-primary-700 text-white rounded-xl shadow-lg shadow-brand-primary-200 transition-all flex items-center justify-center gap-2"
                         >
-                            <Home className="h-4 w-4" />
-                            Return to Dashboard
+                            <Settings className="h-4 w-4" />
+                            Go to Settings
                         </Button>
                     </CardFooter>
                 </Card>

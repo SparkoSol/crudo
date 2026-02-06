@@ -59,30 +59,11 @@ serve(async (req) => {
         const stripeSub = await stripe.subscriptions.retrieve(subscription.subscription_id);
         const currentPeriodEnd = new Date(stripeSub.current_period_end * 1000).toISOString();
 
-        let usageCredits = 0;
-
-        let creditsItemId = subscription.credits_subscription_item_id;
-        if (!creditsItemId) {
-            const creditsItem = stripeSub.items.data.find(item =>
-                item.price.recurring?.usage_type === 'metered'
-            );
-            creditsItemId = creditsItem?.id;
-        }
-
-        if (creditsItemId) {
-            const usageSummaries = await stripe.subscriptionItems.listUsageRecordSummaries(
-                creditsItemId,
-                { limit: 1 }
-            );
-            if (usageSummaries.data.length > 0) {
-                usageCredits = usageSummaries.data[0].total_usage;
-            }
-        }
 
         return new Response(
             JSON.stringify({
                 next_billing_date: currentPeriodEnd,
-                usage_credits: usageCredits
+                usage_credits: 0
             }),
             { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );

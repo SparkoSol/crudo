@@ -8,15 +8,6 @@ import { getTranscripts, downloadPDF } from '@/services/transcriptServices';
 import type { VoiceTranscript } from '@/types';
 import toast from 'react-hot-toast';
 import { format } from 'date-fns';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
 import { subscriptionService } from '@/services/subscriptionService';
 
 export default function VoiceTranscripts() {
@@ -24,7 +15,6 @@ export default function VoiceTranscripts() {
   const [loading, setLoading] = useState(true);
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
   const [isIncrementing, setIsIncrementing] = useState(false);
-  const [isModalOpen, setIsModalOpen] = useState(false);
 
   useEffect(() => {
     loadTranscripts();
@@ -114,146 +104,159 @@ export default function VoiceTranscripts() {
                 View and manage your voice message transcripts
               </p>
             </div>
-
-            <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
-              <DialogTrigger asChild>
-                <Button variant="outline" className="gap-2">
-                  <RefreshCw className="h-4 w-4" />
-                  Test Credits
-                </Button>
-              </DialogTrigger>
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>Add Test Credits</DialogTitle>
-                  <DialogDescription>
-                    This is for testing purposes only. Click the button below to increment your usage credits.
-                  </DialogDescription>
-                </DialogHeader>
-                <div className="py-6 flex justify-center">
-                  <Button
-                    onClick={async () => {
-                      try {
-                        setIsIncrementing(true);
-                        const result = await subscriptionService.incrementCredits(1);
-                        if (result.total_usage !== undefined) {
-                          toast.success(`Credits incremented`);
-                        } else {
-                          toast.success('Credits incremented successfully');
-                        }
-                        setIsModalOpen(false);
-                      } catch (error: any) {
-                        console.error('Failed to increment credits:', error);
-                        toast.error(error.message);
-                      } finally {
-                        setIsIncrementing(false);
-                      }
-                    }}
-                    disabled={isIncrementing}
-                    className="w-full sm:w-auto"
-                  >
-                    {isIncrementing ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Incrementing...
-                      </>
-                    ) : (
-                      'Increment Credit (+1)'
-                    )}
-                  </Button>
-                </div>
-                <DialogFooter className="sm:justify-start">
-                  <p className="text-xs text-gray-500">
-                    Depending on Stripe latency, it might take a moment to reflect in subscription details.
-                  </p>
-                </DialogFooter>
-              </DialogContent>
-            </Dialog>
           </div>
 
-          {loading ? (
-            <div className="flex items-center justify-center py-12">
-              <Loader2 className="h-8 w-8 animate-spin text-brand-primary-600" />
-            </div>
-          ) : transcripts.length === 0 ? (
-            <Card className="border-gray-200 shadow-sm">
-              <CardContent className="p-12 text-center">
-                <FileText className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                <h3 className="text-lg font-semibold text-gray-900 mb-2">No transcripts yet</h3>
-                <p className="text-gray-600">
-                  Send a voice message via WhatsApp to get started
-                </p>
+          <div className="mt-12 pb-8 border-b border-gray-200">
+            <Card className="bg-gradient-to-br from-brand-primary-50 via-white to-gray-50 border-brand-primary-100 shadow-sm overflow-hidden">
+              <div className="h-1 bg-brand-primary-600 w-full" />
+              <CardContent className="p-6 md:p-8">
+                <div className="flex flex-col md:flex-row items-center justify-between gap-6">
+                  <div className="flex-1 text-center md:text-left">
+                    <div className="inline-flex items-center gap-2 bg-brand-primary-100 text-brand-primary-700 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider mb-4">
+                      <RefreshCw className="h-3 w-3" />
+                      Developer Tools
+                    </div>
+                    <h3 className="text-xl font-bold text-gray-900 mb-2">Test Your Credits</h3>
+                    <p className="text-gray-600 max-w-xl text-sm md:text-base">
+                      Simulate usage by incrementing your session credits. This helps verify your subscription status and usage reporting without making live calls.
+                    </p>
+                    <p className="text-[10px] text-gray-400 mt-4 leading-relaxed italic">
+                      * Pulse: Stripe sync may take a few moments to reflect in your dashboard.
+                    </p>
+                  </div>
+
+                  <div className="flex-shrink-0 w-full md:w-auto">
+                    <Button
+                      onClick={async () => {
+                        try {
+                          setIsIncrementing(true);
+                          const result = await subscriptionService.incrementCredits(1);
+                          if (result.total_usage !== undefined) {
+                            toast.success(`Credits updated successfully`);
+                          } else {
+                            toast.success('Credits updated');
+                          }
+                        } catch (error: any) {
+                          console.error('Failed to increment credits:', error);
+                          toast.error(error.message);
+                        } finally {
+                          setIsIncrementing(false);
+                        }
+                      }}
+                      disabled={isIncrementing}
+                      className="w-full md:w-auto h-14 px-8 text-base font-bold bg-brand-primary-600 hover:bg-brand-primary-700 text-white rounded-2xl shadow-xl shadow-brand-primary-100 flex items-center justify-center gap-3 transition-all hover:scale-[1.02] active:scale-95"
+                    >
+                      {isIncrementing ? (
+                        <>
+                          <Loader2 className="h-5 w-5 animate-spin" />
+                          Processing...
+                        </>
+                      ) : (
+                        <>
+                          <RefreshCw className="h-5 w-5" />
+                          Increment Credits (+1)
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                </div>
               </CardContent>
             </Card>
-          ) : (
-            <div className="space-y-4">
-              {transcripts.map((transcript) => (
-                <Card key={transcript.id} className="border-gray-200 shadow-sm">
-                  <CardHeader className="pb-4">
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-3 mb-2">
-                          <CardTitle className="text-lg">
-                            {transcript.user_templates?.name || 'Untitled Template'}
-                          </CardTitle>
-                          {getStatusBadge(transcript.status)}
+          </div>
+          <div className="space-y-8">
+            {loading ? (
+              <div className="flex items-center justify-center py-12">
+                <Loader2 className="h-8 w-8 animate-spin text-brand-primary-600" />
+              </div>
+            ) : transcripts.length === 0 ? (
+              <Card className="border-gray-200 shadow-sm">
+                <CardContent className="p-12 text-center">
+                  <FileText className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                  <h3 className="text-lg font-semibold text-gray-900 mb-2">No transcripts yet</h3>
+                  <p className="text-gray-600">
+                    Send a voice message via WhatsApp to get started
+                  </p>
+                </CardContent>
+              </Card>
+            ) : (
+              <div className="space-y-4">
+                {transcripts.map((transcript) => (
+                  <Card key={transcript.id} className="border-gray-200 shadow-sm hover:shadow-md transition-shadow">
+                    <CardHeader className="pb-4">
+                      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+                        <div className="flex-1">
+                          <div className="flex flex-wrap items-center gap-3 mb-2">
+                            <CardTitle className="text-xl font-bold text-gray-900">
+                              {transcript.user_templates?.name || 'Untitled Template'}
+                            </CardTitle>
+                            {getStatusBadge(transcript.status)}
+                          </div>
+                          <CardDescription className="flex items-center gap-2 text-gray-500">
+                            <Clock className="h-3 w-3" />
+                            {format(new Date(transcript.created_at), 'PPpp')} • {transcript.phone_number}
+                          </CardDescription>
                         </div>
-                        <CardDescription>
-                          {format(new Date(transcript.created_at), 'PPpp')} • {transcript.phone_number}
-                        </CardDescription>
+                        {transcript.status === 'confirmed' && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleDownloadPDF(transcript.id)}
+                            disabled={downloadingId === transcript.id}
+                            className="gap-2 border-brand-primary-100 text-brand-primary-700 hover:bg-brand-primary-50 hover:text-brand-primary-800 shrink-0"
+                          >
+                            {downloadingId === transcript.id ? (
+                              <>
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                                Generating...
+                              </>
+                            ) : (
+                              <>
+                                <Download className="h-4 w-4" />
+                                Download PDF
+                              </>
+                            )}
+                          </Button>
+                        )}
                       </div>
-                      {transcript.status === 'confirmed' && (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleDownloadPDF(transcript.id)}
-                          disabled={downloadingId === transcript.id}
-                          className="gap-2"
-                        >
-                          {downloadingId === transcript.id ? (
-                            <>
-                              <Loader2 className="h-4 w-4 animate-spin" />
-                              Generating...
-                            </>
-                          ) : (
-                            <>
-                              <Download className="h-4 w-4" />
-                              Download PDF
-                            </>
-                          )}
-                        </Button>
-                      )}
-                    </div>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    <div>
-                      <h4 className="text-sm font-semibold text-gray-700 mb-2">Transcript</h4>
-                      <p className="text-sm text-gray-600 bg-gray-50 p-3 rounded-lg">
-                        {transcript.transcript}
-                      </p>
-                    </div>
-
-                    {transcript.filled_data && Object.keys(transcript.filled_data).length > 0 && (
+                    </CardHeader>
+                    <CardContent className="space-y-5">
                       <div>
-                        <h4 className="text-sm font-semibold text-gray-700 mb-2">Filled Template Data</h4>
-                        <div className="bg-gray-50 p-3 rounded-lg space-y-2">
-                          {Object.entries(transcript.filled_data).map(([key, value]) => (
-                            <div key={key} className="flex items-start gap-2">
-                              <span className="text-sm font-medium text-gray-700 min-w-[120px]">
-                                {key.charAt(0).toUpperCase() + key.slice(1).replace(/_/g, ' ')}:
-                              </span>
-                              <span className="text-sm text-gray-600 flex-1">
-                                {value !== null && value !== undefined ? String(value) : 'N/A'}
-                              </span>
-                            </div>
-                          ))}
+                        <h4 className="text-sm font-bold text-gray-800 mb-2 uppercase tracking-tight flex items-center gap-2">
+                          <FileText className="h-4 w-4 text-brand-primary-500" />
+                          Transcript
+                        </h4>
+                        <div className="bg-white border border-gray-100 p-4 rounded-xl text-sm text-gray-600 leading-relaxed shadow-sm">
+                          {transcript.transcript}
                         </div>
                       </div>
-                    )}
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          )}
+
+                      {transcript.filled_data && Object.keys(transcript.filled_data).length > 0 && (
+                        <div>
+                          <h4 className="text-sm font-bold text-gray-800 mb-2 uppercase tracking-tight flex items-center gap-2">
+                            <CheckCircle2 className="h-4 w-4 text-brand-primary-500" />
+                            Extracted Data
+                          </h4>
+                          <div className="bg-gray-50/50 border border-gray-100 p-4 rounded-xl grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-3">
+                            {Object.entries(transcript.filled_data).map(([key, value]) => (
+                              <div key={key} className="flex items-center justify-between border-b border-gray-100 pb-1 last:border-0 last:pb-0">
+                                <span className="text-sm font-medium text-gray-500">
+                                  {key.charAt(0).toUpperCase() + key.slice(1).replace(/_/g, ' ')}
+                                </span>
+                                <span className="text-sm font-semibold text-gray-900">
+                                  {value !== null && value !== undefined ? String(value) : 'N/A'}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            )}
+
+          </div>
         </div>
       </main>
     </div>
