@@ -87,6 +87,63 @@ serve(async (req) => {
 
         const results = await Promise.all(subscriptions.map(async (sub) => {
             try {
+                const stripeSubscription = await stripe.subscriptions.retrieve(sub.id);
+
+                const meteredItems = stripeSubscription.items.data.filter(
+                    item => item.price.recurring?.usage_type === 'metered'
+                );
+
+                if (meteredItems.length > 0) {
+                    console.log(`Found ${meteredItems.length} metered items for subscription ${sub.id}. Checking usage...`);
+
+                    const { data: wallet, error: walletError } = await supabase
+                        .from('credits_wallet')
+                        .select('used_credits_this_month, manager_id')
+                        .or(`manager_id.eq.${user.id}`)
+                        .maybeSingle();
+
+                    let currentUsage = 0;
+                    if (wallet) {
+                        currentUsage = wallet.used_credits_this_month || 0;
+                    } else {
+                        const { data: profile } = await supabase
+                            .from('profiles')
+                            .select('manager_id')
+                            .eq('id', user.id)
+                            .single();
+
+                        if (profile?.manager_id) {
+                            const { data: managerWallet } = await supabase
+                                .from('credits_wallet')
+                                .select('used_credits_this_month')
+                                .eq('manager_id', profile.manager_id)
+                                .maybeSingle();
+
+                            if (managerWallet) {
+                                currentUsage = managerWallet.used_credits_this_month || 0;
+                            }
+                        }
+                    }
+
+                    if (currentUsage > 0) {
+                        console.log(`Creating invoice items for ${currentUsage} used credits...`);
+
+                        for (const item of meteredItems) {
+                            const unitAmount = item.price.unit_amount_decimal
+                                ? parseInt(item.price.unit_amount_decimal)
+                                : item.price.unit_amount || 0;
+
+                            await stripe.invoiceItems.create({
+                                customer: stripeSubscription.customer as string,
+                                currency: item.price.currency,
+                                unit_amount: unitAmount,
+                                quantity: currentUsage,
+                                description: `Final usage charges for ${currentUsage} credits`,
+                            });
+                        }
+                    }
+                }
+
                 const deletedSubscription = await stripe.subscriptions.cancel(sub.id, {
                     invoice_now: true,
                     prorate: true,

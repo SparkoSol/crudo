@@ -55,7 +55,7 @@ const navItems: NavItem[] = [
     description: "Test and manage your WhatsApp Business API integration"
   },
   {
-    label: "Voice Transcripts",
+    label: "Credits and Transcripts",
     icon: Mic,
     path: "/voice-transcripts",
     description: "View and manage your voice message transcripts"
