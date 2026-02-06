@@ -12,6 +12,9 @@ import {
   Menu,
   X,
   UserPlus,
+  MessageSquare,
+  Mic,
+  CreditCard,
 } from "lucide-react";
 import iNotusLogo from "@/assets/iNotus-color.svg";
 import { Button } from "@/components/ui/button";
@@ -27,27 +30,45 @@ interface NavItem {
 }
 
 const navItems: NavItem[] = [
-  { 
-    label: "Home", 
-    icon: LayoutDashboard, 
+  {
+    label: "Home",
+    icon: LayoutDashboard,
     path: "/",
     description: "View and manage field reports from your sales team"
   },
-  { 
-    label: "Salespeople", 
-    icon: Users, 
+  {
+    label: "Salespeople",
+    icon: Users,
     path: "/salespeople",
     description: "Manage your sales team members and their profiles"
   },
-  { 
-    label: "Templates", 
-    icon: FileText, 
+  {
+    label: "Templates",
+    icon: FileText,
     path: "/templates",
     description: "Create and manage report templates for your team"
   },
-  { 
-    label: "Settings", 
-    icon: Settings, 
+  {
+    label: "WhatsApp",
+    icon: MessageSquare,
+    path: "/whatsapp",
+    description: "Test and manage your WhatsApp Business API integration"
+  },
+  {
+    label: "Credits and Transcripts",
+    icon: Mic,
+    path: "/voice-transcripts",
+    description: "View and manage your voice message transcripts"
+  },
+  {
+    label: "Subscription",
+    icon: CreditCard,
+    path: "/subscription",
+    description: "Manage your plan and billing details"
+  },
+  {
+    label: "Settings",
+    icon: Settings,
     path: "/settings",
     description: "Manage your account settings and preferences"
   },
@@ -62,7 +83,7 @@ export const Sidebar = () => {
 
   const getFilteredNavItems = () => {
     const baseItems = [...navItems];
-    
+
     if (isManager(user)) {
       baseItems.splice(2, 0, {
         label: "Invite",
@@ -71,7 +92,7 @@ export const Sidebar = () => {
         description: "Invite sales representatives to join your team"
       });
     }
-    
+
     return baseItems;
   };
 
@@ -139,14 +160,14 @@ export const Sidebar = () => {
               onClick={() => setIsMobileOpen(false)}
               className="flex items-center gap-3 hover:opacity-80 transition-opacity cursor-pointer"
             >
-              <img 
-                src={iNotusLogo} 
-                alt="iNotus Logo" 
+              <img
+                src={iNotusLogo}
+                alt="iNotus Logo"
                 className="w-10 h-10 rounded-lg object-contain"
               />
               <div>
                 <h1 className="text-xl font-semibold text-gray-900">
-                iNotus
+                  iNotus
                 </h1>
                 <p className="text-xs text-gray-500">Sales Reports</p>
               </div>
@@ -183,7 +204,7 @@ export const Sidebar = () => {
               );
             })}
           </nav>
-{/* 
+          {/* 
           <div className="p-4 border-t border-gray-200">
             <div className="bg-blue-50 rounded-lg p-4">
               <h3 className="font-semibold text-gray-900 text-sm mb-2">

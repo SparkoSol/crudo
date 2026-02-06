@@ -1,36 +1,13 @@
 import { useState } from 'react';
 import { Sidebar } from '@/components/dashboard/Sidebar';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Users, UserPlus, Search, Mail, Phone, Calendar } from 'lucide-react';
-import { useAuth } from '@/contexts/AuthContext';
-import { cn } from '@/lib/utils';
+import { Users, UserPlus, Search, Calendar } from 'lucide-react';
+import { MOCK_SALESPEOPLE } from '@/constants/mockData';
 
 export default function Salespeople() {
-  const { user } = useAuth();
   const [searchQuery, setSearchQuery] = useState('');
-
-  const mockSalespeople = [
-    {
-      id: '1',
-      name: 'Pepe Frilac',
-      email: 'pepe@example.com',
-      phone: '+1 234 567 8900',
-      role: 'Sales Representative',
-      joinedDate: '2024-01-15',
-      status: 'active',
-    },
-    {
-      id: '2',
-      name: 'Alejandro',
-      email: 'alejandro@example.com',
-      phone: '+1 234 567 8901',
-      role: 'Sales Representative',
-      joinedDate: '2024-02-20',
-      status: 'active',
-    },
-  ];
 
   return (
     <div className="flex h-screen bg-gray-50 overflow-hidden">
@@ -71,7 +48,7 @@ export default function Salespeople() {
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-sm text-gray-600 mb-1">Total Salespeople</p>
-                    <p className="text-2xl font-bold text-gray-900">{mockSalespeople.length}</p>
+                    <p className="text-2xl font-bold text-gray-900">{MOCK_SALESPEOPLE.length}</p>
                   </div>
                   <div className="p-3 bg-brand-primary-100 rounded-lg">
                     <Users className="h-6 w-6 text-brand-primary-600" />
@@ -85,7 +62,7 @@ export default function Salespeople() {
                   <div>
                     <p className="text-sm text-gray-600 mb-1">Active Members</p>
                     <p className="text-2xl font-bold text-gray-900">
-                      {mockSalespeople.filter(p => p.status === 'active').length}
+                      {MOCK_SALESPEOPLE.filter(p => p.status === 'active').length}
                     </p>
                   </div>
                   <div className="p-3 bg-green-100 rounded-lg">

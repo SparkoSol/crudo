@@ -2,7 +2,7 @@ import { supabase } from "../supabase/client";
 
 let cachedToken: string | null = null;
 let tokenCacheTime: number = 0;
-const TOKEN_CACHE_TTL = 5000; // 5 seconds cache
+const TOKEN_CACHE_TTL = 5000
 
 export const getAuthToken = async (): Promise<string | null> => {
   if (cachedToken && Date.now() - tokenCacheTime < TOKEN_CACHE_TTL) {

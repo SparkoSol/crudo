@@ -4,6 +4,7 @@ import {
   useEffect,
   useState,
   useCallback,
+  useRef,
 } from 'react';
 import type { ReactNode } from 'react';
 import { supabase } from '../lib/supabase/client';
@@ -40,6 +41,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isProfileLoading, setIsProfileLoading] = useState(false);
+  const profileRef = useRef<Profile | null>(null);
 
   const mapUser = (
     sessionUser: SupabaseUser,
@@ -67,19 +69,44 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   };
 
   const loadUserAndProfile = useCallback(
-    async (sessionUser: SupabaseUser, waitForProfile = false) => {
-      const basicUser = mapUser(sessionUser);
-      setUser(basicUser);
+    async (sessionUser: SupabaseUser, waitForProfile = false, skipIfProfileExists = false) => {
+      const hasExistingProfile = !!profileRef.current;
+      
+      if (skipIfProfileExists && hasExistingProfile) {
+        getProfile(sessionUser.id)
+          .then((profileData) => {
+            if (profileData) {
+              profileRef.current = profileData;
+              setProfile(profileData);
+              setUser(mapUser(sessionUser, profileData));
+            }
+          })
+          .catch((err) => {
+            console.error('Background profile refresh failed:', err);
+          });
+        return;
+      }
+
+      if (!hasExistingProfile) {
+        const basicUser = mapUser(sessionUser);
+        setUser(basicUser);
+      }
 
       const loadProfile = async () => {
-        setIsProfileLoading(true);
+        if (!hasExistingProfile) {
+          setIsProfileLoading(true);
+        }
         try {
           const profileData = await getProfile(sessionUser.id);
+          profileRef.current = profileData;
           setProfile(profileData ?? null);
           setUser(mapUser(sessionUser, profileData));
         } catch (err) {
           console.error('Profile load failed:', err);
-          setProfile(null);
+          if (!hasExistingProfile) {
+            profileRef.current = null;
+            setProfile(null);
+          }
         } finally {
           setIsProfileLoading(false);
         }
@@ -133,6 +160,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         if (error) {
           console.error('Session error:', error);
           setUser(null);
+          profileRef.current = null;
           setProfile(null);
           if (mounted) setIsLoading(false);
           if (timeoutId) clearTimeout(timeoutId);
@@ -141,6 +169,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
 
         if (!session?.user) {
           setUser(null);
+          profileRef.current = null;
           setProfile(null);
           if (mounted) setIsLoading(false);
           if (timeoutId) clearTimeout(timeoutId);
@@ -160,6 +189,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         } catch {
           setUser(null);
         }
+        profileRef.current = null;
         setProfile(null);
       } finally {
         if (mounted) {
@@ -178,6 +208,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
 
       if (event === 'SIGNED_OUT' || !session?.user) {
         setUser(null);
+        profileRef.current = null;
         setProfile(null);
         setIsLoading(false);
         return;
@@ -193,7 +224,8 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
           if (event === 'SIGNED_IN') {
             setIsLoading(true);
           }
-          await loadUserAndProfile(session.user);
+          const skipIfProfileExists = event === 'TOKEN_REFRESHED';
+          await loadUserAndProfile(session.user, false, skipIfProfileExists);
         } catch (err) {
           console.error('Auth state change error:', err);
         } finally {
