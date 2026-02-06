@@ -1,0 +1,23 @@
+[functions.send-email]
+verify_jwt = false
+
+[functions.whatsapp]
+verify_jwt = false
+
+[functions.stripe-webhook]
+verify_jwt = false
+
+[functions.create-checkout-session]
+verify_jwt = false
+
+[functions.usage-reporting]
+verify_jwt = false
+
+[functions.get-subscription-details]
+verify_jwt = false
+
+[functions.cancel-subscription]
+verify_jwt = false
+
+[functions.increment-credits]
+verify_jwt = false

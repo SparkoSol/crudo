@@ -6,33 +6,8 @@ import { Loading } from '@/components/Loading';
 import { FileText, Calendar, Users } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 
-const mockReports = [
-  {
-    id: '1',
-    title: 'La estrella - Frilac',
-    salesperson: 'Pepe Frilac',
-    date: '2026-01-07',
-    status: 'completed' as const,
-    duration: '38',
-    novelties: 'None',
-    objections: 'None',
-  },
-  {
-    id: '2',
-    title: '7-Eleven - Frilac',
-    salesperson: 'Alejandro',
-    date: '2026-01-05',
-    status: 'completed' as const,
-    duration: '120',
-    novelties:
-      'Meeting with 7-Eleven: the new promotion of cranberry-filled Christmas muffins was sold. They request a sample of 50 units to try this week.',
-    objections:
-      'The hazelnut syrup bottle was sour; a return will be processed.',
-  },
-];
-
 export default function Dashboard() {
-  const { user, isLoading: authLoading } = useAuth();
+  const { isLoading: authLoading } = useAuth();
   const [searchQuery, setSearchQuery] = useState('');
 
   if (authLoading) {

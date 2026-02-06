@@ -1,11 +1,5 @@
 import { supabase } from "../lib/supabase/client";
-
-interface SignupData {
-  full_name: string;
-  company_name: string;
-  email: string;
-  password: string;
-}
+import type { SignupData } from "@/types";
 
 export const signupSupabase = async (data: SignupData) => {
   try {

@@ -12,10 +12,14 @@ const Dashboard = lazy(() => import("../pages/Dashboard"));
 const Settings = lazy(() => import("../pages/Settings"));
 const Salespeople = lazy(() => import("../pages/Salespeople"));
 const Templates = lazy(() => import("../pages/Templates"));
+const WhatsApp = lazy(() => import("../pages/WhatsApp"));
+const VoiceTranscripts = lazy(() => import("../pages/VoiceTranscripts"));
 const Invite = lazy(() => import("../pages/Invite"));
 const Login = lazy(() => import("../pages/auth/Login"));
 const Register = lazy(() => import("../pages/auth/Register"));
 const ResetPassword = lazy(() => import("../pages/auth/ResetPassword"));
+const Subscription = lazy(() => import("../pages/Subscription"));
+const DashboardStatus = lazy(() => import("../pages/DashboardStatus"));
 const NotFound = lazy(() => import("../pages/NotFound"));
 
 export const ROUTES = {
@@ -23,15 +27,27 @@ export const ROUTES = {
   SETTINGS: "/settings",
   SALESPEOPLE: "/salespeople",
   TEMPLATES: "/templates",
+  WHATSAPP: "/whatsapp",
+  VOICE_TRANSCRIPTS: "/voice-transcripts",
   HOME: "/",
   INVITE: "/invite",
   LOGIN: "/auth/login",
   REGISTER: "/auth/register",
   FORGET_PASSWORD: "/auth/forgot-password",
   RESET_PASSWORD: "/auth/reset-password",
+  SUBSCRIPTION: "/subscription",
+  DASHBOARD_STATUS: "/dashboard/status",
 } as const;
 
 export const routes: RouteObject[] = [
+  {
+    path: ROUTES.DASHBOARD_STATUS,
+    element: (
+      <ProtectedRoute>
+        <DashboardStatus />
+      </ProtectedRoute>
+    ),
+  },
   {
     path: ROUTES.DASHBOARD,
     element: (
@@ -61,6 +77,30 @@ export const routes: RouteObject[] = [
     element: (
       <ProtectedRoute>
         <Templates />
+      </ProtectedRoute>
+    ),
+  },
+  {
+    path: ROUTES.WHATSAPP,
+    element: (
+      <ProtectedRoute>
+        <WhatsApp />
+      </ProtectedRoute>
+    ),
+  },
+  {
+    path: ROUTES.VOICE_TRANSCRIPTS,
+    element: (
+      <ProtectedRoute>
+        <VoiceTranscripts />
+      </ProtectedRoute>
+    ),
+  },
+  {
+    path: ROUTES.SUBSCRIPTION,
+    element: (
+      <ProtectedRoute>
+        <Subscription />
       </ProtectedRoute>
     ),
   },
