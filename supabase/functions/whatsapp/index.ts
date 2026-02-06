@@ -69,7 +69,7 @@ serve(async (req) => {
         const { accessToken, phoneNumberId, apiVersion, openaiApiKey } = getWhatsAppConfig();
 
         if (!accessToken || !phoneNumberId) {
-          console.error("❌ ERROR: WhatsApp credentials not configured");
+          console.error("ERROR: WhatsApp credentials not configured");
           return new Response(JSON.stringify({ success: true }), {
             status: 200,
             headers: corsHeaders,
@@ -591,7 +591,7 @@ Extract and fill all template fields from the transcript. Return a JSON object w
                         to: from,
                         type: "text",
                         text: {
-                          body: "✅ Your transcript has been confirmed and processed! You can view and download it from your account.",
+                          body: "Your transcript has been confirmed and processed! You can view and download it from your account.",
                         },
                       };
                       await fetch(
@@ -742,7 +742,7 @@ Extract and fill all template fields from the transcript. Return a JSON object w
     console.log("-----------------------------------------");
 
     if (!body.to) {
-      console.error("❌ ERROR: Missing 'to' field");
+      console.error("ERROR: Missing 'to' field");
       return new Response(
         JSON.stringify({ error: "Missing required field: 'to'" }),
         { status: 400, headers: corsHeaders }
@@ -750,7 +750,7 @@ Extract and fill all template fields from the transcript. Return a JSON object w
     }
 
     if (!body.messaging_product) {
-      console.error("❌ ERROR: Missing 'messaging_product' field");
+      console.error("ERROR: Missing 'messaging_product' field");
       return new Response(
         JSON.stringify({ error: "Missing required field: 'messaging_product'" }),
         { status: 400, headers: corsHeaders }
@@ -758,7 +758,7 @@ Extract and fill all template fields from the transcript. Return a JSON object w
     }
 
     if (!body.type) {
-      console.error("❌ ERROR: Missing 'type' field");
+      console.error("ERROR: Missing 'type' field");
       return new Response(
         JSON.stringify({ error: "Missing required field: 'type'" }),
         { status: 400, headers: corsHeaders }
@@ -767,7 +767,7 @@ Extract and fill all template fields from the transcript. Return a JSON object w
 
     if (body.type === "text") {
       if (!body.text || !body.text.body) {
-        console.error("❌ ERROR: Missing 'text.body'");
+        console.error("ERROR: Missing 'text.body'");
         return new Response(
           JSON.stringify({ error: "Missing required field: 'text.body' for text messages" }),
           { status: 400, headers: corsHeaders }
@@ -777,7 +777,7 @@ Extract and fill all template fields from the transcript. Return a JSON object w
 
     if (body.type === "template") {
       if (!body.template || !body.template.name) {
-        console.error("❌ ERROR: Missing 'template.name'");
+        console.error("ERROR: Missing 'template.name'");
         return new Response(
           JSON.stringify({ error: "Missing required field: 'template.name' for template messages" }),
           { status: 400, headers: corsHeaders }
@@ -787,7 +787,7 @@ Extract and fill all template fields from the transcript. Return a JSON object w
     }
 
     if (!body.to.match(/^\+[1-9]\d{1,14}$/)) {
-      console.error("❌ ERROR: Invalid phone number format:", body.to);
+      console.error("ERROR: Invalid phone number format:", body.to);
       return new Response(
         JSON.stringify({ error: "Invalid phone number format. Use format (e.g., +1234567890)" }),
         { status: 400, headers: corsHeaders }
@@ -801,7 +801,7 @@ Extract and fill all template fields from the transcript. Return a JSON object w
 
     const whatsappApiUrl = `https://graph.facebook.com/${apiVersion}/${phoneNumberId}/messages`;
 
-    console.log("🚀 Dispatching to WhatsApp API:", whatsappApiUrl);
+    console.log("Dispatching to WhatsApp API:", whatsappApiUrl);
 
     const response = await fetch(whatsappApiUrl, {
       method: "POST",
@@ -815,7 +815,7 @@ Extract and fill all template fields from the transcript. Return a JSON object w
     const result = await response.json();
 
     if (!response.ok) {
-      console.error("❌ WhatsApp API Error:", JSON.stringify(result, null, 2));
+      console.error("WhatsApp API Error:", JSON.stringify(result, null, 2));
       return new Response(
         JSON.stringify({
           error: result?.error?.message || "WhatsApp API request failed",
@@ -825,7 +825,7 @@ Extract and fill all template fields from the transcript. Return a JSON object w
       );
     }
 
-    console.warn("✅ Message sent successfully!");
+    console.warn("Message sent successfully!");
     console.warn("Message ID:", result.messages?.[0]?.id);
     console.log("-----------------------------------------");
 

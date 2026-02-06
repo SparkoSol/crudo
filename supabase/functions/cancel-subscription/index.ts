@@ -40,35 +40,84 @@ serve(async (req) => {
             );
         }
 
-        const { data: subscription, error: subError } = await supabase
-            .from("subscriptions")
-            .select("subscription_id")
-            .eq("user_id", user.id)
-            .in("status", ["active", "trialing", "past_due"])
-            .order('updated_at', { ascending: false })
-            .limit(1)
-            .maybeSingle();
+        const stripeCustomers = await stripe.customers.search({
+            query: `email:'${user.email}'`,
+            limit: 1,
+        });
 
-        if (subError || !subscription) {
+        let subscriptions: { id: string }[] = [];
+        let stripeCustomerId = null;
+
+        if (stripeCustomers.data.length > 0) {
+            stripeCustomerId = stripeCustomers.data[0].id;
+            console.log(`Found Stripe Customer: ${stripeCustomerId}`);
+
+            const stripeSubscriptions = await stripe.subscriptions.list({
+                customer: stripeCustomerId,
+                status: 'all',
+                limit: 10,
+            });
+
+            subscriptions = stripeSubscriptions.data
+                .filter(sub => ['active', 'trialing', 'past_due', 'unpaid'].includes(sub.status))
+                .map(sub => ({ id: sub.id }));
+
+            console.log(`Stripe found ${subscriptions.length} active/pending subscriptions for customer.`);
+        } else {
+            console.warn(`No Stripe customer found for email ${user.email}. Falling back to database lookup.`);
+            const { data: dbSubs, error: subError } = await supabase
+                .from("subscriptions")
+                .select("subscription_id")
+                .eq("user_id", user.id)
+                .in("status", ["active", "trialing", "past_due"]);
+
+            if (!subError && dbSubs) {
+                subscriptions = dbSubs.map(s => ({ id: s.subscription_id }));
+            }
+        }
+
+        if (subscriptions.length === 0) {
             return new Response(
-                JSON.stringify({ error: "No active subscription found" }),
-                { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+                JSON.stringify({ message: "No active subscriptions found to cancel." }),
+                { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
             );
         }
 
-        const deletedSubscription = await stripe.subscriptions.cancel(subscription.subscription_id);
+        console.log(`Canceling ${subscriptions.length} subscriptions with immediate invoicing...`);
 
-        const { error: updateError } = await supabase
-            .from("subscriptions")
-            .update({ status: 'canceled', updated_at: new Date().toISOString() })
-            .eq("subscription_id", subscription.subscription_id);
+        const results = await Promise.all(subscriptions.map(async (sub) => {
+            try {
+                const deletedSubscription = await stripe.subscriptions.cancel(sub.id, {
+                    invoice_now: true,
+                    prorate: true,
+                });
 
-        if (updateError) {
-            console.error("Error updating subscription status in Supabase:", updateError);
-        }
+                const { error: syncError } = await supabase
+                    .from("subscriptions")
+                    .update({
+                        status: 'canceled',
+                        updated_at: new Date().toISOString()
+                    })
+                    .eq('subscription_id', sub.id);
+
+                if (syncError) {
+                    console.error(`Error updating subscription ${sub.id} in Supabase:`, syncError);
+                }
+
+                return { id: sub.id, success: true, stripeResponse: deletedSubscription };
+            } catch (err: any) {
+                console.error(`Error canceling subscription ${sub.id}:`, err.message);
+                return { id: sub.id, success: false, error: err.message };
+            }
+        }));
+
+        const successCount = results.filter(r => r.success).length;
 
         return new Response(
-            JSON.stringify({ message: "Subscription canceled successfully", subscription: deletedSubscription }),
+            JSON.stringify({
+                message: `Successfully processed ${successCount} of ${subscriptions.length} subscriptions.`,
+                results
+            }),
             { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
 

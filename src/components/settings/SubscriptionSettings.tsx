@@ -74,6 +74,7 @@ export function SubscriptionSettings({ initialSubscription, initialDetails, init
                 setSubscription({ ...subscription, status: 'canceled' });
             }
             setShowCancelDialog(false);
+            navigate('/subscription');
         } catch (err: any) {
             console.error(err);
             toast.error(err.message || "Failed to cancel subscription");
@@ -206,8 +207,8 @@ export function SubscriptionSettings({ initialSubscription, initialDetails, init
                 onOpenChange={setShowCancelDialog}
                 onConfirm={executeCancellation}
                 title="Cancel Subscription"
-                description="Are you sure you want to cancel your subscription? You will lose access to premium features at the end of your current billing period."
-                confirmText="Yes, cancel plan"
+                description="Canceling will end Platform Access, forfeit remaining credits, and charge any used credits for this month immediately. This action cannot be undone."
+                confirmText="Yes, cancel everything"
                 cancelText="Keep my plan"
                 variant="destructive"
                 isLoading={cancelLoading}
