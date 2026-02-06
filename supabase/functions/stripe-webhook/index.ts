@@ -1,8 +1,8 @@
-import Stripe from "npm:stripe@^13.10.0";
-import { createClient } from "npm:@supabase/supabase-js@^2";
+import Stripe from "npm:stripe@^14.14.0";
+import { createClient } from "npm:@supabase/supabase-js@2";
 
-const stripe = new Stripe(Deno.env.get("STRIPE_API_KEY") || "", {
-    apiVersion: "2023-10-16",
+const stripe = new Stripe(Deno.env.get("STRIPE_API_KEY")!, {
+    apiVersion: "2024-06-20",
 });
 
 const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
