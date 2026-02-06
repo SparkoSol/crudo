@@ -7,7 +7,8 @@ import { SettingsSkeleton } from '@/components/settings/SettingsSkeleton';
 import { getProfile } from '@/services/profileServices';
 import { useAuth } from '@/contexts/AuthContext';
 import { subscriptionService } from '@/services/subscriptionService';
-import type { SubscriptionData, SubscriptionDetails } from '@/types';
+import { creditService } from '@/services/creditService';
+import type { SubscriptionData, SubscriptionDetails, CreditsWallet } from '@/types';
 
 export default function Settings() {
   const { user } = useAuth();
@@ -15,6 +16,7 @@ export default function Settings() {
   const [profileData, setProfileData] = useState<any>(null);
   const [subscriptionData, setSubscriptionData] = useState<SubscriptionData | null>(null);
   const [subDetails, setSubDetails] = useState<SubscriptionDetails | null>(null);
+  const [wallet, setWallet] = useState<CreditsWallet | null>(null);
 
   useEffect(() => {
     if (!user) return;
@@ -29,8 +31,12 @@ export default function Settings() {
         setSubscriptionData(sub);
 
         if (sub) {
-          const detailData = await subscriptionService.getSubscriptionDetails();
+          const [detailData, walletData] = await Promise.all([
+            subscriptionService.getSubscriptionDetails(),
+            creditService.getWallet()
+          ]);
           setSubDetails(detailData);
+          setWallet(walletData);
         }
       } catch (error) {
         console.error('Error fetching settings data:', error);
@@ -63,6 +69,7 @@ export default function Settings() {
                 <SubscriptionSettings
                   initialSubscription={subscriptionData}
                   initialDetails={subDetails}
+                  initialWallet={wallet}
                 />
                 <ChangePassword />
               </>
