@@ -53,7 +53,7 @@ Deno.serve(async (req) => {
                 undefined
             );
         } catch (err: any) {
-            console.error(`❌ Webhook signature verification failed: ${err.message}`);
+            console.error(`Webhook signature verification failed: ${err.message}`);
             return new Response(`Webhook Error: ${err.message}`, { status: 400, headers: corsHeaders });
         }
 
@@ -137,7 +137,7 @@ Deno.serve(async (req) => {
                             ]);
 
                             if (usageError) console.error("Error creating usage subscription record:", usageError);
-                            else console.log(`✅ Created usage subscription: ${usageSub.id}`);
+                            else console.log(`Created usage subscription: ${usageSub.id}`);
                         } catch (usageApiErr: any) {
                             console.error("Failed to create usage subscription via API:", usageApiErr.message);
                         }
@@ -219,7 +219,7 @@ Deno.serve(async (req) => {
 
             case "invoice.payment_succeeded": {
                 const invoice = event.data.object as Stripe.Invoice;
-                console.log(`✅ Invoice payment succeeded: ${invoice.id}`);
+                console.log(`Invoice payment succeeded: ${invoice.id}`);
 
                 if (invoice.subscription) {
                     await supabase
@@ -232,7 +232,7 @@ Deno.serve(async (req) => {
 
             case "invoice.payment_failed": {
                 const invoice = event.data.object as Stripe.Invoice;
-                console.log(`❌ Invoice payment failed: ${invoice.id}`);
+                console.log(`Invoice payment failed: ${invoice.id}`);
 
                 if (invoice.subscription) {
                     await supabase

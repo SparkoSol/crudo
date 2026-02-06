@@ -136,14 +136,14 @@ export default function VoiceTranscripts() {
                         setIsIncrementing(true);
                         const result = await subscriptionService.incrementCredits(1);
                         if (result.total_usage !== undefined) {
-                          toast.success(`Credits incremented. New Total: ${result.total_usage}`);
+                          toast.success(`Credits incremented`);
                         } else {
                           toast.success('Credits incremented successfully');
                         }
                         setIsModalOpen(false);
-                      } catch (error) {
+                      } catch (error: any) {
                         console.error('Failed to increment credits:', error);
-                        toast.error('Failed to increment credits');
+                        toast.error(error.message);
                       } finally {
                         setIsIncrementing(false);
                       }

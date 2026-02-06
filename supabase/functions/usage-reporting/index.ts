@@ -68,7 +68,7 @@ serve(async (req) => {
             }
         );
 
-        console.log(`✅ Usage reported successfully: ${usageRecord.id}`);
+        console.log(`Usage reported successfully: ${usageRecord.id}`);
 
         return new Response(
             JSON.stringify({ success: true, usageRecord }),

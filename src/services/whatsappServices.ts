@@ -115,7 +115,7 @@ export class WhatsAppUtils {
         to: testPhoneNumber,
         type: "text",
         text: {
-          body: "✅ WhatsApp integration test successful! Your WhatsApp Business API is working correctly.",
+          body: "WhatsApp integration test successful! Your WhatsApp Business API is working correctly.",
         },
       });
       return result.success === true;
