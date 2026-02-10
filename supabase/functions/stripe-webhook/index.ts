@@ -57,12 +57,12 @@ Deno.serve(async (req) => {
             return new Response(`Webhook Error: ${err.message}`, { status: 400, headers: corsHeaders });
         }
 
-        console.log(`🔔 Received event: ${event.type}`);
+        console.log(`Received event: ${event.type}`);
 
         switch (event.type) {
             case "checkout.session.completed": {
                 const session = event.data.object as Stripe.Checkout.Session;
-                console.log(`💰 Checkout Session completed: ${session.id}`);
+                console.log(`Checkout Session completed: ${session.id}`);
                 console.log("Metadata received:", JSON.stringify(session.metadata));
 
                 const subscriptionId = session.subscription as string;
@@ -121,7 +121,7 @@ Deno.serve(async (req) => {
                                 ],
                                 metadata: {
                                     user_id: userId,
-                                    // plan_type: planType,
+                                    plan_type: planType,
                                     subscription_role: "usage",
                                 },
                             });
@@ -202,7 +202,7 @@ Deno.serve(async (req) => {
                                     );
 
                                     if (meteredItems.length > 0) {
-                                        console.log(`💳 Creating invoice for ${currentUsage} used credits...`);
+                                        console.log(`Creating invoice for ${currentUsage} used credits...`);
 
                                         const customerId = typeof oldStripeSubscription.customer === 'string'
                                             ? oldStripeSubscription.customer
@@ -228,12 +228,11 @@ Deno.serve(async (req) => {
 
                                 await stripe.subscriptions.cancel(oldSub.subscription_id, {
                                     invoice_now: true,
-                                    prorate: true,
+                                    prorate: false,
                                 });
 
-                                console.log(`✅ Old subscription ${oldSub.subscription_id} canceled and invoiced.`);
+                                console.log(`Old subscription ${oldSub.subscription_id} canceled and invoiced.`);
 
-                                // Update database status
                                 await supabase
                                     .from("subscriptions")
                                     .update({
@@ -260,7 +259,6 @@ Deno.serve(async (req) => {
                             } catch (cancelError: any) {
                                 console.error(`Error canceling subscription ${oldSub.subscription_id}:`, cancelError.message);
 
-                                // If subscription is already missing in Stripe, mark it as canceled in DB
                                 if (cancelError.message && (cancelError.message.includes("No such subscription") || cancelError.code === 'resource_missing')) {
                                     console.log(`Subscription ${oldSub.subscription_id} not found in Stripe. Marking as canceled in DB.`);
                                     await supabase
