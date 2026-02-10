@@ -1,48 +1,69 @@
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Home, ArrowLeft, Search } from 'lucide-react';
+import { Card, CardContent } from '@/components/ui/card';
+import { Home, ArrowLeft, Ghost, Sparkles } from 'lucide-react';
 
 export default function NotFound() {
   return (
-    <div className="min-h-screen bg-gradient-to-br from-background via-background to-muted/20 flex items-center justify-center p-4">
-      <Card className="w-full max-w-md shadow-lg">
-        <CardHeader className="text-center space-y-4">
-          <div className="flex justify-center">
-            <div className="relative">
-              <div className="text-9xl font-bold text-primary/20">404</div>
-              <Search className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 h-12 w-12 text-primary/40" />
+    <div className="min-h-screen bg-white bg-grid-white relative flex items-center justify-center p-6 overflow-hidden">
+      <div className="absolute top-0 -left-4 w-96 h-96 bg-brand-primary-100 rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-float" />
+      <div className="absolute -bottom-8 -right-4 w-96 h-96 bg-brand-primary-200 rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-float" style={{ animationDelay: '2s' }} />
+
+      <div className="w-full max-w-xl relative shrink-0">
+        <div className="text-center mb-10 opacity-0 animate-reveal" style={{ animationDelay: '100ms' }}>
+          <div className="relative inline-block group">
+            <div className="text-[12rem] font-black text-brand-primary-900/5 leading-none select-none transition-transform duration-500 group-hover:scale-105">
+              404
+            </div>
+            <div className="absolute inset-0 flex items-center justify-center">
+              <Ghost className="h-28 w-28 text-brand-primary-600 animate-float drop-shadow-xl" strokeWidth={1.2} />
+            </div>
+            <div className="absolute -top-2 -right-2">
+              <Sparkles className="h-8 w-8 text-brand-primary-400 animate-pulse" />
             </div>
           </div>
-          <CardTitle className="text-3xl">Page Not Found</CardTitle>
-          <CardDescription className="text-base">
-            The page you're looking for doesn't exist or has been moved.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex flex-col gap-3">
-            <Button asChild className="w-full gap-2">
-              <Link to="/">
-                <Home className="h-4 w-4" />
-                Go to Home
-              </Link>
-            </Button>
-            <Button 
-              variant="outline" 
-              className="w-full gap-2" 
-              onClick={() => window.history.back()}
-            >
-              <ArrowLeft className="h-4 w-4" />
-              Go Back
-            </Button>
-          </div>
-          <div className="pt-4 border-t">
-            <p className="text-xs text-center text-muted-foreground">
-              If you believe this is an error, please contact support.
-            </p>
-          </div>
-        </CardContent>
-      </Card>
+          <h1 className="text-4xl font-black text-gray-900 mt-6 tracking-tight">
+            Lost your way?
+          </h1>
+          <p className="text-lg text-gray-500 mt-3 max-w-sm mx-auto font-medium">
+            The page you're looking for vanished into another dimension. Let's get you back.
+          </p>
+        </div>
+
+        <Card className="border-none glass-premium rounded-[2.5rem] overflow-hidden opacity-0 animate-reveal shadow-2xl" style={{ animationDelay: '300ms' }}>
+          <div className="h-2 bg-gradient-to-r from-brand-primary-400 via-brand-primary-600 to-brand-primary-800" />
+          <CardContent className="p-10">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 pb-8 border-b border-gray-100/50">
+              <Button
+                asChild
+                className="h-16 text-lg font-bold bg-brand-primary-600 hover:bg-brand-primary-700 text-white rounded-2xl shadow-lg shadow-brand-primary-200/50 transition-all hover:scale-[1.03] active:scale-[0.98] group"
+              >
+                <Link to="/">
+                  <Home className="mr-2.5 h-6 w-6 transition-transform group-hover:-translate-y-0.5" />
+                  Back Home
+                </Link>
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => window.history.back()}
+                className="h-16 text-lg font-bold border-2 border-gray-100 hover:border-brand-primary-200 hover:bg-brand-primary-50/30 text-gray-600 hover:text-brand-primary-700 rounded-2xl transition-all hover:scale-[1.03] active:scale-[0.98] group"
+              >
+                <ArrowLeft className="mr-2.5 h-6 w-6 transition-transform group-hover:-translate-x-1" />
+                Go Back
+              </Button>
+            </div>
+
+            <div className="mt-8 flex flex-col items-center gap-6">
+              <div className="flex flex-col items-center gap-1.5 opacity-40">
+                <p className="text-[10px] uppercase tracking-[0.3em] text-gray-900 font-black">
+                  We Are Crudo
+                </p>
+                <div className="h-1 w-12 bg-brand-primary-600 rounded-full" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
 }
