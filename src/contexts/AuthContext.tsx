@@ -12,6 +12,8 @@ import { getProfile } from '../services/profileServices';
 import type { User, Role } from '../types/auth.types';
 import type { Profile } from '../types/profile.types';
 import type { User as SupabaseUser } from '@supabase/supabase-js';
+import { subscriptionService } from '../services/subscriptionService';
+import type { SubscriptionData } from '../types/subscription.types';
 
 interface AuthContextType {
   user: User | null;
@@ -20,6 +22,7 @@ interface AuthContextType {
   isProfileLoading: boolean;
   isAuthenticated: boolean;
   refreshProfile: () => Promise<void>;
+  subscription: SubscriptionData | null;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -39,6 +42,7 @@ interface AuthProviderProps {
 export const AuthProvider = ({ children }: AuthProviderProps) => {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
+  const [subscription, setSubscription] = useState<SubscriptionData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isProfileLoading, setIsProfileLoading] = useState(false);
   const profileRef = useRef<Profile | null>(null);
@@ -71,7 +75,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   const loadUserAndProfile = useCallback(
     async (sessionUser: SupabaseUser, waitForProfile = false, skipIfProfileExists = false) => {
       const hasExistingProfile = !!profileRef.current;
-      
+
       if (skipIfProfileExists && hasExistingProfile) {
         getProfile(sessionUser.id)
           .then((profileData) => {
@@ -101,11 +105,28 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
           profileRef.current = profileData;
           setProfile(profileData ?? null);
           setUser(mapUser(sessionUser, profileData));
+
+          let targetUserId = sessionUser.id;
+          if (profileData && profileData.role === 'sales_representative') {
+            if (profileData.manager_id) {
+              targetUserId = profileData.manager_id;
+            }
+          }
+
+          try {
+            const subData = await subscriptionService.getUserSubscription(targetUserId);
+            setSubscription(subData);
+          } catch (subErr) {
+            console.error('Failed to load subscription:', subErr);
+            setSubscription(null);
+          }
+
         } catch (err) {
           console.error('Profile load failed:', err);
           if (!hasExistingProfile) {
             profileRef.current = null;
             setProfile(null);
+            setSubscription(null);
           }
         } finally {
           setIsProfileLoading(false);
@@ -162,6 +183,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
           setUser(null);
           profileRef.current = null;
           setProfile(null);
+          setSubscription(null);
           if (mounted) setIsLoading(false);
           if (timeoutId) clearTimeout(timeoutId);
           return;
@@ -171,6 +193,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
           setUser(null);
           profileRef.current = null;
           setProfile(null);
+          setSubscription(null);
           if (mounted) setIsLoading(false);
           if (timeoutId) clearTimeout(timeoutId);
           return;
@@ -191,6 +214,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         }
         profileRef.current = null;
         setProfile(null);
+        setSubscription(null);
       } finally {
         if (mounted) {
           setIsLoading(false);
@@ -210,6 +234,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         setUser(null);
         profileRef.current = null;
         setProfile(null);
+        setSubscription(null);
         setIsLoading(false);
         return;
       }
@@ -252,6 +277,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         isProfileLoading,
         isAuthenticated: !!user,
         refreshProfile,
+        subscription,
       }}
     >
       {children}

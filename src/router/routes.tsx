@@ -21,6 +21,7 @@ const ResetPassword = lazy(() => import("../pages/auth/ResetPassword"));
 const Subscription = lazy(() => import("../pages/Subscription"));
 const DashboardStatus = lazy(() => import("../pages/DashboardStatus"));
 const NotFound = lazy(() => import("../pages/NotFound"));
+const AccessDenied = lazy(() => import("../pages/AccessDenied"));
 
 export const ROUTES = {
   DASHBOARD: "/",
@@ -37,6 +38,7 @@ export const ROUTES = {
   RESET_PASSWORD: "/auth/reset-password",
   SUBSCRIPTION: "/subscription",
   DASHBOARD_STATUS: "/dashboard/status",
+  ACCESS_DENIED: "/access-denied",
 } as const;
 
 export const routes: RouteObject[] = [
@@ -165,5 +167,13 @@ export const routes: RouteObject[] = [
         element: <NotFound />,
       },
     ],
+  },
+  {
+    path: ROUTES.ACCESS_DENIED,
+    element: (
+      <ProtectedRoute>
+        <AccessDenied />
+      </ProtectedRoute>
+    ),
   },
 ];

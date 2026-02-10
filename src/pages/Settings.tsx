@@ -66,11 +66,13 @@ export default function Settings() {
             ) : (
               <>
                 <ProfileInformation initialData={profileData} />
-                <SubscriptionSettings
-                  initialSubscription={subscriptionData}
-                  initialDetails={subDetails}
-                  initialWallet={wallet}
-                />
+                {user?.role !== 'SalesRepresentative' && (
+                  <SubscriptionSettings
+                    initialSubscription={subscriptionData}
+                    initialDetails={subDetails}
+                    initialWallet={wallet}
+                  />
+                )}
                 <ChangePassword />
               </>
             )}
