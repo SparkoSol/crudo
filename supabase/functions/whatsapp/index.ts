@@ -9,7 +9,6 @@ const corsHeaders = {
 };
 
 const OPENAI_WHISPER_API_URL = "https://api.openai.com/v1/audio/transcriptions";
-const WHATSAPP_TRANSCRIPT_TEMPLATE_NAME = Deno.env.get("WHATSAPP_TRANSCRIPT_TEMPLATE_NAME") || "sales_report_transcript";
 
 function getWhatsAppConfig() {
   return {
@@ -17,8 +16,60 @@ function getWhatsAppConfig() {
     phoneNumberId: Deno.env.get("WHATSAPP_PHONE_NUMBER_ID"),
     apiVersion: Deno.env.get("WHATSAPP_API_VERSION") || "v24.0",
     openaiApiKey: Deno.env.get("OPENAI_API_KEY"),
+    templateName: Deno.env.get("WHATSAPP_TRANSCRIPT_TEMPLATE_NAME") || "sales_report_transcript",
   };
 }
+
+async function verifyWebhookSignature(payload: string, signature: string | null): Promise<boolean> {
+  if (!signature) {
+    console.warn("⚠️ No X-Hub-Signature-256 header found");
+    return false;
+  }
+
+  const appSecret = Deno.env.get("WHATSAPP_APP_SECRET");
+  if (!appSecret) {
+    console.warn("⚠️ WHATSAPP_APP_SECRET not configured - skipping signature verification");
+    return true;
+  }
+
+  try {
+    const signatureHash = signature.split("=")[1];
+
+    const encoder = new TextEncoder();
+    const key = await crypto.subtle.importKey(
+      "raw",
+      encoder.encode(appSecret),
+      { name: "HMAC", hash: "SHA-256" },
+      false,
+      ["sign"]
+    );
+
+    const signatureBuffer = await crypto.subtle.sign(
+      "HMAC",
+      key,
+      encoder.encode(payload)
+    );
+
+    const hashArray = Array.from(new Uint8Array(signatureBuffer));
+    const expectedHash = hashArray.map(b => b.toString(16).padStart(2, "0")).join("");
+
+    const isValid = signatureHash === expectedHash;
+    if (!isValid) {
+      console.error("❌ Invalid webhook signature");
+    }
+    return isValid;
+  } catch (error) {
+    console.error("Error verifying webhook signature:", error);
+    return false;
+  }
+}
+
+
+function normalizePhoneNumber(phoneNumber: string): string {
+  if (!phoneNumber) return phoneNumber;
+  return phoneNumber.startsWith('+') ? phoneNumber : `+${phoneNumber}`;
+}
+
 
 serve(async (req) => {
 
@@ -31,10 +82,12 @@ serve(async (req) => {
     const authHeader = req.headers.get("Authorization");
 
     const url = new URL(req.url);
+
     const isWebhookVerification = url.searchParams.get("hub.mode") === "subscribe" &&
       url.searchParams.get("hub.verify_token");
+    const isWhatsAppWebhook = req.method === "POST";
 
-    if (!isWebhookVerification && !authHeader) {
+    if (!isWebhookVerification && !isWhatsAppWebhook && !authHeader) {
       return new Response(
         JSON.stringify({ error: "Missing Authorization header" }),
         { status: 401, headers: corsHeaders }
@@ -58,7 +111,19 @@ serve(async (req) => {
     }
 
     if (req.method === "POST" && !authHeader) {
-      const body: WhatsAppWebhookRequest = await req.json();
+      const rawBody = await req.text();
+      const signature = req.headers.get("X-Hub-Signature-256");
+      const isValidSignature = await verifyWebhookSignature(rawBody, signature);
+
+      if (!isValidSignature && Deno.env.get("WHATSAPP_APP_SECRET")) {
+        console.error("❌ Webhook signature verification failed");
+        return new Response(
+          JSON.stringify({ error: "Invalid signature" }),
+          { status: 401, headers: corsHeaders }
+        );
+      }
+
+      const body: WhatsAppWebhookRequest = JSON.parse(rawBody);
       console.log("-----------------------------------------");
       console.log("📦 NEW WEBHOOK RECEIVED");
       console.log("Event Type:", body.object);
@@ -66,7 +131,7 @@ serve(async (req) => {
       console.log("-----------------------------------------");
 
       if (body.object === "whatsapp_business_account") {
-        const { accessToken, phoneNumberId, apiVersion, openaiApiKey } = getWhatsAppConfig();
+        const { accessToken, phoneNumberId, apiVersion, openaiApiKey, templateName } = getWhatsAppConfig();
 
         if (!accessToken || !phoneNumberId) {
           console.error("ERROR: WhatsApp credentials not configured");
@@ -99,8 +164,6 @@ serve(async (req) => {
 
                   if (audioId && openaiApiKey) {
                     try {
-                      // ... (rest of audio processing logic)
-
                       const mediaUrl = `https://graph.facebook.com/${apiVersion}/${audioId}`;
                       const mediaResponse = await fetch(mediaUrl, {
                         headers: {
@@ -180,7 +243,7 @@ serve(async (req) => {
                         transcript = transcript.substring(0, maxLength) + "...\n\n[Transcript truncated due to length]";
                       }
 
-                      if (!from || !from.match(/^\+[1-9]\d{1,14}$/)) {
+                      if (!from || !from.match(/^\+?[1-9]\d{1,14}$/)) {
                         console.error("Invalid phone number format:", from);
                         continue;
                       }
@@ -241,10 +304,10 @@ serve(async (req) => {
                       const templatePayload = {
                         messaging_product: "whatsapp",
                         recipient_type: "individual",
-                        to: from,
+                        to: normalizePhoneNumber(from),
                         type: "template",
                         template: {
-                          name: WHATSAPP_TRANSCRIPT_TEMPLATE_NAME,
+                          name: templateName,
                           language: {
                             code: "en_US",
                           },
@@ -262,7 +325,7 @@ serve(async (req) => {
                         },
                       };
 
-                      console.log("Sending template transcript message to:", from, "using template:", WHATSAPP_TRANSCRIPT_TEMPLATE_NAME);
+                      console.log("Sending template transcript message to:", from, "using template:", templateName);
 
                       const sendResponse = await fetch(
                         `https://graph.facebook.com/${apiVersion}/${phoneNumberId}/messages`,
@@ -289,7 +352,7 @@ serve(async (req) => {
                         const textPayload = {
                           messaging_product: "whatsapp",
                           recipient_type: "individual",
-                          to: from,
+                          to: normalizePhoneNumber(from),
                           type: "text",
                           text: {
                             body: `📝 Transcript:\n\n${transcript}`,
@@ -336,7 +399,7 @@ serve(async (req) => {
                       const responsePayload = {
                         messaging_product: "whatsapp",
                         recipient_type: "individual",
-                        to: from,
+                        to: normalizePhoneNumber(from),
                         type: "text",
                         text: {
                           body: `👋 Hi! I received your message: "${textBody}".\n\nI am currently configured to process voice messages. Please send me a voice note to test transcription! 🎤`,
@@ -360,14 +423,16 @@ serve(async (req) => {
                   }
                 }
 
-                if (messageType === "interactive" && message.interactive) {
-                  const buttonText = message.interactive.button_reply?.title?.toLowerCase() || "";
-                  const buttonId = message.interactive.button_reply?.id;
+                if (messageType === "interactive" || messageType === "button") {
+                  const buttonText = (message.interactive?.button_reply?.title || message.button?.text || "").toLowerCase();
+                  const buttonId = message.interactive?.button_reply?.id || message.button?.payload || "";
+
+                  console.log(`🔘 Button clicked: ${buttonText} (ID: ${buttonId})`);
 
                   let action: "confirm" | "retake" | null = null;
-                  if (buttonId === "confirm" || buttonText.includes("confirm")) {
+                  if (buttonId === "Confirm" || buttonText.includes("confirm")) {
                     action = "confirm";
-                  } else if (buttonId === "retake" || buttonText.includes("retake")) {
+                  } else if (buttonId === "Retake" || buttonText.includes("retake")) {
                     action = "retake";
                   }
 
@@ -412,7 +477,7 @@ serve(async (req) => {
                         const errorPayload = {
                           messaging_product: "whatsapp",
                           recipient_type: "individual",
-                          to: from,
+                          to: normalizePhoneNumber(from),
                           type: "text",
                           text: {
                             body: "Sorry, I couldn't find your transcript. Please send a new voice message.",
@@ -432,7 +497,6 @@ serve(async (req) => {
                         continue;
                       }
 
-                      // Get user_id from phone mapping or transcript
                       let userId = transcriptRecord.user_id;
                       if (!userId) {
                         const { data: phoneMapping } = await adminClient
@@ -448,7 +512,7 @@ serve(async (req) => {
                         const errorPayload = {
                           messaging_product: "whatsapp",
                           recipient_type: "individual",
-                          to: from,
+                          to: normalizePhoneNumber(from),
                           type: "text",
                           text: {
                             body: "Your phone number is not linked to an account. Please contact support.",
@@ -468,7 +532,6 @@ serve(async (req) => {
                         continue;
                       }
 
-                      // Get user's default template
                       const { data: template, error: templateError } = await adminClient
                         .from("user_templates")
                         .select("*")
@@ -478,7 +541,6 @@ serve(async (req) => {
 
                       if (templateError || !template) {
                         console.error("No default template found for user:", templateError);
-                        // Update transcript status to confirmed even without template
                         await adminClient
                           .from("voice_transcripts")
                           .update({
@@ -490,7 +552,7 @@ serve(async (req) => {
                         const errorPayload = {
                           messaging_product: "whatsapp",
                           recipient_type: "individual",
-                          to: from,
+                          to: normalizePhoneNumber(from),
                           type: "text",
                           text: {
                             body: "Your transcript has been saved, but no template is configured. Please set up a template in your account.",
@@ -510,7 +572,6 @@ serve(async (req) => {
                         continue;
                       }
 
-                      // Call GPT to fill template directly
                       const openaiApiKey = Deno.env.get("OPENAI_API_KEY");
                       let filledData = null;
 
@@ -573,7 +634,6 @@ Extract and fill all template fields from the transcript. Return a JSON object w
                         }
                       }
 
-                      // Update transcript with filled data and confirmed status
                       await adminClient
                         .from("voice_transcripts")
                         .update({
@@ -584,11 +644,10 @@ Extract and fill all template fields from the transcript. Return a JSON object w
                         })
                         .eq("id", transcriptRecord.id);
 
-                      // Send confirmation message
                       const confirmPayload = {
                         messaging_product: "whatsapp",
                         recipient_type: "individual",
-                        to: from,
+                        to: normalizePhoneNumber(from),
                         type: "text",
                         text: {
                           body: "Your transcript has been confirmed and processed! You can view and download it from your account.",
@@ -637,7 +696,7 @@ Extract and fill all template fields from the transcript. Return a JSON object w
                       const retakePayload = {
                         messaging_product: "whatsapp",
                         recipient_type: "individual",
-                        to: from,
+                        to: normalizePhoneNumber(from),
                         type: "text",
                         text: {
                           body: "🔄 Please send a new voice message.",
@@ -786,7 +845,7 @@ Extract and fill all template fields from the transcript. Return a JSON object w
       console.log("Template Name:", body.template.name);
     }
 
-    if (!body.to.match(/^\+[1-9]\d{1,14}$/)) {
+    if (!body.to.match(/^\+?[1-9]\d{1,14}$/)) {
       console.error("ERROR: Invalid phone number format:", body.to);
       return new Response(
         JSON.stringify({ error: "Invalid phone number format. Use format (e.g., +1234567890)" }),
