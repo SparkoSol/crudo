@@ -8,6 +8,8 @@ import Home from "@/pages/Home";
 import { RoleBasedRoute } from "./RoleBasedRoute";
 import { Role } from "@/types/auth.types";
 
+import { DashboardLayout } from "../components/dashboard/DashboardLayout";
+
 const Dashboard = lazy(() => import("../pages/Dashboard"));
 const Settings = lazy(() => import("../pages/Settings"));
 const Salespeople = lazy(() => import("../pages/Salespeople"));
@@ -43,72 +45,62 @@ export const ROUTES = {
 
 export const routes: RouteObject[] = [
   {
-    path: ROUTES.DASHBOARD_STATUS,
     element: (
       <ProtectedRoute>
-        <DashboardStatus />
+        <DashboardLayout />
       </ProtectedRoute>
     ),
-  },
-  {
-    path: ROUTES.DASHBOARD,
-    element: (
-      <ProtectedRoute>
-        <Dashboard />
-      </ProtectedRoute>
-    ),
-  },
-  {
-    path: ROUTES.SETTINGS,
-    element: (
-      <ProtectedRoute>
-        <Settings />
-      </ProtectedRoute>
-    ),
-  },
-  {
-    path: ROUTES.SALESPEOPLE,
-    element: (
-      <ProtectedRoute>
-        <Salespeople />
-      </ProtectedRoute>
-    ),
-  },
-  {
-    path: ROUTES.TEMPLATES,
-    element: (
-      <ProtectedRoute>
-        <Templates />
-      </ProtectedRoute>
-    ),
-  },
-  {
-    path: ROUTES.WHATSAPP,
-    element: (
-      <ProtectedRoute>
-        <WhatsApp />
-      </ProtectedRoute>
-    ),
-  },
-  {
-    path: ROUTES.VOICE_TRANSCRIPTS,
-    element: (
-      <ProtectedRoute>
-        <VoiceTranscripts />
-      </ProtectedRoute>
-    ),
-  },
-  {
-    path: ROUTES.SUBSCRIPTION,
-    element: (
-      <ProtectedRoute>
-        <Subscription />
-      </ProtectedRoute>
-    ),
-  },
-  {
-    element: <Layout />,
     children: [
+      {
+        path: ROUTES.DASHBOARD,
+        element: <Dashboard />,
+      },
+      {
+        path: ROUTES.DASHBOARD_STATUS,
+        element: <DashboardStatus />,
+      },
+      {
+        path: ROUTES.SETTINGS,
+        element: <Settings />,
+      },
+      {
+        path: ROUTES.SALESPEOPLE,
+        element: (
+            <Salespeople />
+        ),
+      },
+      {
+        path: ROUTES.TEMPLATES,
+        element: (
+          <RoleBasedRoute allowedRoles={[Role.MANAGER]}>
+            <Templates />
+          </RoleBasedRoute>
+        ),
+      },
+      {
+        path: ROUTES.WHATSAPP,
+        element: (
+          <RoleBasedRoute allowedRoles={[Role.MANAGER]}>
+            <WhatsApp />
+          </RoleBasedRoute>
+        ),
+      },
+      {
+        path: ROUTES.VOICE_TRANSCRIPTS,
+        element: (
+          <RoleBasedRoute allowedRoles={[Role.MANAGER]}>
+            <VoiceTranscripts />
+          </RoleBasedRoute>
+        ),
+      },
+      {
+        path: ROUTES.SUBSCRIPTION,
+        element: (
+          <RoleBasedRoute allowedRoles={[Role.MANAGER]}>
+            <Subscription />
+          </RoleBasedRoute>
+        ),
+      },
       {
         path: ROUTES.INVITE,
         element: (
@@ -119,6 +111,7 @@ export const routes: RouteObject[] = [
       },
     ],
   },
+
   {
     element: <Layout />,
     children: [
@@ -163,17 +156,17 @@ export const routes: RouteObject[] = [
         ),
       },
       {
+        path: ROUTES.ACCESS_DENIED,
+        element: (
+          <ProtectedRoute>
+            <AccessDenied />
+          </ProtectedRoute>
+        ),
+      },
+      {
         path: "*",
         element: <NotFound />,
       },
     ],
-  },
-  {
-    path: ROUTES.ACCESS_DENIED,
-    element: (
-      <ProtectedRoute>
-        <AccessDenied />
-      </ProtectedRoute>
-    ),
   },
 ];

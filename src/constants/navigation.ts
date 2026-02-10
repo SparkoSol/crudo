@@ -49,7 +49,7 @@ export const navItems: NavItem[] = [
         icon: FileText,
         path: "/templates",
         description: "Create and manage report templates for your team",
-        roles: [Role.MANAGER, Role.SALES_REPRESENTATIVE],
+        roles: [Role.MANAGER],
         requiresActiveSubscription: true,
     },
     {
