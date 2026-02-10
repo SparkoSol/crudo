@@ -16,7 +16,7 @@ interface SubscriptionSettingsProps {
 }
 
 export function SubscriptionSettings({ initialSubscription, initialDetails, initialWallet }: SubscriptionSettingsProps) {
-    const { user } = useAuth();
+    const { user, refreshProfile } = useAuth();
     const navigate = useNavigate();
     const [loading, setLoading] = useState(!initialSubscription);
     const [subscription, setSubscription] = useState<SubscriptionData | null>(initialSubscription || null);
@@ -74,6 +74,7 @@ export function SubscriptionSettings({ initialSubscription, initialDetails, init
                 setSubscription({ ...subscription, status: 'canceled' });
             }
             setShowCancelDialog(false);
+            await refreshProfile();
             navigate('/subscription');
         } catch (err: any) {
             console.error(err);

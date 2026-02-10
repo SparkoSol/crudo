@@ -2,7 +2,9 @@ import { useState, useEffect } from 'react';
 import { Sidebar } from '@/components/dashboard/Sidebar';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import { Check, Loader2, Zap, CreditCard, ChevronRight } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { signOut } from '@/services/authServices';
+import { Check, Loader2, Zap, CreditCard, ChevronRight, LogIn } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import toast from 'react-hot-toast';
 import { SUBSCRIPTION_PLAN } from '@/constants/subscription';
@@ -11,9 +13,20 @@ import type { SubscriptionData } from '@/types';
 
 export default function Subscription() {
     const { user } = useAuth();
+    const navigate = useNavigate();
     const [isAnnual, setIsAnnual] = useState(false);
     const [loading, setLoading] = useState(false);
     const [subscription, setSubscription] = useState<SubscriptionData | null>(null);
+
+    const handleLoginRedirect = async () => {
+        try {
+            await signOut();
+            navigate('/auth/login');
+        } catch (error) {
+            console.error('Logout failed:', error);
+            navigate('/auth/login');
+        }
+    };
 
     useEffect(() => {
         if (!user) return;
@@ -61,11 +74,21 @@ export default function Subscription() {
                 <div className="p-6 lg:p-8 pt-20 lg:pt-6 max-w-7xl mx-auto">
 
                     {/* Consistent Header Section */}
-                    <div className="mb-8">
-                        <h1 className="text-3xl font-bold text-gray-900 mb-2">Subscription</h1>
-                        <p className="text-gray-600">
-                            Manage your plan and billing details
-                        </p>
+                    <div className="mb-8 flex justify-between items-start">
+                        <div>
+                            <h1 className="text-3xl font-bold text-gray-900 mb-2">Subscription</h1>
+                            <p className="text-gray-600">
+                                Manage your plan and billing details
+                            </p>
+                        </div>
+                        <Button
+                            variant="outline"
+                            onClick={handleLoginRedirect}
+                            className="gap-2 text-gray-600 hover:text-brand-primary-600 hover:bg-brand-primary-50 hover:border-brand-primary-100 transition-colors"
+                        >
+                            <LogIn className="h-4 w-4" />
+                            Login
+                        </Button>
                     </div>
 
                     <div className="max-w-5xl mx-auto">
@@ -153,7 +176,7 @@ export default function Subscription() {
                                             )}
                                         </Button>
                                         <p className="text-xs text-center text-gray-400 mt-4">
-                                            Secure payments via Stripe. Cancel anytime in your dashboard.
+                                            Secure payments via Stripe. Cancel anytime in your Settings.
                                         </p>
                                     </div>
                                 </CardFooter>

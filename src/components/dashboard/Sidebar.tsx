@@ -1,100 +1,43 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { signOut } from "@/services/authServices";
 import { useNavigate } from "react-router-dom";
 import {
-  LayoutDashboard,
-  Users,
-  FileText,
-  Settings,
   LogOut,
   Menu,
   X,
-  UserPlus,
-  MessageSquare,
-  Mic,
-  CreditCard,
 } from "lucide-react";
 import iNotusLogo from "@/assets/iNotus-color.svg";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import toast from "react-hot-toast";
-import { isManager } from "@/lib/utils/authorization";
-
-interface NavItem {
-  label: string;
-  icon: React.ComponentType<{ className?: string }>;
-  path: string;
-  description: string;
-}
-
-const navItems: NavItem[] = [
-  {
-    label: "Home",
-    icon: LayoutDashboard,
-    path: "/",
-    description: "View and manage field reports from your sales team"
-  },
-  {
-    label: "Salespeople",
-    icon: Users,
-    path: "/salespeople",
-    description: "Manage your sales team members and their profiles"
-  },
-  {
-    label: "Templates",
-    icon: FileText,
-    path: "/templates",
-    description: "Create and manage report templates for your team"
-  },
-  {
-    label: "WhatsApp",
-    icon: MessageSquare,
-    path: "/whatsapp",
-    description: "Test and manage your WhatsApp Business API integration"
-  },
-  {
-    label: "Credits and Transcripts",
-    icon: Mic,
-    path: "/voice-transcripts",
-    description: "View and manage your voice message transcripts"
-  },
-  {
-    label: "Subscription",
-    icon: CreditCard,
-    path: "/subscription",
-    description: "Manage your plan and billing details"
-  },
-  {
-    label: "Settings",
-    icon: Settings,
-    path: "/settings",
-    description: "Manage your account settings and preferences"
-  },
-];
+import { Role } from "@/types/auth.types";
+import { navItems } from "@/constants/navigation";
 
 export const Sidebar = () => {
   const location = useLocation();
   const navigate = useNavigate();
-  const { user, setUser } = useAuth();
+  const { user, subscription } = useAuth();
   const [isMobileOpen, setIsMobileOpen] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
 
-  const getFilteredNavItems = () => {
-    const baseItems = [...navItems];
+  const filteredNavItems = useMemo(() => {
+    if (!user) return [];
 
-    if (isManager(user)) {
-      baseItems.splice(2, 0, {
-        label: "Invite",
-        icon: UserPlus,
-        path: "/invite",
-        description: "Invite sales representatives to join your team"
-      });
-    }
+    const isSubscriptionActive = subscription && (subscription.status === 'active' || subscription.status === 'trialing');
 
-    return baseItems;
-  };
+    return navItems.filter(item => {
+      const hasRoleAccess = item.roles.includes(user.role as Role);
+      if (!hasRoleAccess) return false;
+
+      if (item.requiresActiveSubscription && !isSubscriptionActive) {
+        return false;
+      }
+
+      return true;
+    });
+  }, [user, subscription]);
 
   useEffect(() => {
     setIsMobileOpen(false);
@@ -104,11 +47,9 @@ export const Sidebar = () => {
     setIsLoggingOut(true);
     try {
       await signOut();
-      setUser(null);
       toast.success("Logged out successfully");
       navigate("/auth/login", { replace: true });
     } catch {
-      setUser(null);
       toast.error("Logout failed");
       navigate("/auth/login", { replace: true });
     } finally {
@@ -175,7 +116,7 @@ export const Sidebar = () => {
           </div>
 
           <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
-            {getFilteredNavItems().map((item) => {
+            {filteredNavItems.map((item) => {
               const Icon = item.icon;
               const isActive = location.pathname === item.path;
 
