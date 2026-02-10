@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react';
-import { Sidebar } from '@/components/dashboard/Sidebar';
 import { ProfileInformation } from '@/components/settings/ProfileInformation';
 import { ChangePassword } from '@/components/settings/ChangePassword';
 import { SubscriptionSettings } from '@/components/settings/SubscriptionSettings';
@@ -9,7 +8,6 @@ import { useAuth } from '@/contexts/AuthContext';
 import { subscriptionService } from '@/services/subscriptionService';
 import { creditService } from '@/services/creditService';
 import type { SubscriptionData, SubscriptionDetails, CreditsWallet } from '@/types';
-
 export default function Settings() {
   const { user } = useAuth();
   const [loading, setLoading] = useState(true);
@@ -49,36 +47,31 @@ export default function Settings() {
   }, [user]);
 
   return (
-    <div className="flex h-screen bg-gray-50 overflow-hidden">
-      <Sidebar />
-      <main className="flex-1 overflow-y-auto lg:ml-0">
-        <div className="p-6 lg:p-8 pt-20 lg:pt-6 max-w-7xl mx-auto">
-          <div className="mb-8">
-            <h1 className="text-3xl font-bold text-gray-900 mb-2">Settings</h1>
-            <p className="text-gray-600">
-              Manage your account settings, profile information, and security preferences
-            </p>
-          </div>
+    <div className="p-6 lg:p-8 pt-20 lg:pt-6 max-w-7xl mx-auto">
+      <div className="mb-8">
+        <h1 className="text-3xl font-bold text-gray-900 mb-2">Settings</h1>
+        <p className="text-gray-600">
+          Manage your account settings, profile information, and security preferences
+        </p>
+      </div>
 
-          <div className="space-y-6">
-            {loading ? (
-              <SettingsSkeleton />
-            ) : (
-              <>
-                <ProfileInformation initialData={profileData} />
-                {user?.role !== 'SalesRepresentative' && (
-                  <SubscriptionSettings
-                    initialSubscription={subscriptionData}
-                    initialDetails={subDetails}
-                    initialWallet={wallet}
-                  />
-                )}
-                <ChangePassword />
-              </>
+      <div className="space-y-6">
+        {loading ? (
+          <SettingsSkeleton />
+        ) : (
+          <>
+            < ProfileInformation initialData={profileData} />
+            {user?.role !== 'SalesRepresentative' && (
+              <SubscriptionSettings
+                initialSubscription={subscriptionData}
+                initialDetails={subDetails}
+                initialWallet={wallet}
+              />
             )}
-          </div>
-        </div>
-      </main>
+            <ChangePassword />
+          </>
+        )}
+      </div>
     </div>
   );
 }
