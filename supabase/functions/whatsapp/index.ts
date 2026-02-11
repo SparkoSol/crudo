@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.0";
+import { PDFDocument, rgb, StandardFonts } from "https://esm.sh/pdf-lib@1.17.1";
 import type { WhatsAppWebhookRequest, WhatsAppSendRequest } from "../../../src/types/whatsapp.types.ts";
 
 const corsHeaders = {
@@ -145,6 +146,11 @@ serve(async (req) => {
           for (const change of entry.changes) {
             const value = change.value;
 
+            if (value.statuses) {
+              console.log("ℹ️ Ignoring status update");
+              continue;
+            }
+
             if (value.messages) {
               for (const message of value.messages) {
                 const from = message.from;
@@ -156,6 +162,130 @@ serve(async (req) => {
                 console.log(`Type: ${messageType}`);
                 console.log(`Message ID: ${messageId}`);
                 if (message.text?.body) console.log(`Content: "${message.text.body}"`);
+
+                const supabaseUrl = Deno.env.get("SUPABASE_URL");
+                const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+                let userId: string | null = null;
+                let effectiveManagerId: string | null = null;
+                let userName: string | null = null;
+
+                if (!supabaseUrl || !serviceRoleKey) {
+                  console.error("FATAL: Supabase credentials missing");
+                  continue;
+                }
+
+                const adminClient = createClient(supabaseUrl, serviceRoleKey, {
+                  auth: {
+                    autoRefreshToken: false,
+                    persistSession: false,
+                  },
+                });
+
+                if (true) {
+
+                  const cleanPhone = from.replace(/\D/g, '');
+                  const { data: phoneMapping } = await adminClient
+                    .from("phone_number_mappings")
+                    .select("user_id")
+                    .or(`phone_number.eq."${cleanPhone}",phone_number.eq."+${cleanPhone}"`)
+                    .maybeSingle();
+
+                  userId = phoneMapping?.user_id || null;
+
+                  if (!userId) {
+                    const { data: profileByPhone } = await adminClient
+                      .from("profiles")
+                      .select("id, full_name")
+                      .or(`phone_number.eq."${cleanPhone}",phone_number.eq."+${cleanPhone}"`)
+                      .maybeSingle();
+
+                    if (profileByPhone) {
+                      console.log(`✅ Found user in profiles table: ${profileByPhone.id}`);
+                      userId = profileByPhone.id;
+                      userName = profileByPhone.full_name;
+                    }
+                  }
+
+                  if (!userId) {
+                    console.error("❌ No user mapping found for phone number:", from);
+                    if (messageType !== "reaction" && accessToken && phoneNumberId) {
+                      const notRegisteredPayload = {
+                        messaging_product: "whatsapp",
+                        recipient_type: "individual",
+                        to: normalizePhoneNumber(from),
+                        type: "text",
+                        text: {
+                          body: "🚫 This phone number is not registered in our system. Please ask your manager to invite you or add your number in the portal.",
+                        },
+                      };
+                      try {
+                        await fetch(
+                          `https://graph.facebook.com/${apiVersion}/${phoneNumberId}/messages`,
+                          {
+                            method: "POST",
+                            headers: {
+                              "Authorization": `Bearer ${accessToken}`,
+                              "Content-Type": "application/json",
+                            },
+                            body: JSON.stringify(notRegisteredPayload),
+                          }
+                        );
+                      } catch (err) { console.error("Failed to send Not Registered reply:", err); }
+                    }
+                    continue;
+                  }
+
+                  const { data: profile } = await adminClient
+                    .from("profiles")
+                    .select("id, manager_id, role, full_name")
+                    .eq("id", userId)
+                    .single();
+
+                  if (profile) {
+                    userName = profile.full_name;
+                  }
+
+                  effectiveManagerId = userId;
+                  if (profile && profile.role !== 'manager' && profile.manager_id) {
+                    effectiveManagerId = profile.manager_id;
+                  }
+
+                  const { data: subscription } = await adminClient
+                    .from("subscriptions")
+                    .select("status")
+                    .eq("user_id", effectiveManagerId)
+                    .in("status", ["active", "trialing"])
+                    .maybeSingle();
+
+                  if (!subscription) {
+                    console.error(`❌ Manager (${effectiveManagerId}) has no active subscription.`);
+                    if (messageType !== "reaction" && accessToken && phoneNumberId) {
+                      const subErrorPayload = {
+                        messaging_product: "whatsapp",
+                        recipient_type: "individual",
+                        to: normalizePhoneNumber(from),
+                        type: "text",
+                        text: {
+                          body: "⚠️ The subscription for your account (or your manager's account) is inactive or expired. Please renew the subscription to continue identifying transcripts.",
+                        },
+                      };
+                      try {
+                        await fetch(
+                          `https://graph.facebook.com/${apiVersion}/${phoneNumberId}/messages`,
+                          {
+                            method: "POST",
+                            headers: {
+                              "Authorization": `Bearer ${accessToken}`,
+                              "Content-Type": "application/json",
+                            },
+                            body: JSON.stringify(subErrorPayload),
+                          }
+                        );
+                      } catch (err) { console.error("Failed to send Subscription Error reply:", err); }
+                    }
+                    continue;
+                  }
+                }
 
                 if (messageType === "audio" || messageType === "voice") {
                   console.log("🎙️ Processing voice message...");
@@ -253,47 +383,23 @@ serve(async (req) => {
                         continue;
                       }
 
-                      const supabaseUrl = Deno.env.get("SUPABASE_URL");
-                      const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+                      console.log(`✅ User verified: ${userId}, Manager: ${effectiveManagerId}`);
 
-                      if (supabaseUrl && serviceRoleKey) {
-                        const adminClient = createClient(supabaseUrl, serviceRoleKey, {
-                          auth: {
-                            autoRefreshToken: false,
-                            persistSession: false,
-                          },
-                        });
+                      const { data: transcriptRecord, error: insertError } = await adminClient
+                        .from("voice_transcripts")
+                        .insert({
+                          phone_number: from,
+                          transcript: transcript,
+                          status: "pending",
+                          user_id: userId, // The sales person ID
+                        })
+                        .select()
+                        .single();
 
-
-                        const { data: transcriptRecord, error: insertError } = await adminClient
-                          .from("voice_transcripts")
-                          .insert({
-                            phone_number: from,
-                            transcript: transcript,
-                            status: "pending",
-                            user_id: null,
-                          })
-                          .select()
-                          .single();
-
-                        if (insertError) {
-                          console.error("Failed to store transcript:", insertError);
-                        }
-
-                        const { data: phoneMapping } = await adminClient
-                          .from("phone_number_mappings")
-                          .select("user_id")
-                          .eq("phone_number", from)
-                          .single();
-
-                        let userId = phoneMapping?.user_id || null;
-
-                        if (userId && transcriptRecord) {
-                          await adminClient
-                            .from("voice_transcripts")
-                            .update({ user_id: userId })
-                            .eq("id", transcriptRecord.id);
-                        }
+                      if (insertError) {
+                        console.error("Failed to store transcript:", insertError);
+                      } else {
+                        console.log("✅ Transcript stored successfully with user_id:", userId);
                       }
 
                       const maxTranscriptLength = 1000;
@@ -388,7 +494,6 @@ serve(async (req) => {
                     console.warn("Audio message received but OpenAI API key not configured or audio ID missing");
                   }
                 } else if (messageType === "text") {
-                  // Handle plain text messages
                   const textBody = message.text?.body || "";
                   console.log("Received text message:", textBody);
 
@@ -424,8 +529,8 @@ serve(async (req) => {
                 }
 
                 if (messageType === "interactive" || messageType === "button") {
-                  const buttonText = (message.interactive?.button_reply?.title || message.button?.text || "").toLowerCase();
-                  const buttonId = message.interactive?.button_reply?.id || message.button?.payload || "";
+                  const buttonText = (message.interactive?.button_reply?.title || (message as any).button?.text || "").toLowerCase();
+                  const buttonId = message.interactive?.button_reply?.id || (message as any).button?.payload || "";
 
                   console.log(`🔘 Button clicked: ${buttonText} (ID: ${buttonId})`);
 
@@ -498,86 +603,53 @@ serve(async (req) => {
                       }
 
                       let userId = transcriptRecord.user_id;
-                      if (!userId) {
-                        const { data: phoneMapping } = await adminClient
-                          .from("phone_number_mappings")
-                          .select("user_id")
-                          .eq("phone_number", from)
-                          .single();
-                        userId = phoneMapping?.user_id || null;
-                      }
 
-                      if (!userId) {
-                        console.error("No user mapping found for phone number:", from);
-                        const errorPayload = {
-                          messaging_product: "whatsapp",
-                          recipient_type: "individual",
-                          to: normalizePhoneNumber(from),
-                          type: "text",
-                          text: {
-                            body: "Your phone number is not linked to an account. Please contact support.",
-                          },
-                        };
-                        await fetch(
-                          `https://graph.facebook.com/${apiVersion}/${phoneNumberId}/messages`,
-                          {
-                            method: "POST",
-                            headers: {
-                              "Authorization": `Bearer ${accessToken}`,
-                              "Content-Type": "application/json",
-                            },
-                            body: JSON.stringify(errorPayload),
-                          }
-                        );
-                        continue;
-                      }
-
-                      const { data: template, error: templateError } = await adminClient
-                        .from("user_templates")
-                        .select("*")
-                        .eq("user_id", userId)
-                        .eq("is_default", true)
+                      let effectiveManagerId = userId;
+                      const { data: profile } = await adminClient
+                        .from("profiles")
+                        .select("id, manager_id, role, full_name")
+                        .eq("id", userId)
                         .single();
 
-                      if (templateError || !template) {
-                        console.error("No default template found for user:", templateError);
-                        await adminClient
-                          .from("voice_transcripts")
-                          .update({
-                            status: "confirmed",
-                            user_id: userId,
-                          })
-                          .eq("id", transcriptRecord.id);
-
-                        const errorPayload = {
-                          messaging_product: "whatsapp",
-                          recipient_type: "individual",
-                          to: normalizePhoneNumber(from),
-                          type: "text",
-                          text: {
-                            body: "Your transcript has been saved, but no template is configured. Please set up a template in your account.",
-                          },
-                        };
-                        await fetch(
-                          `https://graph.facebook.com/${apiVersion}/${phoneNumberId}/messages`,
-                          {
-                            method: "POST",
-                            headers: {
-                              "Authorization": `Bearer ${accessToken}`,
-                              "Content-Type": "application/json",
-                            },
-                            body: JSON.stringify(errorPayload),
-                          }
-                        );
-                        continue;
+                      if (profile) {
+                        userName = profile.full_name;
                       }
+
+                      if (profile && profile.role !== 'manager' && profile.manager_id) {
+                        effectiveManagerId = profile.manager_id;
+                      }
+
+                      // 3. Get Template (Manager's default)
+                      const { data: template } = await adminClient
+                        .from("user_templates")
+                        .select("*")
+                        .eq("user_id", effectiveManagerId)
+                        .eq("is_default", true)
+                        .maybeSingle();
+
+                      const activeTemplate = template || {
+                        id: null,
+                        name: "Default Report",
+                        fields: [
+                          { name: "Customer Name", type: "text", required: true },
+                          { name: "Summary", type: "textarea", required: true },
+                          { name: "Action Items", type: "list", required: false }
+                        ]
+                      };
+
+                      if (!template) {
+                        console.log("⚠️ No default template found for manager. Using Fallback Template.");
+                      } else {
+                        console.log(`✅ Using template: ${template.name} (${template.id})`);
+                      }
+
 
                       const openaiApiKey = Deno.env.get("OPENAI_API_KEY");
                       let filledData = null;
 
-                      if (openaiApiKey && template.fields && Array.isArray(template.fields)) {
+                      if (openaiApiKey && activeTemplate.fields && Array.isArray(activeTemplate.fields)) {
                         try {
-                          const fieldsDescription = template.fields
+                          const fieldsDescription = activeTemplate.fields
                             .map(
                               (field: any) =>
                                 `- ${field.name} (${field.type}${field.required ? ", required" : ", optional"})`
@@ -639,20 +711,117 @@ Extract and fill all template fields from the transcript. Return a JSON object w
                         .update({
                           status: "confirmed",
                           user_id: userId,
-                          template_id: template.id,
+                          template_id: template?.id || null, 
                           filled_data: filledData,
                         })
                         .eq("id", transcriptRecord.id);
 
-                      const confirmPayload = {
+                      console.log("Generating PDF...");
+                      const pdfDoc = await PDFDocument.create();
+                      const page = pdfDoc.addPage([612, 792]);
+                      const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+                      const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+
+                      let yPosition = 750;
+                      const margin = 50;
+                      const pageWidth = 612;
+                      const lineHeight = 20;
+                      const sectionSpacing = 30;
+
+                      const addText = (text: string, x: number, y: number, size: number, fontType: any, maxWidth?: number) => {
+                        if (maxWidth) {
+                          const words = text.split(" ");
+                          let line = "";
+                          let currentY = y;
+                          for (const word of words) {
+                            const testLine = line + (line ? " " : "") + word;
+                            const width = fontType.widthOfTextAtSize(testLine, size);
+                            if (width > maxWidth && line) {
+                              page.drawText(line, { x, y: currentY, size, font: fontType });
+                              line = word;
+                              currentY -= lineHeight;
+                            } else {
+                              line = testLine;
+                            }
+                          }
+                          if (line) {
+                            page.drawText(line, { x, y: currentY, size, font: fontType });
+                            currentY -= lineHeight;
+                          }
+                          return currentY;
+                        } else {
+                          page.drawText(text, { x, y, size, font: fontType });
+                          return y - lineHeight;
+                        }
+                      };
+
+                      yPosition = addText("Voice Transcript Report", margin, yPosition, 20, boldFont);
+                      yPosition -= sectionSpacing;
+
+                      const dateStr = new Date().toLocaleString();
+                      yPosition = addText(`Generated: ${dateStr}`, margin, yPosition, 10, font);
+                      if (userName) {
+                        yPosition = addText(`Sales Rep: ${userName}`, margin, yPosition, 10, font);
+                      } else {
+                        yPosition = addText(`Sales Rep: (Name not available)`, margin, yPosition, 10, font);
+                      }
+                      yPosition -= sectionSpacing;
+
+                      yPosition = addText(`Template: ${activeTemplate.name}`, margin, yPosition, 12, boldFont);
+                      yPosition -= sectionSpacing;
+
+                      yPosition = addText("Transcript:", margin, yPosition, 14, boldFont);
+                      yPosition -= 10;
+                      yPosition = addText(transcriptRecord.transcript, margin, yPosition, 10, font, pageWidth - 2 * margin);
+                      yPosition -= sectionSpacing;
+
+                      if (filledData) {
+                        yPosition = addText("Filled Data:", margin, yPosition, 14, boldFont);
+                        yPosition -= 10;
+                        for (const [key, value] of Object.entries(filledData)) {
+                          const label = key.charAt(0).toUpperCase() + key.slice(1).replace(/_/g, " ");
+                          const valStr = value ? String(value) : "N/A";
+                          yPosition = addText(`${label}:`, margin, yPosition, 11, boldFont);
+                          yPosition = addText(valStr, margin + 20, yPosition, 10, font, pageWidth - 2 * margin - 20);
+                          yPosition -= 5;
+                        }
+                      }
+
+                      const pdfBytes = await pdfDoc.save();
+                      const pdfBlob = new Blob([pdfBytes], { type: 'application/pdf' });
+                      const pdfFormData = new FormData();
+                      pdfFormData.append('file', pdfBlob, 'transcript.pdf');
+                      pdfFormData.append('messaging_product', 'whatsapp');
+
+                      console.log("Uploading PDF to WhatsApp...");
+                      const uploadResponse = await fetch(`https://graph.facebook.com/${apiVersion}/${phoneNumberId}/media`, {
+                        method: 'POST',
+                        headers: {
+                          'Authorization': `Bearer ${accessToken}`,
+                        },
+                        body: pdfFormData
+                      });
+
+                      const uploadResult = await uploadResponse.json();
+                      if (!uploadResponse.ok) {
+                        throw new Error(`Media Upload Failed: ${JSON.stringify(uploadResult)}`);
+                      }
+
+                      const mediaId = uploadResult.id;
+                      console.log(`PDF Uploaded. Media ID: ${mediaId}`);
+
+                      const docPayload = {
                         messaging_product: "whatsapp",
                         recipient_type: "individual",
                         to: normalizePhoneNumber(from),
-                        type: "text",
-                        text: {
-                          body: "Your transcript has been confirmed and processed! You can view and download it from your account.",
-                        },
+                        type: "document",
+                        document: {
+                          id: mediaId,
+                          caption: "Here is your processed transcript report. 📄",
+                          filename: "transcript_report.pdf"
+                        }
                       };
+
                       await fetch(
                         `https://graph.facebook.com/${apiVersion}/${phoneNumberId}/messages`,
                         {
@@ -661,11 +830,11 @@ Extract and fill all template fields from the transcript. Return a JSON object w
                             "Authorization": `Bearer ${accessToken}`,
                             "Content-Type": "application/json",
                           },
-                          body: JSON.stringify(confirmPayload),
+                          body: JSON.stringify(docPayload),
                         }
                       );
 
-                      console.log("Transcript confirmed and processed:", {
+                      console.log("Transcript confirmed, PDF generated and sent:", {
                         transcriptId: transcriptRecord.id,
                         userId,
                         phoneNumber: from,
@@ -675,7 +844,6 @@ Extract and fill all template fields from the transcript. Return a JSON object w
                     }
                   } else if (action === "retake") {
                     try {
-                      // Update transcript status to retaken
                       const { data: transcriptRecord } = await adminClient
                         .from("voice_transcripts")
                         .select("id")
@@ -692,7 +860,6 @@ Extract and fill all template fields from the transcript. Return a JSON object w
                           .eq("id", transcriptRecord.id);
                       }
 
-                      // Send retake message
                       const retakePayload = {
                         messaging_product: "whatsapp",
                         recipient_type: "individual",
