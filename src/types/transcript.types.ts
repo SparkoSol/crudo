@@ -13,6 +13,10 @@ export interface VoiceTranscript {
         name: string;
         fields: Array<{ name: string; type: string; required: boolean }>;
     } | null;
+    profiles?: {
+        full_name: string | null;
+        phone_number: string | null;
+    } | null;
 }
 
 export interface UserTemplate {
