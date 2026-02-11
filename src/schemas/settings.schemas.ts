@@ -2,6 +2,7 @@ import { z } from 'zod';
 
 export const profileSchema = z.object({
   full_name: z.string().min(2, 'Name must be at least 2 characters').optional().or(z.literal('')),
+  phone_number: z.string().regex(/^\+?[0-9]{10,15}$/, 'Invalid phone number format').optional().or(z.literal('')),
   email: z.string().email('Invalid email address'),
 });
 
