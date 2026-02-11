@@ -54,22 +54,38 @@ serve(async (req) => {
 
             const stripeSubscriptions = await stripe.subscriptions.list({
                 customer: stripeCustomerId,
-                status: 'all',
-                limit: 10,
+                status: 'active',
+                limit: 100,
             });
 
-            subscriptions = stripeSubscriptions.data
-                .filter(sub => ['active', 'trialing', 'past_due', 'unpaid'].includes(sub.status))
-                .map(sub => ({ id: sub.id }));
+            subscriptions = stripeSubscriptions.data.map(sub => ({ id: sub.id }));
+            console.log(`Stripe found ${subscriptions.length} active subscriptions for customer.`);
 
-            console.log(`Stripe found ${subscriptions.length} active/pending subscriptions for customer.`);
+            const { data: dbSubs, error: subError } = await supabase
+                .from("subscriptions")
+                .select("subscription_id, subscription_role, plan_type, status")
+                .eq("user_id", user.id)
+                .in("status", ["active", "trialing", "past_due", "unpaid"]);
+
+            if (!subError && dbSubs) {
+
+                const stripeSubIds = new Set(subscriptions.map(s => s.id));
+                for (const dbSub of dbSubs) {
+                    if (!stripeSubIds.has(dbSub.subscription_id)) {
+                        console.log(`Adding subscription ${dbSub.subscription_id} from database (${dbSub.subscription_role}, ${dbSub.plan_type})`);
+                        subscriptions.push({ id: dbSub.subscription_id });
+                    }
+                }
+            }
+
+            console.log(`Total subscriptions to cancel: ${subscriptions.length}`);
         } else {
             console.warn(`No Stripe customer found for email ${user.email}. Falling back to database lookup.`);
             const { data: dbSubs, error: subError } = await supabase
                 .from("subscriptions")
                 .select("subscription_id")
                 .eq("user_id", user.id)
-                .in("status", ["active", "trialing", "past_due"]);
+                .in("status", ["active", "trialing", "past_due", "unpaid"]);
 
             if (!subError && dbSubs) {
                 subscriptions = dbSubs.map(s => ({ id: s.subscription_id }));
@@ -83,50 +99,53 @@ serve(async (req) => {
             );
         }
 
+
         console.log(`Canceling ${subscriptions.length} subscriptions with immediate invoicing...`);
+
+
+        const { data: wallet } = await supabase
+            .from('credits_wallet')
+            .select('used_credits_this_month, manager_id')
+            .or(`manager_id.eq.${user.id}`)
+            .maybeSingle();
+
+        let currentUsage = 0;
+        if (wallet) {
+            currentUsage = wallet.used_credits_this_month || 0;
+        } else {
+            const { data: profile } = await supabase
+                .from('profiles')
+                .select('manager_id')
+                .eq('id', user.id)
+                .single();
+
+            if (profile?.manager_id) {
+                const { data: managerWallet } = await supabase
+                    .from('credits_wallet')
+                    .select('used_credits_this_month')
+                    .eq('manager_id', profile.manager_id)
+                    .maybeSingle();
+
+                if (managerWallet) {
+                    currentUsage = managerWallet.used_credits_this_month || 0;
+                }
+            }
+        }
+
+        let creditsInvoiced = false;
 
         const results = await Promise.all(subscriptions.map(async (sub) => {
             try {
                 const stripeSubscription = await stripe.subscriptions.retrieve(sub.id);
+                console.log(`Processing subscription ${sub.id} (${stripeSubscription.status})...`);
 
-                const meteredItems = stripeSubscription.items.data.filter(
-                    item => item.price.recurring?.usage_type === 'metered'
-                );
+                if (currentUsage > 0 && !creditsInvoiced) {
+                    const meteredItems = stripeSubscription.items.data.filter(
+                        item => item.price.recurring?.usage_type === 'metered'
+                    );
 
-                if (meteredItems.length > 0) {
-                    console.log(`Found ${meteredItems.length} metered items for subscription ${sub.id}. Checking usage...`);
-
-                    const { data: wallet, error: walletError } = await supabase
-                        .from('credits_wallet')
-                        .select('used_credits_this_month, manager_id')
-                        .or(`manager_id.eq.${user.id}`)
-                        .maybeSingle();
-
-                    let currentUsage = 0;
-                    if (wallet) {
-                        currentUsage = wallet.used_credits_this_month || 0;
-                    } else {
-                        const { data: profile } = await supabase
-                            .from('profiles')
-                            .select('manager_id')
-                            .eq('id', user.id)
-                            .single();
-
-                        if (profile?.manager_id) {
-                            const { data: managerWallet } = await supabase
-                                .from('credits_wallet')
-                                .select('used_credits_this_month')
-                                .eq('manager_id', profile.manager_id)
-                                .maybeSingle();
-
-                            if (managerWallet) {
-                                currentUsage = managerWallet.used_credits_this_month || 0;
-                            }
-                        }
-                    }
-
-                    if (currentUsage > 0) {
-                        console.log(`Creating invoice items for ${currentUsage} used credits...`);
+                    if (meteredItems.length > 0) {
+                        console.log(`Creating invoice for ${currentUsage} used credits...`);
 
                         for (const item of meteredItems) {
                             const unitAmount = item.price.unit_amount_decimal
@@ -141,13 +160,18 @@ serve(async (req) => {
                                 description: `Final usage charges for ${currentUsage} credits`,
                             });
                         }
+
+                        creditsInvoiced = true;
                     }
                 }
 
+                console.log(`Canceling subscription ${sub.id} with immediate invoice...`);
                 const deletedSubscription = await stripe.subscriptions.cancel(sub.id, {
                     invoice_now: true,
-                    prorate: true,
+                    prorate: false,
                 });
+
+                console.log(`✅ Successfully canceled subscription ${sub.id}`);
 
                 const { error: syncError } = await supabase
                     .from("subscriptions")
@@ -164,11 +188,41 @@ serve(async (req) => {
                 return { id: sub.id, success: true, stripeResponse: deletedSubscription };
             } catch (err: any) {
                 console.error(`Error canceling subscription ${sub.id}:`, err.message);
+
+                if (err.message && (err.message.includes("No such subscription") || err.code === 'resource_missing')) {
+                    console.log(`Subscription ${sub.id} not found in Stripe. Marking as canceled in DB.`);
+                    await supabase
+                        .from("subscriptions")
+                        .update({
+                            status: 'canceled',
+                            updated_at: new Date().toISOString()
+                        })
+                        .eq('subscription_id', sub.id);
+                    return { id: sub.id, success: true, note: "Already deleted in Stripe" };
+                }
+
                 return { id: sub.id, success: false, error: err.message };
             }
         }));
 
         const successCount = results.filter(r => r.success).length;
+
+        if (successCount === subscriptions.length && wallet) {
+            console.log(`Resetting credit wallet for user ${user.id}...`);
+            const { error: walletError } = await supabase
+                .from("credits_wallet")
+                .update({
+                    used_credits_this_month: 0,
+                    updated_at: new Date().toISOString(),
+                })
+                .eq("manager_id", user.id);
+
+            if (walletError) {
+                console.error(`Error resetting credit wallet:`, walletError);
+            } else {
+                console.log(`✅ Credit wallet reset successfully`);
+            }
+        }
 
         return new Response(
             JSON.stringify({
