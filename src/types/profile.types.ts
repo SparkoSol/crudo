@@ -3,6 +3,7 @@ export interface Profile {
   role: 'manager' | 'sales_representative';
   manager_id: string | null;
   full_name: string | null;
+  phone_number: string | null;
   company_name: string | null;
   email: string;
   created_at: string;
@@ -11,6 +12,7 @@ export interface Profile {
 
 export interface UpdateProfileData {
   full_name?: string;
+  phone_number?: string;
   email?: string;
 }
 

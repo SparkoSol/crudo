@@ -266,7 +266,7 @@ serve(async (req) => {
                         to: normalizePhoneNumber(from),
                         type: "text",
                         text: {
-                          body: "⚠️ The subscription for your manager's account is inactive or expired. Please renew the subscription to continue identifying transcripts.",
+                          body: "The subscription for your manager's account is inactive or expired. Please renew the subscription to continue identifying transcripts.",
                         },
                       };
                       try {
@@ -799,26 +799,26 @@ Extract and fill all template fields from the transcript. Return a JSON object w
 
                       yPosition = addText(transcriptRecord.transcript, margin, yPosition, 10, font, pageWidth - 2 * margin);
                       yPosition -= sectionSpacing;
+                      // This is used for future template
+                      // if (filledData) {
+                      //   yPosition = addText("Extracted Data", margin, yPosition, 14, boldFont);
+                      //   page.drawLine({
+                      //     start: { x: margin, y: yPosition + 5 },
+                      //     end: { x: pageWidth - margin, y: yPosition + 5 },
+                      //     thickness: 1,
+                      //     color: rgb(0.8, 0.8, 0.8),
+                      //   });
+                      //   yPosition -= 15;
 
-                      if (filledData) {
-                        yPosition = addText("Extracted Data", margin, yPosition, 14, boldFont);
-                        page.drawLine({
-                          start: { x: margin, y: yPosition + 5 },
-                          end: { x: pageWidth - margin, y: yPosition + 5 },
-                          thickness: 1,
-                          color: rgb(0.8, 0.8, 0.8),
-                        });
-                        yPosition -= 15;
+                      //   for (const [key, value] of Object.entries(filledData)) {
+                      //     const label = key.charAt(0).toUpperCase() + key.slice(1).replace(/_/g, " ");
+                      //     const valStr = value ? String(value) : "N/A";
 
-                        for (const [key, value] of Object.entries(filledData)) {
-                          const label = key.charAt(0).toUpperCase() + key.slice(1).replace(/_/g, " ");
-                          const valStr = value ? String(value) : "N/A";
-
-                          yPosition = addText(`${label}:`, margin, yPosition, 11, boldFont);
-                          yPosition = addText(valStr, margin + 20, yPosition, 10, font, pageWidth - 2 * margin - 20);
-                          yPosition -= 10;
-                        }
-                      }
+                      //     yPosition = addText(`${label}:`, margin, yPosition, 11, boldFont);
+                      //     yPosition = addText(valStr, margin + 20, yPosition, 10, font, pageWidth - 2 * margin - 20);
+                      //     yPosition -= 10;
+                      //   }
+                      // }
 
                       const pdfBytes = await pdfDoc.save();
                       const pdfBlob = new Blob([pdfBytes], { type: 'application/pdf' });
