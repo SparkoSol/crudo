@@ -87,7 +87,7 @@ export function ProfileInformation({ initialData }: ProfileInformationProps) {
       // Only update full_name, email is read-only
       const updatedProfile = await updateProfile({
         full_name: pendingFormData.full_name || undefined,
-        phone_number: pendingFormData.phone_number || undefined,
+        phone_number: pendingFormData.phone_number?.replace(/[^0-9+]/g, '') || undefined,
       });
       setProfile(updatedProfile);
 
@@ -165,7 +165,7 @@ export function ProfileInformation({ initialData }: ProfileInformationProps) {
                     id="phone_number"
                     {...registerProfile('phone_number')}
                     className={`pl-10 h-11 ${profile?.phone_number ? 'bg-gray-50 cursor-not-allowed' : ''}`}
-                    placeholder="e.g. +1234567890"
+                    placeholder="e.g. +92 3XX... or +34 6XX..."
                     disabled={!!profile?.phone_number}
                     readOnly={!!profile?.phone_number}
                   />
