@@ -50,7 +50,6 @@ export const getTranscript = async (transcriptId: string): Promise<VoiceTranscri
       )
     `)
     .eq("id", transcriptId)
-    .eq("user_id", session.user.id)
     .single();
 
   if (error) {
@@ -61,6 +60,51 @@ export const getTranscript = async (transcriptId: string): Promise<VoiceTranscri
   }
 
   return data as VoiceTranscript;
+};
+
+export const getManagerTranscripts = async (): Promise<VoiceTranscript[]> => {
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+
+  if (!session?.user) {
+    throw new Error("User not authenticated");
+  }
+
+  const { data: teamMembers, error: teamError } = await supabase
+    .from("profiles")
+    .select("id")
+    .eq("manager_id", session.user.id);
+
+  if (teamError) {
+    throw teamError;
+  }
+
+  const teamIds = teamMembers.map((member) => member.id);
+  const allIds = [session.user.id, ...teamIds];
+
+  const { data, error } = await supabase
+    .from("voice_transcripts")
+    .select(`
+      *,
+      user_templates:template_id (
+        id,
+        name,
+        fields
+      ),
+      profiles:user_id (
+        full_name,
+        phone_number
+      )
+    `)
+    .in("user_id", allIds)
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    throw error;
+  }
+
+  return data as VoiceTranscript[];
 };
 
 export const downloadPDF = async (transcriptId: string): Promise<{ pdf: string; filename: string }> => {
