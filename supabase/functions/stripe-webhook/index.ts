@@ -57,12 +57,12 @@ Deno.serve(async (req) => {
             return new Response(`Webhook Error: ${err.message}`, { status: 400, headers: corsHeaders });
         }
 
-        console.log(`🔔 Received event: ${event.type}`);
+        console.log(`Received event: ${event.type}`);
 
         switch (event.type) {
             case "checkout.session.completed": {
                 const session = event.data.object as Stripe.Checkout.Session;
-                console.log(`💰 Checkout Session completed: ${session.id}`);
+                console.log(`Checkout Session completed: ${session.id}`);
                 console.log("Metadata received:", JSON.stringify(session.metadata));
 
                 const subscriptionId = session.subscription as string;
@@ -107,6 +107,7 @@ Deno.serve(async (req) => {
                         console.log("Successfully upserted primary subscription.");
                     }
 
+                    let newUsageSubId: string | null = null;
                     if (role === "platform") {
                         console.log(`Split flow: Creating usage subscription for customer ${session.customer}`);
 
@@ -120,9 +121,12 @@ Deno.serve(async (req) => {
                                 ],
                                 metadata: {
                                     user_id: userId,
+                                    plan_type: planType,
                                     subscription_role: "usage",
                                 },
                             });
+
+                            newUsageSubId = usageSub.id;
 
                             const { error: usageError } = await supabase.from("subscriptions").insert([
                                 {
@@ -142,9 +146,138 @@ Deno.serve(async (req) => {
                             console.error("Failed to create usage subscription via API:", usageApiErr.message);
                         }
                     }
-                } catch (subErr: any) {
-                    console.error("Error retrieving subscription or processing logic:", subErr.message);
-                    return new Response(`Processing Error: ${subErr.message}`, { status: 500, headers: corsHeaders });
+                    console.log("Checking for existing subscriptions to cancel (upgrade/downgrade)...");
+                    const newSubscriptionIds = [subscriptionId];
+                    if (newUsageSubId) {
+                        newSubscriptionIds.push(newUsageSubId);
+                    }
+
+                    const { data: existingSubscriptions } = await supabase
+                        .from("subscriptions")
+                        .select("subscription_id, plan_type, subscription_role")
+                        .eq("user_id", userId)
+                        .in("status", ["active", "trialing", "past_due", "unpaid"])
+                        .not("subscription_id", "in", `(${newSubscriptionIds.join(",")})`)
+                        .order('updated_at', { ascending: false });
+
+                    if (existingSubscriptions && existingSubscriptions.length > 0) {
+                        console.log(`Found ${existingSubscriptions.length} existing subscription(s) to cancel.`);
+
+                        const { data: wallet } = await supabase
+                            .from('credits_wallet')
+                            .select('used_credits_this_month, manager_id')
+                            .eq('manager_id', userId)
+                            .maybeSingle();
+
+                        let currentUsage = wallet?.used_credits_this_month || 0;
+
+                        if (!wallet && currentUsage === 0) {
+                            const { data: profile } = await supabase
+                                .from('profiles')
+                                .select('manager_id')
+                                .eq('id', userId)
+                                .maybeSingle();
+
+                            if (profile?.manager_id) {
+                                const { data: managerWallet } = await supabase
+                                    .from('credits_wallet')
+                                    .select('used_credits_this_month')
+                                    .eq('manager_id', profile.manager_id)
+                                    .maybeSingle();
+
+                                currentUsage = managerWallet?.used_credits_this_month || 0;
+                            }
+                        }
+
+                        let creditsInvoiced = false;
+
+                        for (const oldSub of existingSubscriptions) {
+                            console.log(`Canceling ${oldSub.subscription_role} subscription ${oldSub.subscription_id} (${oldSub.plan_type})...`);
+                            try {
+                                const oldStripeSubscription = await stripe.subscriptions.retrieve(oldSub.subscription_id);
+
+                                if (currentUsage > 0 && !creditsInvoiced) {
+                                    const meteredItems = oldStripeSubscription.items.data.filter(
+                                        (item: any) => item.price.recurring?.usage_type === 'metered'
+                                    );
+
+                                    if (meteredItems.length > 0) {
+                                        console.log(`Creating invoice for ${currentUsage} used credits...`);
+
+                                        const customerId = typeof oldStripeSubscription.customer === 'string'
+                                            ? oldStripeSubscription.customer
+                                            : oldStripeSubscription.customer.id;
+
+                                        for (const item of meteredItems) {
+                                            const unitAmount = item.price.unit_amount_decimal
+                                                ? parseInt(item.price.unit_amount_decimal)
+                                                : item.price.unit_amount || 0;
+
+                                            await stripe.invoiceItems.create({
+                                                customer: customerId,
+                                                currency: item.price.currency,
+                                                unit_amount: unitAmount,
+                                                quantity: currentUsage,
+                                                description: `Credits used before plan change to ${planType} (${currentUsage} credits)`,
+                                            });
+                                        }
+
+                                        creditsInvoiced = true;
+                                    }
+                                }
+
+                                await stripe.subscriptions.cancel(oldSub.subscription_id, {
+                                    invoice_now: true,
+                                    prorate: false,
+                                });
+
+                                console.log(`Old subscription ${oldSub.subscription_id} canceled and invoiced.`);
+
+                                await supabase
+                                    .from("subscriptions")
+                                    .update({
+                                        status: 'canceled',
+                                        updated_at: new Date().toISOString()
+                                    })
+                                    .eq('subscription_id', oldSub.subscription_id);
+
+                                if (wallet) {
+                                    const newBillingCycleAnchor = subscription.current_period_start;
+
+                                    await supabase
+                                        .from("credits_wallet")
+                                        .update({
+                                            used_credits_this_month: 0,
+                                            billing_cycle_anchor: newBillingCycleAnchor,
+                                            updated_at: new Date().toISOString(),
+                                        })
+                                        .eq("manager_id", userId);
+
+                                    console.log(`🔄 Credit wallet reset for new billing cycle (anchor: ${newBillingCycleAnchor}).`);
+                                }
+
+                            } catch (cancelError: any) {
+                                console.error(`Error canceling subscription ${oldSub.subscription_id}:`, cancelError.message);
+
+                                if (cancelError.message && (cancelError.message.includes("No such subscription") || cancelError.code === 'resource_missing')) {
+                                    console.log(`Subscription ${oldSub.subscription_id} not found in Stripe. Marking as canceled in DB.`);
+                                    await supabase
+                                        .from("subscriptions")
+                                        .update({
+                                            status: 'canceled',
+                                            updated_at: new Date().toISOString()
+                                        })
+                                        .eq('subscription_id', oldSub.subscription_id);
+                                }
+                            }
+                        }
+                    } else {
+                        console.log("No existing subscriptions found to cancel.");
+                    }
+
+                } catch (err: any) {
+                    console.error("Error in checkout.session.completed:", err.message);
+                    throw err;
                 }
                 break;
             }
