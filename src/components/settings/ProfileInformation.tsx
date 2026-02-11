@@ -9,7 +9,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { profileSchema, type ProfileFormValues } from '@/schemas/settings.schemas';
 import toast from 'react-hot-toast';
-import { User, Mail, Save, Loader2, Shield, Calendar, UserCircle, Building2 } from 'lucide-react';
+import { User, Mail, Save, Loader2, Shield, Calendar, UserCircle, Building2, Phone } from 'lucide-react';
 import type { Profile } from '@/types/profile.types';
 import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
 
@@ -34,6 +34,7 @@ export function ProfileInformation({ initialData }: ProfileInformationProps) {
     resolver: zodResolver(profileSchema),
     defaultValues: {
       full_name: '',
+      phone_number: '',
       email: '',
     },
   });
@@ -43,6 +44,7 @@ export function ProfileInformation({ initialData }: ProfileInformationProps) {
       setProfile(initialData);
       resetProfile({
         full_name: initialData.full_name || '',
+        phone_number: initialData.phone_number || '',
         email: initialData.email,
       });
       setIsLoading(false);
@@ -57,6 +59,7 @@ export function ProfileInformation({ initialData }: ProfileInformationProps) {
         if (profileData) {
           resetProfile({
             full_name: profileData.full_name || '',
+            phone_number: profileData.phone_number || '',
             email: profileData.email,
           });
         }
@@ -84,6 +87,7 @@ export function ProfileInformation({ initialData }: ProfileInformationProps) {
       // Only update full_name, email is read-only
       const updatedProfile = await updateProfile({
         full_name: pendingFormData.full_name || undefined,
+        phone_number: pendingFormData.phone_number?.replace(/[^0-9+]/g, '') || undefined,
       });
       setProfile(updatedProfile);
 
@@ -149,6 +153,36 @@ export function ProfileInformation({ initialData }: ProfileInformationProps) {
                 </p>
               )}
             </div>
+
+            {profile?.role !== 'manager' && (
+              <div className="space-y-2">
+                <Label htmlFor="phone_number" className="text-sm font-medium">
+                  Phone Number
+                </Label>
+                <div className="relative">
+                  <Phone className="absolute left-3 top-3 h-5 w-5 text-gray-400" />
+                  <Input
+                    id="phone_number"
+                    {...registerProfile('phone_number')}
+                    className={`pl-10 h-11 ${profile?.phone_number ? 'bg-gray-50 cursor-not-allowed' : ''}`}
+                    placeholder="e.g. +92 3XX... or +34 6XX..."
+                    disabled={!!profile?.phone_number}
+                    readOnly={!!profile?.phone_number}
+                  />
+                </div>
+                {profile?.phone_number ? (
+                  <p className="text-xs text-gray-500 mt-1">
+                    Phone number cannot be changed once set. Contact support for assistance.
+                  </p>
+                ) : (
+                  profileErrors.phone_number && (
+                    <p className="text-sm text-red-500 mt-1">
+                      {profileErrors.phone_number.message}
+                    </p>
+                  )
+                )}
+              </div>
+            )}
 
             <div className="space-y-2">
               <Label htmlFor="email" className="text-sm font-medium">
