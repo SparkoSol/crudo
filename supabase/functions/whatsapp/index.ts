@@ -29,7 +29,7 @@ async function verifyWebhookSignature(payload: string, signature: string | null)
 
   const appSecret = Deno.env.get("WHATSAPP_APP_SECRET");
   if (!appSecret) {
-    console.warn("⚠️ WHATSAPP_APP_SECRET not configured - skipping signature verification");
+    console.warn("WHATSAPP_APP_SECRET not configured - skipping signature verification");
     return true;
   }
 
@@ -56,7 +56,7 @@ async function verifyWebhookSignature(payload: string, signature: string | null)
 
     const isValid = signatureHash === expectedHash;
     if (!isValid) {
-      console.error("❌ Invalid webhook signature");
+      console.error("Invalid webhook signature");
     }
     return isValid;
   } catch (error) {
@@ -117,7 +117,7 @@ serve(async (req) => {
       const isValidSignature = await verifyWebhookSignature(rawBody, signature);
 
       if (!isValidSignature && Deno.env.get("WHATSAPP_APP_SECRET")) {
-        console.error("❌ Webhook signature verification failed");
+        console.error("Webhook signature verification failed");
         return new Response(
           JSON.stringify({ error: "Invalid signature" }),
           { status: 401, headers: corsHeaders }
@@ -126,7 +126,7 @@ serve(async (req) => {
 
       const body: WhatsAppWebhookRequest = JSON.parse(rawBody);
       console.log("-----------------------------------------");
-      console.log("📦 NEW WEBHOOK RECEIVED");
+      console.log("NEW WEBHOOK RECEIVED");
       console.log("Event Type:", body.object);
       console.log("Payload:", JSON.stringify(body, null, 2));
       console.log("-----------------------------------------");
@@ -147,7 +147,7 @@ serve(async (req) => {
             const value = change.value;
 
             if (value.statuses) {
-              console.log("ℹ️ Ignoring status update");
+              console.log("Ignoring status update");
               continue;
             }
 
@@ -158,7 +158,7 @@ serve(async (req) => {
                 const timestamp = message.timestamp;
                 const messageType = message.type;
 
-                console.log(`📩 MESSAGE RECEIVED from ${from}`);
+                console.log(`MESSAGE RECEIVED from ${from}`);
                 console.log(`Type: ${messageType}`);
                 console.log(`Message ID: ${messageId}`);
                 if (message.text?.body) console.log(`Content: "${message.text.body}"`);
@@ -200,14 +200,14 @@ serve(async (req) => {
                       .maybeSingle();
 
                     if (profileByPhone) {
-                      console.log(`✅ Found user in profiles table: ${profileByPhone.id}`);
+                      console.log(`Found user in profiles table: ${profileByPhone.id}`);
                       userId = profileByPhone.id;
                       userName = profileByPhone.full_name;
                     }
                   }
 
                   if (!userId) {
-                    console.error("❌ No user mapping found for phone number:", from);
+                    console.error("No user mapping found for phone number:", from);
                     if (messageType !== "reaction" && accessToken && phoneNumberId) {
                       const notRegisteredPayload = {
                         messaging_product: "whatsapp",
@@ -215,7 +215,7 @@ serve(async (req) => {
                         to: normalizePhoneNumber(from),
                         type: "text",
                         text: {
-                          body: "🚫 This phone number is not registered in our system. Please ask your manager to invite you or add your number in the portal.",
+                          body: "This phone number is not registered in our system. Please ask your manager to invite you or add your number in the portal.",
                         },
                       };
                       try {
@@ -258,7 +258,7 @@ serve(async (req) => {
                     .maybeSingle();
 
                   if (!subscription) {
-                    console.error(`❌ Manager (${effectiveManagerId}) has no active subscription.`);
+                    console.error(`Manager (${effectiveManagerId}) has no active subscription.`);
                     if (messageType !== "reaction" && accessToken && phoneNumberId) {
                       const subErrorPayload = {
                         messaging_product: "whatsapp",
@@ -266,7 +266,7 @@ serve(async (req) => {
                         to: normalizePhoneNumber(from),
                         type: "text",
                         text: {
-                          body: "⚠️ The subscription for your account (or your manager's account) is inactive or expired. Please renew the subscription to continue identifying transcripts.",
+                          body: "⚠️ The subscription for your manager's account is inactive or expired. Please renew the subscription to continue identifying transcripts.",
                         },
                       };
                       try {
@@ -383,7 +383,7 @@ serve(async (req) => {
                         continue;
                       }
 
-                      console.log(`✅ User verified: ${userId}, Manager: ${effectiveManagerId}`);
+                      console.log(`User verified: ${userId}, Manager: ${effectiveManagerId}`);
 
                       const { data: transcriptRecord, error: insertError } = await adminClient
                         .from("voice_transcripts")
@@ -391,7 +391,7 @@ serve(async (req) => {
                           phone_number: from,
                           transcript: transcript,
                           status: "pending",
-                          user_id: userId, // The sales person ID
+                          user_id: userId,
                         })
                         .select()
                         .single();
@@ -399,7 +399,7 @@ serve(async (req) => {
                       if (insertError) {
                         console.error("Failed to store transcript:", insertError);
                       } else {
-                        console.log("✅ Transcript stored successfully with user_id:", userId);
+                        console.log("Transcript stored successfully with user_id:", userId);
                       }
 
                       const maxTranscriptLength = 1000;
@@ -461,7 +461,7 @@ serve(async (req) => {
                           to: normalizePhoneNumber(from),
                           type: "text",
                           text: {
-                            body: `📝 Transcript:\n\n${transcript}`,
+                            body: `Transcript:\n\n${transcript}`,
                           },
                         };
 
@@ -532,7 +532,7 @@ serve(async (req) => {
                   const buttonText = (message.interactive?.button_reply?.title || (message as any).button?.text || "").toLowerCase();
                   const buttonId = message.interactive?.button_reply?.id || (message as any).button?.payload || "";
 
-                  console.log(`🔘 Button clicked: ${buttonText} (ID: ${buttonId})`);
+                  console.log(`Button clicked: ${buttonText} (ID: ${buttonId})`);
 
                   let action: "confirm" | "retake" | null = null;
                   if (buttonId === "Confirm" || buttonText.includes("confirm")) {
@@ -635,9 +635,9 @@ serve(async (req) => {
                       };
 
                       if (!template) {
-                        console.log("⚠️ No default template found for manager. Using Fallback Template.");
+                        console.log("No default template found for manager. Using Fallback Template.");
                       } else {
-                        console.log(`✅ Using template: ${template.name} (${template.id})`);
+                        console.log(`Using template: ${template.name} (${template.id})`);
                       }
 
 
