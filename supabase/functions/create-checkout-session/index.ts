@@ -1,8 +1,13 @@
 import Stripe from "npm:stripe@^14.14.0";
+import { createClient } from "npm:@supabase/supabase-js@2";
 
 const stripe = new Stripe(Deno.env.get("STRIPE_API_KEY")!, {
     apiVersion: "2024-06-20",
 });
+
+const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
 
 const corsHeaders = {
@@ -36,6 +41,18 @@ Deno.serve(async (req) => {
         }
 
         console.log(`🎟️ Creating 'Platform Access' checkout session for user: ${user_id}, plan: ${plan_type}, email: ${email}`);
+
+        const { data: existingSubscriptions } = await supabase
+            .from("subscriptions")
+            .select("plan_type")
+            .eq("user_id", user_id)
+            .in("status", ["active", "trialing", "past_due"])
+            .limit(1)
+            .maybeSingle();
+
+        if (existingSubscriptions) {
+            console.log(`User has existing ${existingSubscriptions.plan_type} subscription. Will handle upgrade/downgrade in webhook after payment.`);
+        }
 
         const basePriceId = plan_type === 'monthly' ? PRICES.monthly : PRICES.annual;
         const subscriptionRole = plan_type === 'annual' ? "platform" : "monthly_bundled";
@@ -79,6 +96,7 @@ Deno.serve(async (req) => {
     } catch (err) {
         console.error(`Unexpected error: ${err.message}`);
         return new Response(
+            // Retrieve the Stripe subscription
             JSON.stringify({ error: "Internal Server Error", message: err.message }),
             { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
