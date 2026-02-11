@@ -607,7 +607,7 @@ serve(async (req) => {
                       let effectiveManagerId = userId;
                       const { data: profile } = await adminClient
                         .from("profiles")
-                        .select("id, manager_id, role, full_name")
+                        .select("id, manager_id, role, full_name, phone_number")
                         .eq("id", userId)
                         .single();
 
@@ -619,7 +619,6 @@ serve(async (req) => {
                         effectiveManagerId = profile.manager_id;
                       }
 
-                      // 3. Get Template (Manager's default)
                       const { data: template } = await adminClient
                         .from("user_templates")
                         .select("*")
@@ -629,11 +628,9 @@ serve(async (req) => {
 
                       const activeTemplate = template || {
                         id: null,
-                        name: "Default Report",
+                        name: "Standard Sales Report",
                         fields: [
-                          { name: "Customer Name", type: "text", required: true },
-                          { name: "Summary", type: "textarea", required: true },
-                          { name: "Action Items", type: "list", required: false }
+                          { name: "Summary", type: "textarea", required: true }
                         ]
                       };
 
@@ -711,7 +708,7 @@ Extract and fill all template fields from the transcript. Return a JSON object w
                         .update({
                           status: "confirmed",
                           user_id: userId,
-                          template_id: template?.id || null, 
+                          template_id: template?.id || null,
                           filled_data: filledData,
                         })
                         .eq("id", transcriptRecord.id);
@@ -725,10 +722,14 @@ Extract and fill all template fields from the transcript. Return a JSON object w
                       let yPosition = 750;
                       const margin = 50;
                       const pageWidth = 612;
+                      const pageHeight = 792;
                       const lineHeight = 20;
                       const sectionSpacing = 30;
 
-                      const addText = (text: string, x: number, y: number, size: number, fontType: any, maxWidth?: number) => {
+                      const addText = (text: string, x: number, y: number, size: number, fontType: any, maxWidth?: number, color?: any) => {
+                        const drawOptions: any = { x, size, font: fontType };
+                        if (color) drawOptions.color = color;
+
                         if (maxWidth) {
                           const words = text.split(" ");
                           let line = "";
@@ -737,7 +738,7 @@ Extract and fill all template fields from the transcript. Return a JSON object w
                             const testLine = line + (line ? " " : "") + word;
                             const width = fontType.widthOfTextAtSize(testLine, size);
                             if (width > maxWidth && line) {
-                              page.drawText(line, { x, y: currentY, size, font: fontType });
+                              page.drawText(line, { ...drawOptions, y: currentY });
                               line = word;
                               currentY -= lineHeight;
                             } else {
@@ -745,45 +746,77 @@ Extract and fill all template fields from the transcript. Return a JSON object w
                             }
                           }
                           if (line) {
-                            page.drawText(line, { x, y: currentY, size, font: fontType });
+                            page.drawText(line, { ...drawOptions, y: currentY });
                             currentY -= lineHeight;
                           }
                           return currentY;
                         } else {
-                          page.drawText(text, { x, y, size, font: fontType });
+                          page.drawText(text, { ...drawOptions, y });
                           return y - lineHeight;
                         }
                       };
 
-                      yPosition = addText("Voice Transcript Report", margin, yPosition, 20, boldFont);
-                      yPosition -= sectionSpacing;
+                      page.drawRectangle({
+                        x: 0,
+                        y: pageHeight - 100,
+                        width: pageWidth,
+                        height: 100,
+                        color: rgb(0.1, 0.1, 0.1),
+                      });
 
+                      yPosition = pageHeight - 50;
+                      addText("Sales Visit Report", margin, yPosition, 24, boldFont, undefined, rgb(1, 1, 1));
+                      yPosition -= 35;
                       const dateStr = new Date().toLocaleString();
-                      yPosition = addText(`Generated: ${dateStr}`, margin, yPosition, 10, font);
-                      if (userName) {
-                        yPosition = addText(`Sales Rep: ${userName}`, margin, yPosition, 10, font);
-                      } else {
-                        yPosition = addText(`Sales Rep: (Name not available)`, margin, yPosition, 10, font);
-                      }
+                      addText(`Generated: ${dateStr}`, margin, yPosition, 10, font, undefined, rgb(0.8, 0.8, 0.8));
+
+                      yPosition = pageHeight - 130;
+
+                      yPosition = addText("Sales Representative Details", margin, yPosition, 14, boldFont, undefined, rgb(0, 0, 0));
+                      yPosition -= 15;
+
+                      const repName = userName || "(Name not available)";
+                      const repPhone = profile?.phone_number || "(Phone not available)";
+
+                      addText("Name:", margin, yPosition, 11, boldFont);
+                      addText(repName, margin + 50, yPosition, 11, font);
+                      yPosition -= 20;
+                      addText("Phone:", margin, yPosition, 11, boldFont);
+                      addText(repPhone, margin + 50, yPosition, 11, font);
                       yPosition -= sectionSpacing;
 
-                      yPosition = addText(`Template: ${activeTemplate.name}`, margin, yPosition, 12, boldFont);
+                      yPosition = addText(`Template Used: ${activeTemplate.name}`, margin, yPosition, 12, boldFont);
                       yPosition -= sectionSpacing;
 
-                      yPosition = addText("Transcript:", margin, yPosition, 14, boldFont);
-                      yPosition -= 10;
+                      yPosition = addText("Transcript", margin, yPosition, 14, boldFont);
+                      page.drawLine({
+                        start: { x: margin, y: yPosition + 5 },
+                        end: { x: pageWidth - margin, y: yPosition + 5 },
+                        thickness: 1,
+                        color: rgb(0.8, 0.8, 0.8),
+                      });
+                      yPosition -= 15;
+
                       yPosition = addText(transcriptRecord.transcript, margin, yPosition, 10, font, pageWidth - 2 * margin);
                       yPosition -= sectionSpacing;
 
                       if (filledData) {
-                        yPosition = addText("Filled Data:", margin, yPosition, 14, boldFont);
-                        yPosition -= 10;
+                        yPosition = addText("Extracted Data", margin, yPosition, 14, boldFont);
+                        page.drawLine({
+                          start: { x: margin, y: yPosition + 5 },
+                          end: { x: pageWidth - margin, y: yPosition + 5 },
+                          thickness: 1,
+                          color: rgb(0.8, 0.8, 0.8),
+                        });
+                        yPosition -= 15;
+
                         for (const [key, value] of Object.entries(filledData)) {
                           const label = key.charAt(0).toUpperCase() + key.slice(1).replace(/_/g, " ");
                           const valStr = value ? String(value) : "N/A";
+
                           yPosition = addText(`${label}:`, margin, yPosition, 11, boldFont);
                           yPosition = addText(valStr, margin + 20, yPosition, 10, font, pageWidth - 2 * margin - 20);
-                          yPosition -= 5;
+                          yPosition -= 10;
                         }
                       }
 
