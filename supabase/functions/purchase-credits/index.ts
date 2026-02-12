@@ -32,9 +32,9 @@ Deno.serve(async (req) => {
     try {
         const { user_id, email, pack_id, success_url, cancel_url } = await req.json();
 
-        if (!user_id || !pack_id) {
+        if (!user_id || !email || !pack_id) {
             return new Response(
-                JSON.stringify({ error: "Missing required fields: user_id, pack_id" }),
+                JSON.stringify({ error: "Missing required fields: user_id, email, pack_id" }),
                 { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
             );
         }
@@ -49,10 +49,10 @@ Deno.serve(async (req) => {
 
         console.log(`\uD83D\uDCE6 Creating credit pack checkout for user ${user_id}: ${pack.name} (${pack.credits} credits, \u20AC${(pack.unit_amount / 100).toFixed(2)})`);
 
-        // Look up existing Stripe customer for this user
-        let customerEmail = email;
+        // Always find or create a Stripe Customer to avoid "Guest" payments
         let customerId: string | undefined;
 
+        // 1. Check existing subscriptions for a Stripe customer ID
         const { data: existingSub } = await supabase
             .from("subscriptions")
             .select("subscription_id")
@@ -66,6 +66,26 @@ Deno.serve(async (req) => {
             customerId = typeof stripeSub.customer === 'string' ? stripeSub.customer : stripeSub.customer.id;
         }
 
+        // 2. If no subscription, search Stripe for an existing customer by email
+        if (!customerId && email) {
+            const existingCustomers = await stripe.customers.list({ email, limit: 1 });
+            if (existingCustomers.data.length > 0) {
+                customerId = existingCustomers.data[0].id;
+            }
+        }
+
+        // 3. If still no customer, create a new one
+        if (!customerId) {
+            const newCustomer = await stripe.customers.create({
+                email,
+                metadata: { user_id },
+            }, {
+                idempotencyKey: `customer_create_${user_id}`,
+            });
+            customerId = newCustomer.id;
+            console.log(`\uD83D\uDC64 Created new Stripe customer ${customerId} for user ${user_id}`);
+        }
+
         const metadata = {
             user_id,
             pack_id,
@@ -75,6 +95,7 @@ Deno.serve(async (req) => {
 
         const sessionParams: Stripe.Checkout.SessionCreateParams = {
             payment_method_types: ["card"],
+            customer: customerId,
             line_items: [
                 {
                     price_data: {
@@ -93,12 +114,6 @@ Deno.serve(async (req) => {
             success_url: success_url || `${req.headers.get("origin")}/settings?credits_purchased=${pack.credits}`,
             cancel_url: cancel_url || `${req.headers.get("origin")}/subscription`,
         };
-
-        if (customerId) {
-            sessionParams.customer = customerId;
-        } else if (customerEmail) {
-            sessionParams.customer_email = customerEmail;
-        }
 
         const session = await stripe.checkout.sessions.create(sessionParams);
 

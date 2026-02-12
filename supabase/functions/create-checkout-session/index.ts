@@ -55,7 +55,7 @@ Deno.serve(async (req) => {
 
         const { data: existingSubscriptions } = await supabase
             .from("subscriptions")
-            .select("plan_type, billing_period")
+            .select("plan_type, billing_period, subscription_id")
             .eq("user_id", user_id)
             .in("status", ["active", "trialing", "past_due"])
             .limit(1)
@@ -63,6 +63,35 @@ Deno.serve(async (req) => {
 
         if (existingSubscriptions) {
             console.log(`User has existing ${existingSubscriptions.plan_type} (${existingSubscriptions.billing_period}) subscription. Will handle upgrade/downgrade in webhook after payment.`);
+        }
+
+        // Always find or create a Stripe Customer to avoid "Guest" payments
+        let customerId: string | undefined;
+
+        // 1. Check existing subscription for a Stripe customer ID
+        if (existingSubscriptions?.subscription_id) {
+            const stripeSub = await stripe.subscriptions.retrieve(existingSubscriptions.subscription_id);
+            customerId = typeof stripeSub.customer === 'string' ? stripeSub.customer : stripeSub.customer.id;
+        }
+
+        // 2. If no subscription, search Stripe for an existing customer by email
+        if (!customerId && email) {
+            const existingCustomers = await stripe.customers.list({ email, limit: 1 });
+            if (existingCustomers.data.length > 0) {
+                customerId = existingCustomers.data[0].id;
+            }
+        }
+
+        // 3. If still no customer, create a new one
+        if (!customerId) {
+            const newCustomer = await stripe.customers.create({
+                email: email || undefined,
+                metadata: { user_id },
+            }, {
+                idempotencyKey: `customer_create_${user_id}`,
+            });
+            customerId = newCustomer.id;
+            console.log(`👤 Created new Stripe customer ${customerId} for user ${user_id}`);
         }
 
         const isAnnual = period === 'annual';
@@ -96,7 +125,7 @@ Deno.serve(async (req) => {
 
         const session = await stripe.checkout.sessions.create({
             payment_method_types: ["card"],
-            customer_email: email,
+            customer: customerId,
             line_items,
             mode: "subscription",
             success_url: success_url || `${req.headers.get("origin")}/dashboard/status?session_id={CHECKOUT_SESSION_ID}`,
