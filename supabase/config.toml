@@ -21,3 +21,9 @@ verify_jwt = false
 
 [functions.increment-credits]
 verify_jwt = false
+
+[functions.process-credit-rollover]
+verify_jwt = false
+
+[functions.purchase-credits]
+verify_jwt = false

@@ -1,4 +1,5 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { ProfileInformation } from '@/components/settings/ProfileInformation';
 import { ChangePassword } from '@/components/settings/ChangePassword';
 import { SubscriptionSettings } from '@/components/settings/SubscriptionSettings';
@@ -7,14 +8,31 @@ import { getProfile } from '@/services/profileServices';
 import { useAuth } from '@/contexts/AuthContext';
 import { subscriptionService } from '@/services/subscriptionService';
 import { creditService } from '@/services/creditService';
+import toast from 'react-hot-toast';
 import type { SubscriptionData, SubscriptionDetails, CreditsWallet } from '@/types';
 export default function Settings() {
   const { user } = useAuth();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [loading, setLoading] = useState(true);
   const [profileData, setProfileData] = useState<any>(null);
   const [subscriptionData, setSubscriptionData] = useState<SubscriptionData | null>(null);
   const [subDetails, setSubDetails] = useState<SubscriptionDetails | null>(null);
   const [wallet, setWallet] = useState<CreditsWallet | null>(null);
+
+  const toastShownRef = useRef(false);
+
+  useEffect(() => {
+    const creditsPurchased = searchParams.get('credits_purchased');
+    if (creditsPurchased && !toastShownRef.current) {
+      toastShownRef.current = true;
+      toast.success(`${Number(creditsPurchased).toLocaleString()} credits have been added to your account!`, {
+        duration: 5000,
+        icon: '🎉',
+      });
+      searchParams.delete('credits_purchased');
+      setSearchParams(searchParams, { replace: true });
+    }
+  }, [searchParams, setSearchParams]);
 
   useEffect(() => {
     if (!user) return;
