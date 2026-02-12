@@ -4,12 +4,13 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { useNavigate } from 'react-router-dom';
 import { signOut } from '@/services/authServices';
 import { Check, Loader2, Zap, ChevronRight, LogIn, Coins, ArrowRight, RotateCcw, TrendingDown, ShoppingCart, Package, Shield, Star, Sparkles } from 'lucide-react';
+import { Skeleton } from '@/components/ui/skeleton';
 import { useAuth } from '@/contexts/AuthContext';
 import toast from 'react-hot-toast';
 import { SUBSCRIPTION_PLANS, CREDIT_INFO, ANNUAL_SAVINGS_PERCENT, CREDIT_PACKAGES } from '@/constants/subscription';
 import { subscriptionService } from '@/services/subscriptionService';
 import { creditService } from '@/services/creditService';
-import type { SubscriptionData, SubscriptionTier, BillingPeriod } from '@/types';
+import type { SubscriptionData, SubscriptionTier, BillingPeriod, CreditsWallet, CreditBatch } from '@/types';
 
 export default function Subscription() {
     const { user } = useAuth();
@@ -18,6 +19,8 @@ export default function Subscription() {
     const [subscription, setSubscription] = useState<SubscriptionData | null>(null);
     const [billingPeriod, setBillingPeriod] = useState<BillingPeriod>('monthly');
     const [loadingPackId, setLoadingPackId] = useState<string | null>(null);
+    const [wallet, setWallet] = useState<CreditsWallet | null>(null);
+    const [batches, setBatches] = useState<CreditBatch[]>([]);
 
     const handleLoginRedirect = async () => {
         try {
@@ -42,8 +45,23 @@ export default function Subscription() {
                 console.error('Failed to fetch subscription:', err);
             }
         };
+        const fetchCredits = async () => {
+            try {
+                const [walletData, batchesData] = await Promise.all([
+                    creditService.getWallet(),
+                    creditService.getBatches(),
+                ]);
+                setWallet(walletData);
+                setBatches(batchesData);
+            } catch (err) {
+                console.error('Failed to fetch credits:', err);
+            }
+        };
         fetchSub();
+        fetchCredits();
     }, [user]);
+
+    const remainingCredits = batches.reduce((sum, b) => sum + b.credits_remaining, 0) || (wallet?.total_credits ?? 0);
 
     const handleSubscribe = async (tier: SubscriptionTier) => {
         if (!user) {
@@ -131,14 +149,33 @@ export default function Subscription() {
                                 Pay a fixed platform fee, then only for the visits you actually record. No hidden costs.
                             </p>
                         </div>
-                        <Button
-                            variant="outline"
-                            onClick={handleLoginRedirect}
-                            className="gap-2 text-gray-600 hover:text-brand-primary-600 hover:bg-brand-primary-50 hover:border-brand-primary-200 transition-all duration-200 rounded-xl self-start"
-                        >
-                            <LogIn className="h-4 w-4" />
-                            Login
-                        </Button>
+                        {user ? (
+                            <div className="relative group self-start" aria-label={`${remainingCredits} remaining credits`}>
+                                <div className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white/80 backdrop-blur-sm border border-gray-200/60 shadow-sm cursor-default transition-all duration-200 group-hover:border-amber-300 group-hover:shadow-md group-hover:shadow-amber-100/50">
+                                    <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-amber-100 to-orange-100 flex items-center justify-center">
+                                        <Coins className="h-4 w-4 text-amber-600" />
+                                    </div>
+                                    {wallet === null && batches.length === 0 ? (
+                                        <Skeleton className="h-5 w-10 rounded-md" />
+                                    ) : (
+                                        <span className="text-lg font-bold text-gray-900">{remainingCredits.toLocaleString()}</span>
+                                    )}
+                                </div>
+                                <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 px-3 py-1.5 bg-gray-900 text-white text-xs font-medium rounded-lg whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none shadow-lg">
+                                    Remaining credits
+                                    <div className="absolute -top-1 left-1/2 -translate-x-1/2 w-2 h-2 bg-gray-900 rotate-45" />
+                                </div>
+                            </div>
+                        ) : (
+                            <Button
+                                variant="outline"
+                                onClick={handleLoginRedirect}
+                                className="gap-2 text-gray-600 hover:text-brand-primary-600 hover:bg-brand-primary-50 hover:border-brand-primary-200 transition-all duration-200 rounded-xl self-start"
+                            >
+                                <LogIn className="h-4 w-4" />
+                                Login
+                            </Button>
+                        )}
                     </div>
 
                     {/* Billing Period Toggle */}
