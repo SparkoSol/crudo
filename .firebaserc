@@ -7,8 +7,12 @@
       "hosting": {
         "wearecrudo": [
           "wearecrudo"
+        ],
+        "inotus-staging": [
+          "inotus-staging"
         ]
       }
     }
-  }
+  },
+  "etags": {}
 }
