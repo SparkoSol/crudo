@@ -15,3 +15,26 @@ export interface CreditTransaction {
     reason: string | null;
     created_at: string;
 }
+
+export interface CreditBatch {
+    id: string;
+    manager_id: string;
+    credits_purchased: number;
+    credits_remaining: number;
+    source: 'purchase' | 'rollover';
+    cycle_month: string;
+    stripe_session_id: string | null;
+    is_active: boolean;
+    created_at: string;
+    updated_at: string;
+}
+
+export interface CreditPackage {
+    id: string;
+    name: string;
+    credits: number;
+    price: number;
+    pricePerCredit: number;
+    savingsPercent: number;
+    highlighted?: boolean;
+}
