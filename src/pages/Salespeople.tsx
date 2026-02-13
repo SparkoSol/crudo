@@ -1,22 +1,47 @@
-import { useState, useEffect } from 'react';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Users, UserPlus, Search, Phone, Mail, Building2, User, Loader2, Unlink } from 'lucide-react';
-import { getManagedProfiles, unlinkPhoneNumber } from '@/services/profileServices';
-import type { Profile } from '@/types/profile.types';
-import toast from 'react-hot-toast';
-import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
-import { useNavigate } from 'react-router-dom';
+import { useState, useEffect } from "react";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+} from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import {
+  Users,
+  UserPlus,
+  Search,
+  Phone,
+  Mail,
+  Building2,
+  User,
+  Loader2,
+  Unlink,
+  Pencil,
+} from "lucide-react";
+import {
+  getManagedProfiles,
+  unlinkPhoneNumber,
+} from "@/services/profileServices";
+import type { Profile } from "@/types/profile.types";
+import toast from "react-hot-toast";
+import { ConfirmationDialog } from "@/components/ui/confirmation-dialog";
+import { useNavigate } from "react-router-dom";
+import { EditSalespersonDialog } from "./EditSalespersonDialog";
 
 export default function Salespeople() {
   const navigate = useNavigate();
   const [profiles, setProfiles] = useState<Profile[]>([]);
+  const [selectedProfile, setSelectedProfile] = useState<Profile | null>(null);
+  const [isEditOpen, setIsEditOpen] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [searchQuery, setSearchQuery] = useState('');
+  const [searchQuery, setSearchQuery] = useState("");
   const [operatingId, setOperatingId] = useState<string | null>(null);
   const [showUnlinkConfirm, setShowUnlinkConfirm] = useState(false);
-  const [selectedProfileId, setSelectedProfileId] = useState<string | null>(null);
+  const [selectedProfileId, setSelectedProfileId] = useState<string | null>(
+    null,
+  );
 
   useEffect(() => {
     loadProfiles();
@@ -26,11 +51,11 @@ export default function Salespeople() {
     try {
       setLoading(true);
       const data = await getManagedProfiles();
-      const salesReps = data.filter(p => p.role === 'sales_representative');
+      const salesReps = data.filter((p) => p.role === "sales_representative");
       setProfiles(salesReps);
     } catch (error) {
-      console.error('Failed to load salespeople:', error);
-      toast.error('Failed to load salespeople');
+      console.error("Failed to load salespeople:", error);
+      toast.error("Failed to load salespeople");
     } finally {
       setLoading(false);
     }
@@ -47,14 +72,16 @@ export default function Salespeople() {
     try {
       setOperatingId(selectedProfileId);
       await unlinkPhoneNumber(selectedProfileId);
-      toast.success('Phone number unlinked successfully');
+      toast.success("Phone number unlinked successfully");
 
-      setProfiles(prev => prev.map(p =>
-        p.id === selectedProfileId ? { ...p, phone_number: null } : p
-      ));
+      setProfiles((prev) =>
+        prev.map((p) =>
+          p.id === selectedProfileId ? { ...p, phone_number: null } : p,
+        ),
+      );
     } catch (error) {
-      console.error('Failed to unlink phone number:', error);
-      toast.error('Failed to unlink phone number');
+      console.error("Failed to unlink phone number:", error);
+      toast.error("Failed to unlink phone number");
     } finally {
       setOperatingId(null);
       setSelectedProfileId(null);
@@ -62,7 +89,7 @@ export default function Salespeople() {
     }
   };
 
-  const filteredProfiles = profiles.filter(profile => {
+  const filteredProfiles = profiles.filter((profile) => {
     const query = searchQuery.toLowerCase();
     return (
       profile.full_name?.toLowerCase().includes(query) ||
@@ -70,19 +97,25 @@ export default function Salespeople() {
       profile.phone_number?.includes(query)
     );
   });
+  const handleEditClick = (profile: Profile) => {
+    setSelectedProfile(profile);
+    setIsEditOpen(true);
+  };
 
   return (
     <div className="p-6 lg:p-8 pt-20 lg:pt-6">
       <div className="mb-8">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900 mb-2">Salespeople</h1>
+            <h1 className="text-3xl font-bold text-gray-900 mb-2">
+              Salespeople
+            </h1>
             <p className="text-gray-600">
               Manage your sales team members and their profiles
             </p>
           </div>
           <Button
-            onClick={() => navigate('/invite')}
+            onClick={() => navigate("/invite")}
             className="gap-2 bg-gradient-to-r from-brand-primary-600 to-brand-primary-700 hover:from-brand-primary-700 hover:to-brand-primary-800 shadow-md"
           >
             <UserPlus className="h-4 w-4" />
@@ -112,31 +145,52 @@ export default function Salespeople() {
         <Card className="border-gray-200 shadow-sm">
           <CardContent className="p-12 text-center">
             <Users className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-            <h3 className="text-lg font-semibold text-gray-900 mb-2">No salespeople found</h3>
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">
+              No salespeople found
+            </h3>
             <p className="text-gray-600">
-              {searchQuery ? 'Try adjusting your search terms' : 'Invite your first salesperson to get started'}
+              {searchQuery
+                ? "Try adjusting your search terms"
+                : "Invite your first salesperson to get started"}
             </p>
           </CardContent>
         </Card>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {filteredProfiles.map((profile) => (
-            <Card key={profile.id} className="border-gray-200 shadow-sm hover:shadow-md transition-shadow">
+            <Card
+              key={profile.id}
+              className="border-gray-200 shadow-sm hover:shadow-md transition-shadow"
+            >
               <CardHeader className="pb-4">
                 <div className="flex items-start justify-between gap-4">
                   <div className="flex items-center gap-3">
                     <div className="h-10 w-10 rounded-full bg-brand-primary-100 flex items-center justify-center text-brand-primary-600 font-bold">
-                      {profile.full_name ? profile.full_name.charAt(0).toUpperCase() : <User className="h-5 w-5" />}
+                      {profile.full_name ? (
+                        profile.full_name.charAt(0).toUpperCase()
+                      ) : (
+                        <User className="h-5 w-5" />
+                      )}
                     </div>
                     <div>
                       <CardTitle className="text-base font-bold text-gray-900">
-                        {profile.full_name || 'Unnamed Salesperson'}
+                        {profile.full_name || "Unnamed Salesperson"}
                       </CardTitle>
                       <CardDescription className="text-xs">
-                        Joined {new Date(profile.created_at).toLocaleDateString()}
+                        Joined{" "}
+                        {new Date(profile.created_at).toLocaleDateString()}
                       </CardDescription>
                     </div>
                   </div>
+
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8"
+                    onClick={() => handleEditClick(profile)}
+                  >
+                    <Pencil className="h-4 w-4" />
+                  </Button>
                 </div>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -148,8 +202,12 @@ export default function Salespeople() {
                   <div className="flex items-center gap-3 text-sm text-gray-600">
                     <Phone className="h-4 w-4 text-gray-400 shrink-0" />
                     <div className="flex-1 flex items-center justify-between">
-                      <span className={profile.phone_number ? '' : 'text-gray-400 italic'}>
-                        {profile.phone_number || 'No phone number'}
+                      <span
+                        className={
+                          profile.phone_number ? "" : "text-gray-400 italic"
+                        }
+                      >
+                        {profile.phone_number || "No phone number"}
                       </span>
                       {profile.phone_number && (
                         <Button
@@ -191,6 +249,24 @@ export default function Salespeople() {
         confirmText="Unlink"
         cancelText="Cancel"
         isLoading={!!operatingId}
+      />
+      <EditSalespersonDialog
+        open={isEditOpen}
+        onClose={() => setIsEditOpen(false)}
+        onUpdated={loadProfiles} // Refresh profiles after edit
+        salesperson={
+          selectedProfile
+            ? {
+                id: selectedProfile.id,
+                full_name: selectedProfile.full_name || "",
+                email: selectedProfile.email,
+                phone_number: selectedProfile.phone_number || "",
+                whatsapp_number: selectedProfile.phone_number || "",
+                status: selectedProfile.is_active ? "active" : "inactive",
+                template_id: selectedProfile.template_id || "",
+              }
+            : null
+        }
       />
     </div>
   );
