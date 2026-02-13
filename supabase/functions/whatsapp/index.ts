@@ -1439,8 +1439,11 @@ serve(async (req) => {
                           const drawOptions: any = { x, size, font: fontType };
                           if (color) drawOptions.color = color;
 
+                          // Replace newlines with spaces to avoid encoding issues
+                          const sanitizedText = text.replace(/\n/g, " ").replace(/\r/g, "").replace(/\t/g, " ");
+
                           if (maxWidth) {
-                            const words = text.split(" ");
+                            const words = sanitizedText.split(" ").filter(word => word.length > 0);
                             let line = "";
                             let currentY = y;
                             for (const word of words) {
@@ -1469,7 +1472,7 @@ serve(async (req) => {
                             }
                             return currentY;
                           } else {
-                            page.drawText(text, { ...drawOptions, y });
+                            page.drawText(sanitizedText, { ...drawOptions, y });
                             return y - lineHeight;
                           }
                         };
