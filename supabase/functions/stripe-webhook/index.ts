@@ -17,11 +17,7 @@ const corsHeaders = {
     "Access-Control-Allow-Headers": "Content-Type, stripe-signature",
 };
 
-const PRICES = {
-    monthly: Deno.env.get("STRIPE_PRICE_MONTHLY")!,
-    annual: Deno.env.get("STRIPE_PRICE_ANNUAL")!,
-    metered_monthly_annual: Deno.env.get("STRIPE_PRICE_METERED_MONTHLY_ANNUAL")!,
-};
+const METERED_CREDITS_PRICE = Deno.env.get("STRIPE_PRICE_METERED_CREDITS") || Deno.env.get("STRIPE_PRICE_METERED_MONTHLY_ANNUAL")!;
 
 Deno.serve(async (req) => {
     const { method } = req;
@@ -65,10 +61,64 @@ Deno.serve(async (req) => {
                 console.log(`Checkout Session completed: ${session.id}`);
                 console.log("Metadata received:", JSON.stringify(session.metadata));
 
+                // Handle one-time credit pack purchases
+                if (session.mode === 'payment' && session.metadata?.purchase_type === 'credit_pack') {
+                    const packUserId = session.metadata.user_id;
+                    const creditsAmount = parseInt(session.metadata.credits_amount || '0');
+                    const packId = session.metadata.pack_id;
+
+                    if (!packUserId || !creditsAmount) {
+                        console.error('Missing user_id or credits_amount in credit pack metadata');
+                        break;
+                    }
+
+                    if (session.payment_status !== 'paid') {
+                        console.log(`Credit pack payment not yet completed (status: ${session.payment_status}), skipping`);
+                        break;
+                    }
+
+                    // Idempotency: check if credits for this session were already deposited
+                    const { data: existingBatch } = await supabase
+                        .from('credit_batches')
+                        .select('id')
+                        .eq('stripe_session_id', session.id)
+                        .maybeSingle();
+
+                    if (existingBatch) {
+                        console.log(`Credits for session ${session.id} already deposited, skipping duplicate`);
+                        break;
+                    }
+
+                    console.log(`\uD83D\uDCE6 Depositing ${creditsAmount} prepaid credits for user ${packUserId} (pack: ${packId})`);
+
+                    const now = new Date();
+                    const cycleMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+
+                    const rolloverResponse = await fetch(`${supabaseUrl}/functions/v1/process-credit-rollover`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${supabaseServiceKey}`,
+                        },
+                        body: JSON.stringify({
+                            action: 'add_credits',
+                            manager_id: packUserId,
+                            credits_amount: creditsAmount,
+                            cycle_month: cycleMonth,
+                            stripe_session_id: session.id,
+                        }),
+                    });
+                    const result = await rolloverResponse.json();
+                    console.log(`\u2705 Credit pack deposited:`, result);
+                    break;
+                }
+
+                // Handle subscription checkouts
                 const subscriptionId = session.subscription as string;
                 const userId = session.metadata?.user_id;
                 const planType = session.metadata?.plan_type;
                 const role = session.metadata?.subscription_role;
+                const billingPeriod = session.metadata?.billing_period || 'monthly';
 
                 if (!subscriptionId || !userId) {
                     console.error("Missing subscription info or user_id in session metadata");
@@ -89,7 +139,8 @@ Deno.serve(async (req) => {
                         user_id: userId,
                         credits_subscription_item_id: creditsItemId || null,
                         plan_type: planType,
-                        subscription_role: role === 'platform' ? 'platform' : 'usage',
+                        billing_period: billingPeriod,
+                        subscription_role: role || 'platform',
                         status: subscription.status,
                         updated_at: new Date().toISOString(),
                     };
@@ -108,20 +159,24 @@ Deno.serve(async (req) => {
                     }
 
                     let newUsageSubId: string | null = null;
-                    if (role === "platform") {
-                        console.log(`Split flow: Creating usage subscription for customer ${session.customer}`);
+
+                    // Annual plans: create separate monthly metered subscription for credits
+                    // Monthly plans: metered credits already included in the same subscription
+                    if (billingPeriod === 'annual') {
+                        console.log(`Annual plan — creating separate usage subscription for customer ${session.customer}`);
 
                         try {
                             const usageSub = await stripe.subscriptions.create({
                                 customer: session.customer as string,
                                 items: [
                                     {
-                                        price: PRICES.metered_monthly_annual,
+                                        price: METERED_CREDITS_PRICE,
                                     },
                                 ],
                                 metadata: {
                                     user_id: userId,
                                     plan_type: planType,
+                                    billing_period: 'annual',
                                     subscription_role: "usage",
                                 },
                             });
@@ -134,7 +189,8 @@ Deno.serve(async (req) => {
                                     subscription_id: usageSub.id,
                                     credits_subscription_item_id: usageSub.items.data[0].id,
                                     subscription_role: "usage",
-                                    plan_type: "metered",
+                                    billing_period: 'annual',
+                                    plan_type: planType,
                                     status: "active",
                                     updated_at: new Date().toISOString(),
                                 }
@@ -145,6 +201,8 @@ Deno.serve(async (req) => {
                         } catch (usageApiErr: any) {
                             console.error("Failed to create usage subscription via API:", usageApiErr.message);
                         }
+                    } else {
+                        console.log(`Monthly combined plan — metered credits included in subscription. Metered item ID: ${creditsItemId}`);
                     }
                     console.log("Checking for existing subscriptions to cancel (upgrade/downgrade)...");
                     const newSubscriptionIds = [subscriptionId];
@@ -318,7 +376,8 @@ Deno.serve(async (req) => {
                     user_id: targetUserId,
                     credits_subscription_item_id: creditsItemId || null,
                     plan_type: planType,
-                    subscription_role: role || (planType === 'annual' ? 'platform' : 'usage'),
+                    billing_period: subscription.metadata?.billing_period || null,
+                    subscription_role: role || 'platform',
                     status: subscription.status,
                     updated_at: new Date().toISOString(),
                 };
@@ -359,6 +418,52 @@ Deno.serve(async (req) => {
                         .from("subscriptions")
                         .update({ status: "active", updated_at: new Date().toISOString() })
                         .eq("subscription_id", invoice.subscription as string);
+
+                    // Process credit rollover on subscription renewal
+                    if (invoice.billing_reason === 'subscription_cycle') {
+                        try {
+                            const { data: subRecord } = await supabase
+                                .from("subscriptions")
+                                .select("user_id")
+                                .eq("subscription_id", invoice.subscription as string)
+                                .maybeSingle();
+
+                            if (subRecord?.user_id) {
+                                const renewalSub = await stripe.subscriptions.retrieve(invoice.subscription as string);
+                                const cycleDate = new Date(renewalSub.current_period_start * 1000);
+                                const newCycleMonth = `${cycleDate.getFullYear()}-${String(cycleDate.getMonth() + 1).padStart(2, '0')}`;
+
+                                console.log(`Processing credit rollover for manager ${subRecord.user_id}, cycle ${newCycleMonth}`);
+
+                                const rolloverResponse = await fetch(`${supabaseUrl}/functions/v1/process-credit-rollover`, {
+                                    method: 'POST',
+                                    headers: {
+                                        'Content-Type': 'application/json',
+                                        'Authorization': `Bearer ${supabaseServiceKey}`,
+                                    },
+                                    body: JSON.stringify({
+                                        action: 'rollover',
+                                        manager_id: subRecord.user_id,
+                                        cycle_month: newCycleMonth,
+                                    }),
+                                });
+                                const rolloverResult = await rolloverResponse.json();
+                                console.log(`🔄 Rollover result:`, rolloverResult);
+
+                                // Reset monthly usage counter for new cycle
+                                await supabase
+                                    .from('credits_wallet')
+                                    .update({
+                                        used_credits_this_month: 0,
+                                        billing_cycle_anchor: renewalSub.current_period_start,
+                                        updated_at: new Date().toISOString(),
+                                    })
+                                    .eq('manager_id', subRecord.user_id);
+                            }
+                        } catch (rolloverErr: any) {
+                            console.error('Error processing credit rollover:', rolloverErr.message);
+                        }
+                    }
                 }
                 break;
             }

@@ -1,7 +1,10 @@
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.0";
 import { PDFDocument, rgb, StandardFonts } from "https://esm.sh/pdf-lib@1.17.1";
-import type { WhatsAppWebhookRequest, WhatsAppSendRequest } from "../../../src/types/whatsapp.types.ts";
+import type {
+  WhatsAppWebhookRequest,
+  WhatsAppSendRequest,
+} from "../../../src/types/whatsapp.types.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -10,6 +13,21 @@ const corsHeaders = {
 };
 
 const OPENAI_WHISPER_API_URL = "https://api.openai.com/v1/audio/transcriptions";
+const OPENAI_API_URL = "https://api.openai.com/v1/chat/completions";
+
+interface TemplateField {
+  name: string;
+  label: string;
+  type: string;
+  required: boolean;
+}
+
+interface UserTemplate {
+  id: string;
+  user_id: string;
+  name: string;
+  fields: TemplateField[];
+}
 
 function getWhatsAppConfig() {
   return {
@@ -17,11 +35,16 @@ function getWhatsAppConfig() {
     phoneNumberId: Deno.env.get("WHATSAPP_PHONE_NUMBER_ID"),
     apiVersion: Deno.env.get("WHATSAPP_API_VERSION") || "v24.0",
     openaiApiKey: Deno.env.get("OPENAI_API_KEY"),
-    templateName: Deno.env.get("WHATSAPP_TRANSCRIPT_TEMPLATE_NAME") || "sales_report_transcript",
+    templateName:
+      Deno.env.get("WHATSAPP_TRANSCRIPT_TEMPLATE_NAME") ||
+      "sales_report_transcript",
   };
 }
 
-async function verifyWebhookSignature(payload: string, signature: string | null): Promise<boolean> {
+async function verifyWebhookSignature(
+  payload: string,
+  signature: string | null,
+): Promise<boolean> {
   if (!signature) {
     console.warn("⚠️ No X-Hub-Signature-256 header found");
     return false;
@@ -29,7 +52,9 @@ async function verifyWebhookSignature(payload: string, signature: string | null)
 
   const appSecret = Deno.env.get("WHATSAPP_APP_SECRET");
   if (!appSecret) {
-    console.warn("WHATSAPP_APP_SECRET not configured - skipping signature verification");
+    console.warn(
+      "WHATSAPP_APP_SECRET not configured - skipping signature verification",
+    );
     return true;
   }
 
@@ -42,17 +67,19 @@ async function verifyWebhookSignature(payload: string, signature: string | null)
       encoder.encode(appSecret),
       { name: "HMAC", hash: "SHA-256" },
       false,
-      ["sign"]
+      ["sign"],
     );
 
     const signatureBuffer = await crypto.subtle.sign(
       "HMAC",
       key,
-      encoder.encode(payload)
+      encoder.encode(payload),
     );
 
     const hashArray = Array.from(new Uint8Array(signatureBuffer));
-    const expectedHash = hashArray.map(b => b.toString(16).padStart(2, "0")).join("");
+    const expectedHash = hashArray
+      .map((b) => b.toString(16).padStart(2, "0"))
+      .join("");
 
     const isValid = signatureHash === expectedHash;
     if (!isValid) {
@@ -65,15 +92,169 @@ async function verifyWebhookSignature(payload: string, signature: string | null)
   }
 }
 
-
 function normalizePhoneNumber(phoneNumber: string): string {
   if (!phoneNumber) return phoneNumber;
-  return phoneNumber.startsWith('+') ? phoneNumber : `+${phoneNumber}`;
+  return phoneNumber.startsWith("+") ? phoneNumber : `+${phoneNumber}`;
 }
 
+// Helper function to extract fields from transcript using GPT
+async function extractFieldsWithGPT(
+  transcript: string,
+  templateFields: TemplateField[],
+  openaiApiKey: string,
+): Promise<Record<string, any> | null> {
+  try {
+    const fieldsDescription = templateFields
+      .map(
+        (field) =>
+          `- ${field.name} (${field.type}${field.required ? ", required" : ", optional"})`,
+      )
+      .join("\n");
+
+    const systemPrompt = `You are a helpful assistant that extracts structured data from voice transcripts. 
+Given a transcript and a list of template fields, extract the relevant information and fill in the template fields.
+Return ONLY a valid JSON object with field names as keys and extracted values as values.
+
+IMPORTANT: For fields marked as "required":
+- If the information is clearly present in the transcript, extract it accurately
+- If the information is NOT in the transcript or unclear, return null for that field
+
+For fields marked as "optional":
+- Extract the value if present
+- Return null if not present or unclear
+
+Be accurate and only extract information that is clearly stated in the transcript.`;
+
+    const userPrompt = `Transcript:
+${transcript}
+
+Template Fields:
+${fieldsDescription}
+
+Extract and fill all template fields from the transcript. Return a JSON object with field names as keys.`;
+
+    const gptResponse = await fetch(OPENAI_API_URL, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${openaiApiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: Deno.env.get("OPENAI_GPT_MODEL") || "gpt-4o-mini",
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userPrompt },
+        ],
+        temperature: 0.3,
+        response_format: { type: "json_object" },
+      }),
+    });
+
+    if (!gptResponse.ok) {
+      const errorText = await gptResponse.text();
+      console.error("GPT API error:", errorText);
+      return null;
+    }
+
+    const gptResult = await gptResponse.json();
+    const content = gptResult.choices?.[0]?.message?.content;
+
+    if (!content) {
+      console.error("No content in GPT response");
+      return null;
+    }
+
+    try {
+      return JSON.parse(content);
+    } catch (parseError) {
+      console.error("Failed to parse GPT response:", content);
+      return null;
+    }
+  } catch (error) {
+    console.error("Error calling GPT API:", error);
+    return null;
+  }
+}
+
+// Helper function to identify missing required fields
+function identifyMissingRequiredFields(
+  filledData: Record<string, any>,
+  templateFields: TemplateField[],
+): TemplateField[] {
+  const missingFields: TemplateField[] = [];
+
+  for (const field of templateFields) {
+    if (field.required) {
+      const value = filledData[field.name];
+      // Check if value is null, undefined, empty string, or empty array
+      if (
+        value === null ||
+        value === undefined ||
+        (typeof value === "string" && value.trim() === "") ||
+        (Array.isArray(value) && value.length === 0)
+      ) {
+        missingFields.push(field);
+      }
+    }
+  }
+
+  return missingFields;
+}
+
+// Helper function to build field collection message
+function buildFieldPromptMessage(field: TemplateField): string {
+  return `I need some more information. Please provide: ${field.label}`;
+}
+
+// Helper function to check if response is valid (not empty/unclear)
+function isValidFieldResponse(text: string): boolean {
+  if (!text || text.trim().length === 0) return false;
+
+  const unclearResponses = [
+    "i don't know",
+    "not sure",
+    "unclear",
+    "skip",
+    "pass",
+    "...",
+    "???",
+    "n/a",
+    "na",
+    "none",
+  ];
+
+  const lowerText = text.toLowerCase().trim();
+  return !unclearResponses.some((response) => lowerText.includes(response));
+}
+
+// Helper function to merge GPT extracted data with collected data
+function mergeFieldData(
+  gptData: Record<string, any>,
+  collectedData: Record<string, any>,
+): Record<string, any> {
+  return { ...gptData, ...collectedData };
+}
+
+// Helper function to build confirmation message
+function buildConfirmationMessage(
+  filledData: Record<string, any>,
+  templateFields: TemplateField[],
+): string {
+  let message = "Perfect! I've collected all the information. Here's your report:\n\n";
+
+  for (const field of templateFields) {
+    const value = filledData[field.name];
+    const displayValue = value !== null && value !== undefined && value !== ""
+      ? String(value)
+      : "(not provided)";
+    message += `${field.label}: ${displayValue}\n`;
+  }
+
+  message += "\nIs this correct?";
+  return message;
+}
 
 serve(async (req) => {
-
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
@@ -84,19 +265,21 @@ serve(async (req) => {
 
     const url = new URL(req.url);
 
-    const isWebhookVerification = url.searchParams.get("hub.mode") === "subscribe" &&
+    const isWebhookVerification =
+      url.searchParams.get("hub.mode") === "subscribe" &&
       url.searchParams.get("hub.verify_token");
     const isWhatsAppWebhook = req.method === "POST";
 
     if (!isWebhookVerification && !isWhatsAppWebhook && !authHeader) {
       return new Response(
         JSON.stringify({ error: "Missing Authorization header" }),
-        { status: 401, headers: corsHeaders }
+        { status: 401, headers: corsHeaders },
       );
     }
 
     if (req.method === "GET" && isWebhookVerification) {
-      const verifyToken = Deno.env.get("WHATSAPP_VERIFY_TOKEN") || "whatsapp_verify_token";
+      const verifyToken =
+        Deno.env.get("WHATSAPP_VERIFY_TOKEN") || "whatsapp_verify_token";
       const mode = url.searchParams.get("hub.mode");
       const token = url.searchParams.get("hub.verify_token");
       const challenge = url.searchParams.get("hub.challenge");
@@ -104,10 +287,10 @@ serve(async (req) => {
       if (mode === "subscribe" && token === verifyToken) {
         return new Response(challenge, { status: 200, headers: corsHeaders });
       } else {
-        return new Response(
-          JSON.stringify({ error: "Verification failed" }),
-          { status: 403, headers: corsHeaders }
-        );
+        return new Response(JSON.stringify({ error: "Verification failed" }), {
+          status: 403,
+          headers: corsHeaders,
+        });
       }
     }
 
@@ -118,10 +301,10 @@ serve(async (req) => {
 
       if (!isValidSignature && Deno.env.get("WHATSAPP_APP_SECRET")) {
         console.error("Webhook signature verification failed");
-        return new Response(
-          JSON.stringify({ error: "Invalid signature" }),
-          { status: 401, headers: corsHeaders }
-        );
+        return new Response(JSON.stringify({ error: "Invalid signature" }), {
+          status: 401,
+          headers: corsHeaders,
+        });
       }
 
       const body: WhatsAppWebhookRequest = JSON.parse(rawBody);
@@ -132,7 +315,13 @@ serve(async (req) => {
       console.log("-----------------------------------------");
 
       if (body.object === "whatsapp_business_account") {
-        const { accessToken, phoneNumberId, apiVersion, openaiApiKey, templateName } = getWhatsAppConfig();
+        const {
+          accessToken,
+          phoneNumberId,
+          apiVersion,
+          openaiApiKey,
+          templateName,
+        } = getWhatsAppConfig();
 
         if (!accessToken || !phoneNumberId) {
           console.error("ERROR: WhatsApp credentials not configured");
@@ -161,10 +350,13 @@ serve(async (req) => {
                 console.log(`MESSAGE RECEIVED from ${from}`);
                 console.log(`Type: ${messageType}`);
                 console.log(`Message ID: ${messageId}`);
-                if (message.text?.body) console.log(`Content: "${message.text.body}"`);
+                if (message.text?.body)
+                  console.log(`Content: "${message.text.body}"`);
 
                 const supabaseUrl = Deno.env.get("SUPABASE_URL");
-                const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+                const serviceRoleKey = Deno.env.get(
+                  "SUPABASE_SERVICE_ROLE_KEY",
+                );
                 let userId: string | null = null;
                 let effectiveManagerId: string | null = null;
                 let userName: string | null = null;
@@ -182,12 +374,13 @@ serve(async (req) => {
                 });
 
                 if (true) {
-
-                  const cleanPhone = from.replace(/\D/g, '');
+                  const cleanPhone = from.replace(/\D/g, "");
                   const { data: phoneMapping } = await adminClient
                     .from("phone_number_mappings")
                     .select("user_id")
-                    .or(`phone_number.eq."${cleanPhone}",phone_number.eq."+${cleanPhone}"`)
+                    .or(
+                      `phone_number.eq."${cleanPhone}",phone_number.eq."+${cleanPhone}"`,
+                    )
                     .maybeSingle();
 
                   userId = phoneMapping?.user_id || null;
@@ -196,19 +389,30 @@ serve(async (req) => {
                     const { data: profileByPhone } = await adminClient
                       .from("profiles")
                       .select("id, full_name")
-                      .or(`phone_number.eq."${cleanPhone}",phone_number.eq."+${cleanPhone}"`)
+                      .or(
+                        `phone_number.eq."${cleanPhone}",phone_number.eq."+${cleanPhone}"`,
+                      )
                       .maybeSingle();
 
                     if (profileByPhone) {
-                      console.log(`Found user in profiles table: ${profileByPhone.id}`);
+                      console.log(
+                        `Found user in profiles table: ${profileByPhone.id}`,
+                      );
                       userId = profileByPhone.id;
                       userName = profileByPhone.full_name;
                     }
                   }
 
                   if (!userId) {
-                    console.error("No user mapping found for phone number:", from);
-                    if (messageType !== "reaction" && accessToken && phoneNumberId) {
+                    console.error(
+                      "No user mapping found for phone number:",
+                      from,
+                    );
+                    if (
+                      messageType !== "reaction" &&
+                      accessToken &&
+                      phoneNumberId
+                    ) {
                       const notRegisteredPayload = {
                         messaging_product: "whatsapp",
                         recipient_type: "individual",
@@ -224,20 +428,25 @@ serve(async (req) => {
                           {
                             method: "POST",
                             headers: {
-                              "Authorization": `Bearer ${accessToken}`,
+                              Authorization: `Bearer ${accessToken}`,
                               "Content-Type": "application/json",
                             },
                             body: JSON.stringify(notRegisteredPayload),
-                          }
+                          },
                         );
-                      } catch (err) { console.error("Failed to send Not Registered reply:", err); }
+                      } catch (err) {
+                        console.error(
+                          "Failed to send Not Registered reply:",
+                          err,
+                        );
+                      }
                     }
                     continue;
                   }
 
                   const { data: profile } = await adminClient
                     .from("profiles")
-                    .select("id, manager_id, role, full_name")
+                    .select("id, manager_id, role, full_name, template_id")
                     .eq("id", userId)
                     .single();
 
@@ -246,7 +455,11 @@ serve(async (req) => {
                   }
 
                   effectiveManagerId = userId;
-                  if (profile && profile.role !== 'manager' && profile.manager_id) {
+                  if (
+                    profile &&
+                    profile.role !== "manager" &&
+                    profile.manager_id
+                  ) {
                     effectiveManagerId = profile.manager_id;
                   }
 
@@ -258,8 +471,14 @@ serve(async (req) => {
                     .maybeSingle();
 
                   if (!subscription) {
-                    console.error(`Manager (${effectiveManagerId}) has no active subscription.`);
-                    if (messageType !== "reaction" && accessToken && phoneNumberId) {
+                    console.error(
+                      `Manager (${effectiveManagerId}) has no active subscription.`,
+                    );
+                    if (
+                      messageType !== "reaction" &&
+                      accessToken &&
+                      phoneNumberId
+                    ) {
                       const subErrorPayload = {
                         messaging_product: "whatsapp",
                         recipient_type: "individual",
@@ -275,317 +494,1232 @@ serve(async (req) => {
                           {
                             method: "POST",
                             headers: {
-                              "Authorization": `Bearer ${accessToken}`,
+                              Authorization: `Bearer ${accessToken}`,
                               "Content-Type": "application/json",
                             },
                             body: JSON.stringify(subErrorPayload),
-                          }
+                          },
                         );
-                      } catch (err) { console.error("Failed to send Subscription Error reply:", err); }
+                      } catch (err) {
+                        console.error(
+                          "Failed to send Subscription Error reply:",
+                          err,
+                        );
+                      }
                     }
                     continue;
                   }
-                }
 
-                if (messageType === "audio" || messageType === "voice") {
-                  console.log("🎙️ Processing voice message...");
-                  const audioId = message.audio?.id || message.voice?.id;
-                  const mimeType = message.audio?.mime_type || message.voice?.mime_type || "audio/ogg";
+                  // Handle text messages for field collection
+                  if (messageType === "text") {
+                    const textBody = message.text?.body || "";
+                    console.log("Received text message:", textBody);
 
-                  if (audioId && openaiApiKey) {
-                    try {
-                      const mediaUrl = `https://graph.facebook.com/${apiVersion}/${audioId}`;
-                      const mediaResponse = await fetch(mediaUrl, {
-                        headers: {
-                          "Authorization": `Bearer ${accessToken}`,
-                        },
-                      });
+                    // Check if user has an active conversation in collecting_fields state
+                    const { data: activeTranscript } = await adminClient
+                      .from("voice_transcripts")
+                      .select("*")
+                      .eq("phone_number", from)
+                      .eq("conversation_state", "collecting_fields")
+                      .order("created_at", { ascending: false })
+                      .limit(1)
+                      .maybeSingle();
 
-                      if (!mediaResponse.ok) {
-                        const errorText = await mediaResponse.text();
-                        console.error("Failed to get media URL:", errorText);
-                        continue;
-                      }
-
-                      const mediaData = await mediaResponse.json();
-                      const downloadUrl = mediaData.url;
-
-                      if (!downloadUrl) {
-                        console.error("No download URL in media response:", mediaData);
-                        continue;
-                      }
-
-                      const audioResponse = await fetch(downloadUrl, {
-                        headers: {
-                          "Authorization": `Bearer ${accessToken}`,
-                        },
-                      });
-
-                      if (!audioResponse.ok) {
-                        const errorText = await audioResponse.text();
-                        console.error("Failed to download audio file:", errorText);
-                        continue;
-                      }
-
-                      const audioBlob = await audioResponse.blob();
-                      const audioBuffer = await audioBlob.arrayBuffer();
-
-                      const formData = new FormData();
-                      let fileExtension = "ogg";
-                      if (mimeType.includes("mpeg") || mimeType.includes("mp3")) {
-                        fileExtension = "mp3";
-                      } else if (mimeType.includes("wav")) {
-                        fileExtension = "wav";
-                      } else if (mimeType.includes("webm")) {
-                        fileExtension = "webm";
-                      }
-
-                      const audioFile = new Blob([audioBuffer], { type: mimeType });
-                      formData.append("file", audioFile, `audio.${fileExtension}`);
-                      formData.append("model", "whisper-1");
-
-                      const whisperResponse = await fetch(OPENAI_WHISPER_API_URL, {
-                        method: "POST",
-                        headers: {
-                          "Authorization": `Bearer ${openaiApiKey}`,
-                        },
-                        body: formData,
-                      });
-
-                      if (!whisperResponse.ok) {
-                        const errorText = await whisperResponse.text();
-                        console.error("Whisper API error:", errorText);
-                        continue;
-                      }
-
-                      const transcriptionResult = await whisperResponse.json();
-                      let transcript = transcriptionResult.text;
-
-                      if (!transcript || transcript.trim().length === 0) {
-                        console.warn("Empty transcript received from Whisper API");
-                        transcript = "Sorry, I couldn't transcribe the audio. Please try again.";
-                      }
-
-                      console.log("Transcription result:", transcript);
-
-                      const maxLength = 4000;
-                      if (transcript.length > maxLength) {
-                        transcript = transcript.substring(0, maxLength) + "...\n\n[Transcript truncated due to length]";
-                      }
-
-                      if (!from || !from.match(/^\+?[1-9]\d{1,14}$/)) {
-                        console.error("Invalid phone number format:", from);
-                        continue;
-                      }
-
-                      if (!accessToken || !phoneNumberId) {
-                        console.error("Missing WhatsApp credentials when trying to send transcript");
-                        continue;
-                      }
-
-                      console.log(`User verified: ${userId}, Manager: ${effectiveManagerId}`);
-
-                      const { data: transcriptRecord, error: insertError } = await adminClient
-                        .from("voice_transcripts")
-                        .insert({
-                          phone_number: from,
-                          transcript: transcript,
-                          status: "pending",
-                          user_id: userId,
-                        })
-                        .select()
-                        .single();
-
-                      if (insertError) {
-                        console.error("Failed to store transcript:", insertError);
-                      } else {
-                        console.log("Transcript stored successfully with user_id:", userId);
-                      }
-
-                      const maxTranscriptLength = 1000;
-                      const truncatedTranscript = transcript.length > maxTranscriptLength
-                        ? transcript.substring(0, maxTranscriptLength) + "..."
-                        : transcript;
-
-                      const templatePayload = {
-                        messaging_product: "whatsapp",
-                        recipient_type: "individual",
-                        to: normalizePhoneNumber(from),
-                        type: "template",
-                        template: {
-                          name: templateName,
-                          language: {
-                            code: "en_US",
-                          },
-                          components: [
-                            {
-                              type: "body",
-                              parameters: [
-                                {
-                                  type: "text",
-                                  text: truncatedTranscript,
-                                },
-                              ],
-                            },
-                          ],
-                        },
-                      };
-
-                      console.log("Sending template transcript message to:", from, "using template:", templateName);
-
-                      const sendResponse = await fetch(
-                        `https://graph.facebook.com/${apiVersion}/${phoneNumberId}/messages`,
-                        {
-                          method: "POST",
-                          headers: {
-                            "Authorization": `Bearer ${accessToken}`,
-                            "Content-Type": "application/json",
-                          },
-                          body: JSON.stringify(templatePayload),
-                        }
+                    if (activeTranscript) {
+                      console.log(
+                        "Found active conversation in collecting_fields state:",
+                        activeTranscript.id,
                       );
 
-                      const sendResult = await sendResponse.json();
+                      // Get the template
+                      const { data: template } = await adminClient
+                        .from("user_templates")
+                        .select("*")
+                        .eq("id", activeTranscript.template_id)
+                        .single();
 
-                      if (!sendResponse.ok) {
-                        console.error("Failed to send template transcript message:", {
-                          status: sendResponse.status,
-                          statusText: sendResponse.statusText,
-                          error: sendResult,
-                          phoneNumber: from,
-                        });
+                      if (!template) {
+                        console.error("Template not found for transcript");
+                        continue;
+                      }
 
-                        const textPayload = {
+                      const missingFields: TemplateField[] =
+                        activeTranscript.missing_required_fields || [];
+                      const currentIndex =
+                        activeTranscript.current_field_index || 0;
+
+                      if (currentIndex < missingFields.length) {
+                        const currentField = missingFields[currentIndex];
+
+                        // Check if response is valid
+                        if (!isValidFieldResponse(textBody)) {
+                          console.log("Invalid field response, re-asking");
+                          const reaskPayload = {
+                            messaging_product: "whatsapp",
+                            recipient_type: "individual",
+                            to: normalizePhoneNumber(from),
+                            type: "text",
+                            text: {
+                              body: `I didn't catch that. Please provide ${currentField.label} again.`,
+                            },
+                          };
+                          await fetch(
+                            `https://graph.facebook.com/${apiVersion}/${phoneNumberId}/messages`,
+                            {
+                              method: "POST",
+                              headers: {
+                                Authorization: `Bearer ${accessToken}`,
+                                "Content-Type": "application/json",
+                              },
+                              body: JSON.stringify(reaskPayload),
+                            },
+                          );
+                          continue;
+                        }
+
+                        // Store the collected data
+                        const collectedData =
+                          activeTranscript.collected_data || {};
+                        collectedData[currentField.name] = textBody.trim();
+
+                        const nextIndex = currentIndex + 1;
+
+                        if (nextIndex < missingFields.length) {
+                          // Ask for next field
+                          const nextField = missingFields[nextIndex];
+                          const nextPrompt = buildFieldPromptMessage(nextField);
+
+                          await adminClient
+                            .from("voice_transcripts")
+                            .update({
+                              collected_data: collectedData,
+                              current_field_index: nextIndex,
+                            })
+                            .eq("id", activeTranscript.id);
+
+                          const promptPayload = {
+                            messaging_product: "whatsapp",
+                            recipient_type: "individual",
+                            to: normalizePhoneNumber(from),
+                            type: "text",
+                            text: {
+                              body: `Thank you! ${nextPrompt}`,
+                            },
+                          };
+                          await fetch(
+                            `https://graph.facebook.com/${apiVersion}/${phoneNumberId}/messages`,
+                            {
+                              method: "POST",
+                              headers: {
+                                Authorization: `Bearer ${accessToken}`,
+                                "Content-Type": "application/json",
+                              },
+                              body: JSON.stringify(promptPayload),
+                            },
+                          );
+                        } else {
+                          // All fields collected, merge data and send confirmation
+                          const gptData = activeTranscript.filled_data || {};
+                          const mergedData = mergeFieldData(gptData, collectedData);
+
+                          await adminClient
+                            .from("voice_transcripts")
+                            .update({
+                              conversation_state: "awaiting_confirmation",
+                              collected_data: collectedData,
+                              filled_data: mergedData,
+                              current_field_index: nextIndex,
+                            })
+                            .eq("id", activeTranscript.id);
+
+                          // Build confirmation message
+                          const confirmationMessage = buildConfirmationMessage(
+                            mergedData,
+                            template.fields,
+                          );
+
+                          const interactivePayload = {
+                            messaging_product: "whatsapp",
+                            recipient_type: "individual",
+                            to: normalizePhoneNumber(from),
+                            type: "interactive",
+                            interactive: {
+                              type: "button",
+                              body: {
+                                text: confirmationMessage,
+                              },
+                              action: {
+                                buttons: [
+                                  {
+                                    type: "reply",
+                                    reply: {
+                                      id: "Confirm",
+                                      title: "Confirm",
+                                    },
+                                  },
+                                  {
+                                    type: "reply",
+                                    reply: {
+                                      id: "Retake",
+                                      title: "Retake",
+                                    },
+                                  },
+                                ],
+                              },
+                            },
+                          };
+
+                          await fetch(
+                            `https://graph.facebook.com/${apiVersion}/${phoneNumberId}/messages`,
+                            {
+                              method: "POST",
+                              headers: {
+                                Authorization: `Bearer ${accessToken}`,
+                                "Content-Type": "application/json",
+                              },
+                              body: JSON.stringify(interactivePayload),
+                            },
+                          );
+
+                          console.log(
+                            "All fields collected, sent confirmation message",
+                          );
+                        }
+                        continue;
+                      }
+                    }
+
+                    // No active field collection, send default message
+                    if (accessToken && phoneNumberId) {
+                      try {
+                        const responsePayload = {
                           messaging_product: "whatsapp",
                           recipient_type: "individual",
                           to: normalizePhoneNumber(from),
                           type: "text",
                           text: {
-                            body: `Transcript:\n\n${transcript}`,
+                            body: `👋 Hi! I received your message: "${textBody}".\n\nI am currently configured to process voice messages. Please send me a voice note to test transcription! 🎤`,
                           },
                         };
 
-                        const fallbackResponse = await fetch(
+                        await fetch(
                           `https://graph.facebook.com/${apiVersion}/${phoneNumberId}/messages`,
                           {
                             method: "POST",
                             headers: {
-                              "Authorization": `Bearer ${accessToken}`,
+                              Authorization: `Bearer ${accessToken}`,
                               "Content-Type": "application/json",
                             },
-                            body: JSON.stringify(textPayload),
-                          }
+                            body: JSON.stringify(responsePayload),
+                          },
+                        );
+                      } catch (error) {
+                        console.error("Error sending text reply:", error);
+                      }
+                    }
+                    continue;
+                  }
+
+                  // Handle voice messages
+                  if (messageType === "audio" || messageType === "voice") {
+                    console.log("🎙️ Processing voice message...");
+                    const audioId = message.audio?.id || message.voice?.id;
+                    const mimeType =
+                      message.audio?.mime_type ||
+                      message.voice?.mime_type ||
+                      "audio/ogg";
+
+                    if (audioId && openaiApiKey) {
+                      try {
+                        const mediaUrl = `https://graph.facebook.com/${apiVersion}/${audioId}`;
+                        const mediaResponse = await fetch(mediaUrl, {
+                          headers: {
+                            Authorization: `Bearer ${accessToken}`,
+                          },
+                        });
+
+                        if (!mediaResponse.ok) {
+                          const errorText = await mediaResponse.text();
+                          console.error("Failed to get media URL:", errorText);
+                          continue;
+                        }
+
+                        const mediaData = await mediaResponse.json();
+                        const downloadUrl = mediaData.url;
+
+                        if (!downloadUrl) {
+                          console.error(
+                            "No download URL in media response:",
+                            mediaData,
+                          );
+                          continue;
+                        }
+
+                        const audioResponse = await fetch(downloadUrl, {
+                          headers: {
+                            Authorization: `Bearer ${accessToken}`,
+                          },
+                        });
+
+                        if (!audioResponse.ok) {
+                          const errorText = await audioResponse.text();
+                          console.error(
+                            "Failed to download audio file:",
+                            errorText,
+                          );
+                          continue;
+                        }
+
+                        const audioBlob = await audioResponse.blob();
+                        const audioBuffer = await audioBlob.arrayBuffer();
+
+                        const formData = new FormData();
+                        let fileExtension = "ogg";
+                        if (
+                          mimeType.includes("mpeg") ||
+                          mimeType.includes("mp3")
+                        ) {
+                          fileExtension = "mp3";
+                        } else if (mimeType.includes("wav")) {
+                          fileExtension = "wav";
+                        } else if (mimeType.includes("webm")) {
+                          fileExtension = "webm";
+                        }
+
+                        const audioFile = new Blob([audioBuffer], {
+                          type: mimeType,
+                        });
+                        formData.append(
+                          "file",
+                          audioFile,
+                          `audio.${fileExtension}`,
+                        );
+                        formData.append("model", "whisper-1");
+
+                        const whisperResponse = await fetch(
+                          OPENAI_WHISPER_API_URL,
+                          {
+                            method: "POST",
+                            headers: {
+                              Authorization: `Bearer ${openaiApiKey}`,
+                            },
+                            body: formData,
+                          },
                         );
 
-                        if (!fallbackResponse.ok) {
-                          const errorDetails = sendResult?.error || sendResult;
-                          console.error("WhatsApp API Error Details:", JSON.stringify(errorDetails, null, 2));
+                        if (!whisperResponse.ok) {
+                          const errorText = await whisperResponse.text();
+                          console.error("Whisper API error:", errorText);
+                          continue;
                         }
-                      } else {
-                        console.log("Template transcript sent successfully:", {
-                          messageId: sendResult.messages?.[0]?.id,
-                          phoneNumber: from,
-                        });
+
+                        const transcriptionResult =
+                          await whisperResponse.json();
+                        let transcript = transcriptionResult.text;
+
+                        if (!transcript || transcript.trim().length === 0) {
+                          console.warn(
+                            "Empty transcript received from Whisper API",
+                          );
+                          transcript =
+                            "Sorry, I couldn't transcribe the audio. Please try again.";
+                        }
+
+                        console.log("Transcription result:", transcript);
+
+                        const maxLength = 4000;
+                        if (transcript.length > maxLength) {
+                          transcript =
+                            transcript.substring(0, maxLength) +
+                            "...\n\n[Transcript truncated due to length]";
+                        }
+
+                        if (!from || !from.match(/^\+?[1-9]\d{1,14}$/)) {
+                          console.error("Invalid phone number format:", from);
+                          continue;
+                        }
+
+                        if (!accessToken || !phoneNumberId) {
+                          console.error(
+                            "Missing WhatsApp credentials when trying to send transcript",
+                          );
+                          continue;
+                        }
+
+                        console.log(
+                          `User verified: ${userId}, Manager: ${effectiveManagerId}`,
+                        );
+
+                        // Check if there's an ongoing conversation in collecting_fields state
+                        const { data: ongoingConversation } = await adminClient
+                          .from("voice_transcripts")
+                          .select("*")
+                          .eq("phone_number", from)
+                          .eq("conversation_state", "collecting_fields")
+                          .order("created_at", { ascending: false })
+                          .limit(1)
+                          .maybeSingle();
+
+                        if (ongoingConversation) {
+                          console.log(
+                            "Found ongoing conversation, merging transcripts",
+                            ongoingConversation.id,
+                          );
+
+                          // Get the template
+                          const { data: template } = await adminClient
+                            .from("user_templates")
+                            .select("*")
+                            .eq("id", ongoingConversation.template_id)
+                            .single();
+
+                          if (!template) {
+                            console.error("Template not found for ongoing conversation");
+                            continue;
+                          }
+
+                          // Merge transcripts
+                          const mergedTranscript =
+                            `${ongoingConversation.transcript}\n\n[Additional Voice Message]\n${transcript}`;
+
+                          console.log("Merged transcript:", mergedTranscript);
+
+                          // Re-extract fields from merged transcript
+                          let filledData: Record<string, any> = {};
+                          if (
+                            openaiApiKey &&
+                            template.fields &&
+                            Array.isArray(template.fields)
+                          ) {
+                            filledData = await extractFieldsWithGPT(
+                              mergedTranscript,
+                              template.fields,
+                              openaiApiKey,
+                            ) || {};
+                          }
+
+                          console.log("Re-extracted fields after merge:", filledData);
+
+                          // Merge with already collected data
+                          const collectedData =
+                            ongoingConversation.collected_data || {};
+                          const mergedFilledData = {
+                            ...filledData,
+                            ...collectedData,
+                          };
+
+                          // Check if we still have missing required fields
+                          const currentMissingFields =
+                            identifyMissingRequiredFields(
+                              mergedFilledData,
+                              template.fields,
+                            );
+
+                          // Filter out fields already collected via text
+                          const missingFields = currentMissingFields.filter(
+                            (field) => !(field.name in collectedData),
+                          );
+
+                          console.log(
+                            "Missing fields after merge:",
+                            missingFields.map((f) => f.name),
+                          );
+
+                          // Update the existing record
+                          if (missingFields.length === 0) {
+                            // All fields collected, move to confirmation
+                            await adminClient
+                              .from("voice_transcripts")
+                              .update({
+                                transcript: mergedTranscript,
+                                filled_data: mergedFilledData,
+                                conversation_state: "awaiting_confirmation",
+                                missing_required_fields: [],
+                                current_field_index: 0,
+                              })
+                              .eq("id", ongoingConversation.id);
+
+                            // Send confirmation message
+                            const confirmationMessage = buildConfirmationMessage(
+                              mergedFilledData,
+                              template.fields,
+                            );
+
+                            const interactivePayload = {
+                              messaging_product: "whatsapp",
+                              recipient_type: "individual",
+                              to: normalizePhoneNumber(from),
+                              type: "interactive",
+                              interactive: {
+                                type: "button",
+                                body: {
+                                  text: confirmationMessage,
+                                },
+                                action: {
+                                  buttons: [
+                                    {
+                                      type: "reply",
+                                      reply: {
+                                        id: "Confirm",
+                                        title: "Confirm",
+                                      },
+                                    },
+                                    {
+                                      type: "reply",
+                                      reply: {
+                                        id: "Retake",
+                                        title: "Retake",
+                                      },
+                                    },
+                                  ],
+                                },
+                              },
+                            };
+
+                            await fetch(
+                              `https://graph.facebook.com/${apiVersion}/${phoneNumberId}/messages`,
+                              {
+                                method: "POST",
+                                headers: {
+                                  Authorization: `Bearer ${accessToken}`,
+                                  "Content-Type": "application/json",
+                                },
+                                body: JSON.stringify(interactivePayload),
+                              },
+                            );
+
+                            console.log(
+                              "All fields collected via voice merge, sent confirmation",
+                            );
+                          } else {
+                            // Still missing fields, continue collection
+                            const currentIndex =
+                              ongoingConversation.current_field_index || 0;
+                            const nextFieldIndex = Math.min(
+                              currentIndex,
+                              missingFields.length - 1,
+                            );
+
+                            await adminClient
+                              .from("voice_transcripts")
+                              .update({
+                                transcript: mergedTranscript,
+                                filled_data: mergedFilledData,
+                                missing_required_fields: missingFields,
+                                current_field_index: nextFieldIndex,
+                              })
+                              .eq("id", ongoingConversation.id);
+
+                            // Ask for the current missing field
+                            const currentField = missingFields[nextFieldIndex];
+                            const promptMessage = buildFieldPromptMessage(
+                              currentField,
+                            );
+
+                            const fieldPromptPayload = {
+                              messaging_product: "whatsapp",
+                              recipient_type: "individual",
+                              to: normalizePhoneNumber(from),
+                              type: "text",
+                              text: {
+                                body: `✓ Additional voice message received!\n\n${promptMessage}`,
+                              },
+                            };
+
+                            await fetch(
+                              `https://graph.facebook.com/${apiVersion}/${phoneNumberId}/messages`,
+                              {
+                                method: "POST",
+                                headers: {
+                                  Authorization: `Bearer ${accessToken}`,
+                                  "Content-Type": "application/json",
+                                },
+                                body: JSON.stringify(fieldPromptPayload),
+                              },
+                            );
+
+                            console.log(
+                              "Still missing fields after voice merge, continuing collection",
+                            );
+                          }
+                          continue;
+                        }
+
+                        // No ongoing conversation - create new transcript record
+                        // Get the user's assigned template or fall back to default
+                        let activeTemplate: UserTemplate | null = null;
+
+                        if (profile?.template_id) {
+                          const { data: assignedTemplate } = await adminClient
+                            .from("user_templates")
+                            .select("*")
+                            .eq("id", profile.template_id)
+                            .single();
+                          activeTemplate = assignedTemplate;
+                        }
+
+                        if (!activeTemplate) {
+                          const { data: defaultTemplate } = await adminClient
+                            .from("user_templates")
+                            .select("*")
+                            .eq("user_id", effectiveManagerId)
+                            .eq("is_default", true)
+                            .maybeSingle();
+                          activeTemplate = defaultTemplate;
+                        }
+
+                        if (!activeTemplate) {
+                          console.log(
+                            "No template found for user. Using fallback template.",
+                          );
+                          activeTemplate = {
+                            id: null as any,
+                            user_id: effectiveManagerId as any,
+                            name: "Standard Sales Report",
+                            fields: [
+                              {
+                                name: "Summary",
+                                label: "Summary",
+                                type: "textarea",
+                                required: true,
+                              },
+                            ],
+                          };
+                        } else {
+                          console.log(
+                            `Using template: ${activeTemplate.name} (${activeTemplate.id})`,
+                          );
+                        }
+
+                        // Extract fields from transcript using GPT
+                        let filledData: Record<string, any> = {};
+                        if (
+                          openaiApiKey &&
+                          activeTemplate &&
+                          activeTemplate.fields &&
+                          Array.isArray(activeTemplate.fields)
+                        ) {
+                          filledData = await extractFieldsWithGPT(
+                            transcript,
+                            activeTemplate.fields,
+                            openaiApiKey,
+                          ) || {};
+                        }
+
+                        console.log("GPT extracted fields:", filledData);
+
+                        // Identify missing required fields
+                        const missingFields = identifyMissingRequiredFields(
+                          filledData,
+                          activeTemplate.fields,
+                        );
+
+                        console.log(
+                          "Missing required fields:",
+                          missingFields.map((f) => f.name),
+                        );
+
+                        // Store transcript with conversation state
+                        let conversationState = "awaiting_confirmation";
+                        let currentFieldIndex = 0;
+
+                        if (missingFields.length > 0) {
+                          conversationState = "collecting_fields";
+                          currentFieldIndex = 0;
+                        }
+
+                        const { data: transcriptRecord, error: insertError } =
+                          await adminClient
+                            .from("voice_transcripts")
+                            .insert({
+                              phone_number: from,
+                              transcript: transcript,
+                              status: "pending",
+                              user_id: userId,
+                              template_id: activeTemplate.id,
+                              filled_data: filledData,
+                              conversation_state: conversationState,
+                              missing_required_fields: missingFields,
+                              collected_data: {},
+                              current_field_index: currentFieldIndex,
+                            })
+                            .select()
+                            .single();
+
+                        if (insertError) {
+                          console.error(
+                            "Failed to store transcript:",
+                            insertError,
+                          );
+                        } else {
+                          console.log(
+                            "Transcript stored successfully with user_id:",
+                            userId,
+                          );
+                        }
+
+                        // Send appropriate response based on conversation state
+                        if (conversationState === "collecting_fields") {
+                          // Ask for first missing field
+                          const firstField = missingFields[0];
+                          const promptMessage = buildFieldPromptMessage(
+                            firstField,
+                          );
+
+                          const fieldPromptPayload = {
+                            messaging_product: "whatsapp",
+                            recipient_type: "individual",
+                            to: normalizePhoneNumber(from),
+                            type: "text",
+                            text: {
+                              body: `✓ Transcript received!\n\n${promptMessage}`,
+                            },
+                          };
+
+                          await fetch(
+                            `https://graph.facebook.com/${apiVersion}/${phoneNumberId}/messages`,
+                            {
+                              method: "POST",
+                              headers: {
+                                Authorization: `Bearer ${accessToken}`,
+                                "Content-Type": "application/json",
+                              },
+                              body: JSON.stringify(fieldPromptPayload),
+                            },
+                          );
+
+                          console.log(
+                            "Sent field collection prompt for:",
+                            firstField.name,
+                          );
+                        } else {
+                          // Send confirmation message directly
+                          const confirmationMessage = buildConfirmationMessage(
+                            filledData,
+                            activeTemplate.fields,
+                          );
+
+                          const interactivePayload = {
+                            messaging_product: "whatsapp",
+                            recipient_type: "individual",
+                            to: normalizePhoneNumber(from),
+                            type: "interactive",
+                            interactive: {
+                              type: "button",
+                              body: {
+                                text: confirmationMessage,
+                              },
+                              action: {
+                                buttons: [
+                                  {
+                                    type: "reply",
+                                    reply: {
+                                      id: "Confirm",
+                                      title: "Confirm",
+                                    },
+                                  },
+                                  {
+                                    type: "reply",
+                                    reply: {
+                                      id: "Retake",
+                                      title: "Retake",
+                                    },
+                                  },
+                                ],
+                              },
+                            },
+                          };
+
+                          await fetch(
+                            `https://graph.facebook.com/${apiVersion}/${phoneNumberId}/messages`,
+                            {
+                              method: "POST",
+                              headers: {
+                                Authorization: `Bearer ${accessToken}`,
+                                "Content-Type": "application/json",
+                              },
+                              body: JSON.stringify(interactivePayload),
+                            },
+                          );
+
+                          console.log(
+                            "Sent confirmation message (no missing fields)",
+                          );
+                        }
+                      } catch (error) {
+                        console.error("Error processing audio message:", error);
                       }
-                    } catch (error) {
-                      console.error("Error processing audio message:", error);
-                    }
-                  } else {
-                    console.warn("Audio message received but OpenAI API key not configured or audio ID missing");
-                  }
-                } else if (messageType === "text") {
-                  const textBody = message.text?.body || "";
-                  console.log("Received text message:", textBody);
-
-                  const { accessToken, phoneNumberId, apiVersion } = getWhatsAppConfig();
-
-                  if (accessToken && phoneNumberId) {
-                    try {
-                      const responsePayload = {
-                        messaging_product: "whatsapp",
-                        recipient_type: "individual",
-                        to: normalizePhoneNumber(from),
-                        type: "text",
-                        text: {
-                          body: `👋 Hi! I received your message: "${textBody}".\n\nI am currently configured to process voice messages. Please send me a voice note to test transcription! 🎤`,
-                        },
-                      };
-
-                      await fetch(
-                        `https://graph.facebook.com/${apiVersion}/${phoneNumberId}/messages`,
-                        {
-                          method: "POST",
-                          headers: {
-                            "Authorization": `Bearer ${accessToken}`,
-                            "Content-Type": "application/json",
-                          },
-                          body: JSON.stringify(responsePayload),
-                        }
+                    } else {
+                      console.warn(
+                        "Audio message received but OpenAI API key not configured or audio ID missing",
                       );
-                    } catch (error) {
-                      console.error("Error sending text reply:", error);
                     }
-                  }
-                }
-
-                if (messageType === "interactive" || messageType === "button") {
-                  const buttonText = (message.interactive?.button_reply?.title || (message as any).button?.text || "").toLowerCase();
-                  const buttonId = message.interactive?.button_reply?.id || (message as any).button?.payload || "";
-
-                  console.log(`Button clicked: ${buttonText} (ID: ${buttonId})`);
-
-                  let action: "confirm" | "retake" | null = null;
-                  if (buttonId === "Confirm" || buttonText.includes("confirm")) {
-                    action = "confirm";
-                  } else if (buttonId === "Retake" || buttonText.includes("retake")) {
-                    action = "retake";
-                  }
-
-                  if (!action) {
-                    console.log("Unknown button clicked:", buttonText, buttonId);
-                    continue;
-                  }
-                  const { accessToken, phoneNumberId, apiVersion } = getWhatsAppConfig();
-                  const supabaseUrl = Deno.env.get("SUPABASE_URL");
-                  const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-
-                  if (!supabaseUrl || !serviceRoleKey) {
-                    console.error("Supabase configuration missing for interactive handler");
                     continue;
                   }
 
-                  if (!accessToken || !phoneNumberId) {
-                    console.error("WhatsApp credentials missing for interactive handler");
-                    continue;
-                  }
+                  // Handle interactive button responses
+                  if (messageType === "interactive" || messageType === "button") {
+                    const buttonText = (
+                      message.interactive?.button_reply?.title ||
+                      (message as any).button?.text ||
+                      ""
+                    ).toLowerCase();
+                    const buttonId =
+                      message.interactive?.button_reply?.id ||
+                      (message as any).button?.payload ||
+                      "";
 
-                  const adminClient = createClient(supabaseUrl, serviceRoleKey, {
-                    auth: {
-                      autoRefreshToken: false,
-                      persistSession: false,
-                    },
-                  });
+                    console.log(
+                      `Button clicked: ${buttonText} (ID: ${buttonId})`,
+                    );
 
-                  if (action === "confirm") {
-                    try {
-                      const { data: transcriptRecord, error: transcriptError } = await adminClient
-                        .from("voice_transcripts")
-                        .select("*")
-                        .eq("phone_number", from)
-                        .eq("status", "pending")
-                        .order("created_at", { ascending: false })
-                        .limit(1)
-                        .single();
+                    let action: "confirm" | "retake" | null = null;
+                    if (
+                      buttonId === "Confirm" ||
+                      buttonText.includes("confirm")
+                    ) {
+                      action = "confirm";
+                    } else if (
+                      buttonId === "Retake" ||
+                      buttonText.includes("retake")
+                    ) {
+                      action = "retake";
+                    }
 
-                      if (transcriptError || !transcriptRecord) {
-                        console.error("No pending transcript found for confirmation:", transcriptError);
-                        const errorPayload = {
+                    if (!action) {
+                      console.log(
+                        "Unknown button clicked:",
+                        buttonText,
+                        buttonId,
+                      );
+                      continue;
+                    }
+
+                    if (!accessToken || !phoneNumberId) {
+                      console.error(
+                        "WhatsApp credentials missing for interactive handler",
+                      );
+                      continue;
+                    }
+
+                    if (action === "confirm") {
+                      try {
+                        // Get the awaiting_confirmation transcript
+                        const { data: transcriptRecord, error: transcriptError } =
+                          await adminClient
+                            .from("voice_transcripts")
+                            .select("*")
+                            .eq("phone_number", from)
+                            .eq("conversation_state", "awaiting_confirmation")
+                            .order("created_at", { ascending: false })
+                            .limit(1)
+                            .maybeSingle();
+
+                        if (!transcriptRecord) {
+                          // Fallback to pending status for backwards compatibility
+                          const { data: pendingRecord } = await adminClient
+                            .from("voice_transcripts")
+                            .select("*")
+                            .eq("phone_number", from)
+                            .eq("status", "pending")
+                            .order("created_at", { ascending: false })
+                            .limit(1)
+                            .maybeSingle();
+
+                          if (!pendingRecord) {
+                            console.error(
+                              "No transcript found for confirmation",
+                            );
+                            const errorPayload = {
+                              messaging_product: "whatsapp",
+                              recipient_type: "individual",
+                              to: normalizePhoneNumber(from),
+                              type: "text",
+                              text: {
+                                body: "Sorry, I couldn't find your transcript. Please send a new voice message.",
+                              },
+                            };
+                            await fetch(
+                              `https://graph.facebook.com/${apiVersion}/${phoneNumberId}/messages`,
+                              {
+                                method: "POST",
+                                headers: {
+                                  Authorization: `Bearer ${accessToken}`,
+                                  "Content-Type": "application/json",
+                                },
+                                body: JSON.stringify(errorPayload),
+                              },
+                            );
+                            continue;
+                          }
+                        }
+
+                        const finalRecord = transcriptRecord;
+                        let userId = finalRecord.user_id;
+
+                        let effectiveManagerId = userId;
+                        const { data: profile } = await adminClient
+                          .from("profiles")
+                          .select(
+                            "id, manager_id, role, full_name, phone_number",
+                          )
+                          .eq("id", userId)
+                          .single();
+
+                        if (profile) {
+                          userName = profile.full_name;
+                        }
+
+                        if (
+                          profile &&
+                          profile.role !== "manager" &&
+                          profile.manager_id
+                        ) {
+                          effectiveManagerId = profile.manager_id;
+                        }
+
+                        // Get the template
+                        const { data: template } = await adminClient
+                          .from("user_templates")
+                          .select("*")
+                          .eq("id", finalRecord.template_id)
+                          .maybeSingle();
+
+                        const activeTemplate = template || {
+                          id: null,
+                          name: "Standard Sales Report",
+                          fields: [
+                            {
+                              name: "Summary",
+                              label: "Summary",
+                              type: "textarea",
+                              required: true,
+                            },
+                          ],
+                        };
+
+                        // Use the merged filled_data
+                        const filledData = finalRecord.filled_data || {};
+
+                        // Update transcript status
+                        await adminClient
+                          .from("voice_transcripts")
+                          .update({
+                            status: "confirmed",
+                            conversation_state: "confirmed",
+                          })
+                          .eq("id", finalRecord.id);
+
+                        console.log("Generating PDF...");
+                        const pdfDoc = await PDFDocument.create();
+                        const page = pdfDoc.addPage([612, 792]);
+                        const font = await pdfDoc.embedFont(
+                          StandardFonts.Helvetica,
+                        );
+                        const boldFont = await pdfDoc.embedFont(
+                          StandardFonts.HelveticaBold,
+                        );
+
+                        let yPosition = 750;
+                        const margin = 50;
+                        const pageWidth = 612;
+                        const pageHeight = 792;
+                        const lineHeight = 20;
+                        const sectionSpacing = 30;
+
+                        const addText = (
+                          text: string,
+                          x: number,
+                          y: number,
+                          size: number,
+                          fontType: any,
+                          maxWidth?: number,
+                          color?: any,
+                        ) => {
+                          const drawOptions: any = { x, size, font: fontType };
+                          if (color) drawOptions.color = color;
+
+                          // Replace newlines with spaces to avoid encoding issues
+                          const sanitizedText = text.replace(/\n/g, " ").replace(/\r/g, "").replace(/\t/g, " ");
+
+                          if (maxWidth) {
+                            const words = sanitizedText.split(" ").filter(word => word.length > 0);
+                            let line = "";
+                            let currentY = y;
+                            for (const word of words) {
+                              const testLine = line + (line ? " " : "") + word;
+                              const width = fontType.widthOfTextAtSize(
+                                testLine,
+                                size,
+                              );
+                              if (width > maxWidth && line) {
+                                page.drawText(line, {
+                                  ...drawOptions,
+                                  y: currentY,
+                                });
+                                line = word;
+                                currentY -= lineHeight;
+                              } else {
+                                line = testLine;
+                              }
+                            }
+                            if (line) {
+                              page.drawText(line, {
+                                ...drawOptions,
+                                y: currentY,
+                              });
+                              currentY -= lineHeight;
+                            }
+                            return currentY;
+                          } else {
+                            page.drawText(sanitizedText, { ...drawOptions, y });
+                            return y - lineHeight;
+                          }
+                        };
+
+                        page.drawRectangle({
+                          x: 0,
+                          y: pageHeight - 100,
+                          width: pageWidth,
+                          height: 100,
+                          color: rgb(0.1, 0.1, 0.1),
+                        });
+
+                        yPosition = pageHeight - 50;
+                        addText(
+                          "Sales Visit Report",
+                          margin,
+                          yPosition,
+                          24,
+                          boldFont,
+                          undefined,
+                          rgb(1, 1, 1),
+                        );
+                        yPosition -= 35;
+                        const dateStr = new Date().toLocaleString();
+                        addText(
+                          `Generated: ${dateStr}`,
+                          margin,
+                          yPosition,
+                          10,
+                          font,
+                          undefined,
+                          rgb(0.8, 0.8, 0.8),
+                        );
+
+                        yPosition = pageHeight - 130;
+
+                        yPosition = addText(
+                          "Sales Representative Details",
+                          margin,
+                          yPosition,
+                          14,
+                          boldFont,
+                          undefined,
+                          rgb(0, 0, 0),
+                        );
+                        yPosition -= 15;
+
+                        const repName = userName || "(Name not available)";
+                        const repPhone =
+                          profile?.phone_number || "(Phone not available)";
+
+                        addText("Name:", margin, yPosition, 11, boldFont);
+                        addText(repName, margin + 50, yPosition, 11, font);
+                        yPosition -= 20;
+                        addText("Phone:", margin, yPosition, 11, boldFont);
+                        addText(repPhone, margin + 50, yPosition, 11, font);
+                        yPosition -= sectionSpacing;
+
+                        yPosition = addText(
+                          `Template Used: ${activeTemplate.name}`,
+                          margin,
+                          yPosition,
+                          12,
+                          boldFont,
+                        );
+                        yPosition -= sectionSpacing;
+
+                        // Add filled data section
+                        if (filledData && Object.keys(filledData).length > 0) {
+                          yPosition = addText(
+                            "Report Details",
+                            margin,
+                            yPosition,
+                            14,
+                            boldFont,
+                          );
+                          page.drawLine({
+                            start: { x: margin, y: yPosition + 5 },
+                            end: { x: pageWidth - margin, y: yPosition + 5 },
+                            thickness: 1,
+                            color: rgb(0.8, 0.8, 0.8),
+                          });
+                          yPosition -= 15;
+
+                          // Map field names to labels for display
+                          const fieldLabelMap: Record<string, string> = {};
+                          if (activeTemplate.fields) {
+                            for (const field of activeTemplate.fields) {
+                              fieldLabelMap[field.name] = field.label;
+                            }
+                          }
+
+                          for (const [key, value] of Object.entries(filledData)) {
+                            const label = fieldLabelMap[key] ||
+                              key.charAt(0).toUpperCase() +
+                                key.slice(1).replace(/_/g, " ");
+                            const valStr = value !== null &&
+                                value !== undefined && String(value).trim() !== ""
+                              ? String(value)
+                              : "N/A";
+
+                            yPosition = addText(
+                              `${label}:`,
+                              margin,
+                              yPosition,
+                              11,
+                              boldFont,
+                            );
+                            yPosition = addText(
+                              valStr,
+                              margin + 20,
+                              yPosition,
+                              10,
+                              font,
+                              pageWidth - 2 * margin - 20,
+                            );
+                            yPosition -= 10;
+                          }
+
+                          yPosition -= sectionSpacing;
+                        }
+
+                        yPosition = addText(
+                          "Transcript",
+                          margin,
+                          yPosition,
+                          14,
+                          boldFont,
+                        );
+                        page.drawLine({
+                          start: { x: margin, y: yPosition + 5 },
+                          end: { x: pageWidth - margin, y: yPosition + 5 },
+                          thickness: 1,
+                          color: rgb(0.8, 0.8, 0.8),
+                        });
+                        yPosition -= 15;
+
+                        yPosition = addText(
+                          finalRecord.transcript,
+                          margin,
+                          yPosition,
+                          10,
+                          font,
+                          pageWidth - 2 * margin,
+                        );
+
+                        const pdfBytes = await pdfDoc.save();
+                        const pdfBlob = new Blob([pdfBytes], {
+                          type: "application/pdf",
+                        });
+                        const pdfFormData = new FormData();
+                        pdfFormData.append("file", pdfBlob, "transcript.pdf");
+                        pdfFormData.append("messaging_product", "whatsapp");
+
+                        console.log("Uploading PDF to WhatsApp...");
+                        const uploadResponse = await fetch(
+                          `https://graph.facebook.com/${apiVersion}/${phoneNumberId}/media`,
+                          {
+                            method: "POST",
+                            headers: {
+                              Authorization: `Bearer ${accessToken}`,
+                            },
+                            body: pdfFormData,
+                          },
+                        );
+
+                        const uploadResult = await uploadResponse.json();
+                        if (!uploadResponse.ok) {
+                          throw new Error(
+                            `Media Upload Failed: ${JSON.stringify(uploadResult)}`,
+                          );
+                        }
+
+                        const mediaId = uploadResult.id;
+                        console.log(`PDF Uploaded. Media ID: ${mediaId}`);
+
+                        const docPayload = {
+                          messaging_product: "whatsapp",
+                          recipient_type: "individual",
+                          to: normalizePhoneNumber(from),
+                          type: "document",
+                          document: {
+                            id: mediaId,
+                            caption:
+                              "Here is your processed transcript report. 📄",
+                            filename: "transcript_report.pdf",
+                          },
+                        };
+
+                        await fetch(
+                          `https://graph.facebook.com/${apiVersion}/${phoneNumberId}/messages`,
+                          {
+                            method: "POST",
+                            headers: {
+                              Authorization: `Bearer ${accessToken}`,
+                              "Content-Type": "application/json",
+                            },
+                            body: JSON.stringify(docPayload),
+                          },
+                        );
+
+                        console.log(
+                          "Transcript confirmed, PDF generated and sent:",
+                          {
+                            transcriptId: finalRecord.id,
+                            userId,
+                            phoneNumber: from,
+                          },
+                        );
+                      } catch (error) {
+                        console.error(
+                          "Error processing confirm button:",
+                          error,
+                        );
+                      }
+                    } else if (action === "retake") {
+                      try {
+                        // Find transcript in awaiting_confirmation or collecting_fields state
+                        const { data: transcriptRecord } = await adminClient
+                          .from("voice_transcripts")
+                          .select("id")
+                          .eq("phone_number", from)
+                          .in("conversation_state", [
+                            "awaiting_confirmation",
+                            "collecting_fields",
+                          ])
+                          .order("created_at", { ascending: false })
+                          .limit(1)
+                          .maybeSingle();
+
+                        if (transcriptRecord) {
+                          await adminClient
+                            .from("voice_transcripts")
+                            .update({
+                              status: "retaken",
+                              conversation_state: "retaken",
+                            })
+                            .eq("id", transcriptRecord.id);
+                        }
+
+                        const retakePayload = {
                           messaging_product: "whatsapp",
                           recipient_type: "individual",
                           to: normalizePhoneNumber(from),
                           type: "text",
                           text: {
-                            body: "Sorry, I couldn't find your transcript. Please send a new voice message.",
+                            body: "🔄 Please send a new voice message.",
                           },
                         };
                         await fetch(
@@ -593,330 +1727,17 @@ serve(async (req) => {
                           {
                             method: "POST",
                             headers: {
-                              "Authorization": `Bearer ${accessToken}`,
+                              Authorization: `Bearer ${accessToken}`,
                               "Content-Type": "application/json",
                             },
-                            body: JSON.stringify(errorPayload),
-                          }
+                            body: JSON.stringify(retakePayload),
+                          },
                         );
-                        continue;
+
+                        console.log("User requested retake:", from);
+                      } catch (error) {
+                        console.error("Error processing retake button:", error);
                       }
-
-                      let userId = transcriptRecord.user_id;
-
-                      let effectiveManagerId = userId;
-                      const { data: profile } = await adminClient
-                        .from("profiles")
-                        .select("id, manager_id, role, full_name, phone_number")
-                        .eq("id", userId)
-                        .single();
-
-                      if (profile) {
-                        userName = profile.full_name;
-                      }
-
-                      if (profile && profile.role !== 'manager' && profile.manager_id) {
-                        effectiveManagerId = profile.manager_id;
-                      }
-
-                      const { data: template } = await adminClient
-                        .from("user_templates")
-                        .select("*")
-                        .eq("user_id", effectiveManagerId)
-                        .eq("is_default", true)
-                        .maybeSingle();
-
-                      const activeTemplate = template || {
-                        id: null,
-                        name: "Standard Sales Report",
-                        fields: [
-                          { name: "Summary", type: "textarea", required: true }
-                        ]
-                      };
-
-                      if (!template) {
-                        console.log("No default template found for manager. Using Fallback Template.");
-                      } else {
-                        console.log(`Using template: ${template.name} (${template.id})`);
-                      }
-
-
-                      const openaiApiKey = Deno.env.get("OPENAI_API_KEY");
-                      let filledData = null;
-
-                      if (openaiApiKey && activeTemplate.fields && Array.isArray(activeTemplate.fields)) {
-                        try {
-                          const fieldsDescription = activeTemplate.fields
-                            .map(
-                              (field: any) =>
-                                `- ${field.name} (${field.type}${field.required ? ", required" : ", optional"})`
-                            )
-                            .join("\n");
-
-                          const systemPrompt = `You are a helpful assistant that extracts structured data from voice transcripts. 
-Given a transcript and a list of template fields, extract the relevant information and fill in the template fields.
-Return ONLY a valid JSON object with field names as keys and extracted values as values.
-If a field cannot be found in the transcript, use null for optional fields or make your best inference for required fields.
-Be accurate and only extract information that is clearly stated in the transcript.`;
-
-                          const userPrompt = `Transcript:
-${transcriptRecord.transcript}
-
-Template Fields:
-${fieldsDescription}
-
-Extract and fill all template fields from the transcript. Return a JSON object with field names as keys.`;
-
-                          const gptResponse = await fetch("https://api.openai.com/v1/chat/completions", {
-                            method: "POST",
-                            headers: {
-                              "Authorization": `Bearer ${openaiApiKey}`,
-                              "Content-Type": "application/json",
-                            },
-                            body: JSON.stringify({
-                              model: Deno.env.get("OPENAI_GPT_MODEL") || "gpt-4o-mini",
-                              messages: [
-                                { role: "system", content: systemPrompt },
-                                { role: "user", content: userPrompt },
-                              ],
-                              temperature: 0.3,
-                              response_format: { type: "json_object" },
-                            }),
-                          });
-
-                          if (gptResponse.ok) {
-                            const gptResult = await gptResponse.json();
-                            const content = gptResult.choices?.[0]?.message?.content;
-                            if (content) {
-                              try {
-                                filledData = JSON.parse(content);
-                              } catch (parseError) {
-                                console.error("Failed to parse GPT response:", content);
-                              }
-                            }
-                          } else {
-                            const errorText = await gptResponse.text();
-                            console.error("Failed to fill template with GPT:", errorText);
-                          }
-                        } catch (gptError) {
-                          console.error("Error calling GPT API:", gptError);
-                        }
-                      }
-
-                      await adminClient
-                        .from("voice_transcripts")
-                        .update({
-                          status: "confirmed",
-                          user_id: userId,
-                          template_id: template?.id || null,
-                          filled_data: filledData,
-                        })
-                        .eq("id", transcriptRecord.id);
-
-                      console.log("Generating PDF...");
-                      const pdfDoc = await PDFDocument.create();
-                      const page = pdfDoc.addPage([612, 792]);
-                      const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
-                      const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
-
-                      let yPosition = 750;
-                      const margin = 50;
-                      const pageWidth = 612;
-                      const pageHeight = 792;
-                      const lineHeight = 20;
-                      const sectionSpacing = 30;
-
-                      const addText = (text: string, x: number, y: number, size: number, fontType: any, maxWidth?: number, color?: any) => {
-                        const drawOptions: any = { x, size, font: fontType };
-                        if (color) drawOptions.color = color;
-
-                        if (maxWidth) {
-                          const words = text.split(" ");
-                          let line = "";
-                          let currentY = y;
-                          for (const word of words) {
-                            const testLine = line + (line ? " " : "") + word;
-                            const width = fontType.widthOfTextAtSize(testLine, size);
-                            if (width > maxWidth && line) {
-                              page.drawText(line, { ...drawOptions, y: currentY });
-                              line = word;
-                              currentY -= lineHeight;
-                            } else {
-                              line = testLine;
-                            }
-                          }
-                          if (line) {
-                            page.drawText(line, { ...drawOptions, y: currentY });
-                            currentY -= lineHeight;
-                          }
-                          return currentY;
-                        } else {
-                          page.drawText(text, { ...drawOptions, y });
-                          return y - lineHeight;
-                        }
-                      };
-
-                      page.drawRectangle({
-                        x: 0,
-                        y: pageHeight - 100,
-                        width: pageWidth,
-                        height: 100,
-                        color: rgb(0.1, 0.1, 0.1),
-                      });
-
-                      yPosition = pageHeight - 50;
-                      addText("Sales Visit Report", margin, yPosition, 24, boldFont, undefined, rgb(1, 1, 1));
-                      yPosition -= 35;
-                      const dateStr = new Date().toLocaleString();
-                      addText(`Generated: ${dateStr}`, margin, yPosition, 10, font, undefined, rgb(0.8, 0.8, 0.8));
-
-                      yPosition = pageHeight - 130;
-
-                      yPosition = addText("Sales Representative Details", margin, yPosition, 14, boldFont, undefined, rgb(0, 0, 0));
-                      yPosition -= 15;
-
-                      const repName = userName || "(Name not available)";
-                      const repPhone = profile?.phone_number || "(Phone not available)";
-
-                      addText("Name:", margin, yPosition, 11, boldFont);
-                      addText(repName, margin + 50, yPosition, 11, font);
-                      yPosition -= 20;
-                      addText("Phone:", margin, yPosition, 11, boldFont);
-                      addText(repPhone, margin + 50, yPosition, 11, font);
-                      yPosition -= sectionSpacing;
-
-                      yPosition = addText(`Template Used: ${activeTemplate.name}`, margin, yPosition, 12, boldFont);
-                      yPosition -= sectionSpacing;
-
-                      yPosition = addText("Transcript", margin, yPosition, 14, boldFont);
-                      page.drawLine({
-                        start: { x: margin, y: yPosition + 5 },
-                        end: { x: pageWidth - margin, y: yPosition + 5 },
-                        thickness: 1,
-                        color: rgb(0.8, 0.8, 0.8),
-                      });
-                      yPosition -= 15;
-
-                      yPosition = addText(transcriptRecord.transcript, margin, yPosition, 10, font, pageWidth - 2 * margin);
-                      yPosition -= sectionSpacing;
-                      // This is used for future template
-                      // if (filledData) {
-                      //   yPosition = addText("Extracted Data", margin, yPosition, 14, boldFont);
-                      //   page.drawLine({
-                      //     start: { x: margin, y: yPosition + 5 },
-                      //     end: { x: pageWidth - margin, y: yPosition + 5 },
-                      //     thickness: 1,
-                      //     color: rgb(0.8, 0.8, 0.8),
-                      //   });
-                      //   yPosition -= 15;
-
-                      //   for (const [key, value] of Object.entries(filledData)) {
-                      //     const label = key.charAt(0).toUpperCase() + key.slice(1).replace(/_/g, " ");
-                      //     const valStr = value ? String(value) : "N/A";
-
-                      //     yPosition = addText(`${label}:`, margin, yPosition, 11, boldFont);
-                      //     yPosition = addText(valStr, margin + 20, yPosition, 10, font, pageWidth - 2 * margin - 20);
-                      //     yPosition -= 10;
-                      //   }
-                      // }
-
-                      const pdfBytes = await pdfDoc.save();
-                      const pdfBlob = new Blob([pdfBytes], { type: 'application/pdf' });
-                      const pdfFormData = new FormData();
-                      pdfFormData.append('file', pdfBlob, 'transcript.pdf');
-                      pdfFormData.append('messaging_product', 'whatsapp');
-
-                      console.log("Uploading PDF to WhatsApp...");
-                      const uploadResponse = await fetch(`https://graph.facebook.com/${apiVersion}/${phoneNumberId}/media`, {
-                        method: 'POST',
-                        headers: {
-                          'Authorization': `Bearer ${accessToken}`,
-                        },
-                        body: pdfFormData
-                      });
-
-                      const uploadResult = await uploadResponse.json();
-                      if (!uploadResponse.ok) {
-                        throw new Error(`Media Upload Failed: ${JSON.stringify(uploadResult)}`);
-                      }
-
-                      const mediaId = uploadResult.id;
-                      console.log(`PDF Uploaded. Media ID: ${mediaId}`);
-
-                      const docPayload = {
-                        messaging_product: "whatsapp",
-                        recipient_type: "individual",
-                        to: normalizePhoneNumber(from),
-                        type: "document",
-                        document: {
-                          id: mediaId,
-                          caption: "Here is your processed transcript report. 📄",
-                          filename: "transcript_report.pdf"
-                        }
-                      };
-
-                      await fetch(
-                        `https://graph.facebook.com/${apiVersion}/${phoneNumberId}/messages`,
-                        {
-                          method: "POST",
-                          headers: {
-                            "Authorization": `Bearer ${accessToken}`,
-                            "Content-Type": "application/json",
-                          },
-                          body: JSON.stringify(docPayload),
-                        }
-                      );
-
-                      console.log("Transcript confirmed, PDF generated and sent:", {
-                        transcriptId: transcriptRecord.id,
-                        userId,
-                        phoneNumber: from,
-                      });
-                    } catch (error) {
-                      console.error("Error processing confirm button:", error);
-                    }
-                  } else if (action === "retake") {
-                    try {
-                      const { data: transcriptRecord } = await adminClient
-                        .from("voice_transcripts")
-                        .select("id")
-                        .eq("phone_number", from)
-                        .eq("status", "pending")
-                        .order("created_at", { ascending: false })
-                        .limit(1)
-                        .single();
-
-                      if (transcriptRecord) {
-                        await adminClient
-                          .from("voice_transcripts")
-                          .update({ status: "retaken" })
-                          .eq("id", transcriptRecord.id);
-                      }
-
-                      const retakePayload = {
-                        messaging_product: "whatsapp",
-                        recipient_type: "individual",
-                        to: normalizePhoneNumber(from),
-                        type: "text",
-                        text: {
-                          body: "🔄 Please send a new voice message.",
-                        },
-                      };
-                      await fetch(
-                        `https://graph.facebook.com/${apiVersion}/${phoneNumberId}/messages`,
-                        {
-                          method: "POST",
-                          headers: {
-                            "Authorization": `Bearer ${accessToken}`,
-                            "Content-Type": "application/json",
-                          },
-                          body: JSON.stringify(retakePayload),
-                        }
-                      );
-
-                      console.log("User requested retake:", from);
-                    } catch (error) {
-                      console.error("Error processing retake button:", error);
                     }
                   }
                 }
@@ -932,16 +1753,18 @@ Extract and fill all template fields from the transcript. Return a JSON object w
       });
     }
 
+    // Handle API requests with authorization header (existing code)
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
     const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY");
 
     if (!supabaseUrl || !supabaseAnonKey) {
       return new Response(
         JSON.stringify({
-          error: "Supabase configuration missing. SUPABASE_URL and SUPABASE_ANON_KEY must be set.",
-          code: 500
+          error:
+            "Supabase configuration missing. SUPABASE_URL and SUPABASE_ANON_KEY must be set.",
+          code: 500,
         }),
-        { status: 500, headers: corsHeaders }
+        { status: 500, headers: corsHeaders },
       );
     }
 
@@ -950,31 +1773,30 @@ Extract and fill all template fields from the transcript. Return a JSON object w
     if (!serviceRoleKey) {
       return new Response(
         JSON.stringify({ error: "Service configuration error" }),
-        { status: 500, headers: corsHeaders }
+        { status: 500, headers: corsHeaders },
       );
     }
 
-    const adminClient = createClient(
-      supabaseUrl,
-      serviceRoleKey,
-      {
-        auth: {
-          autoRefreshToken: false,
-          persistSession: false
-        }
-      }
-    );
+    const adminClient = createClient(supabaseUrl, serviceRoleKey, {
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false,
+      },
+    });
 
-    const { data: { user }, error: tokenError } = await adminClient.auth.getUser(token);
+    const {
+      data: { user },
+      error: tokenError,
+    } = await adminClient.auth.getUser(token);
 
     if (tokenError || !user) {
       return new Response(
         JSON.stringify({
           error: tokenError?.message || "Invalid or expired token",
           code: tokenError?.status || 401,
-          details: tokenError
+          details: tokenError,
         }),
-        { status: 401, headers: corsHeaders }
+        { status: 401, headers: corsHeaders },
       );
     }
 
@@ -983,7 +1805,7 @@ Extract and fill all template fields from the transcript. Return a JSON object w
     if (!accessToken || !phoneNumberId) {
       return new Response(
         JSON.stringify({ error: "WhatsApp credentials not configured" }),
-        { status: 500, headers: corsHeaders }
+        { status: 500, headers: corsHeaders },
       );
     }
 
@@ -993,7 +1815,7 @@ Extract and fill all template fields from the transcript. Return a JSON object w
     console.log("📤 SENDING MESSAGE REQUEST");
     console.log("To:", body.to);
     console.log("Type:", body.type);
-    if (body.type === 'text') {
+    if (body.type === "text") {
       console.log("📝 TEXT MSG DETECTED");
       console.log("Content:", body.text?.body);
       console.log("Object Dump:", JSON.stringify(body.text, null, 2));
@@ -1004,15 +1826,17 @@ Extract and fill all template fields from the transcript. Return a JSON object w
       console.error("ERROR: Missing 'to' field");
       return new Response(
         JSON.stringify({ error: "Missing required field: 'to'" }),
-        { status: 400, headers: corsHeaders }
+        { status: 400, headers: corsHeaders },
       );
     }
 
     if (!body.messaging_product) {
       console.error("ERROR: Missing 'messaging_product' field");
       return new Response(
-        JSON.stringify({ error: "Missing required field: 'messaging_product'" }),
-        { status: 400, headers: corsHeaders }
+        JSON.stringify({
+          error: "Missing required field: 'messaging_product'",
+        }),
+        { status: 400, headers: corsHeaders },
       );
     }
 
@@ -1020,7 +1844,7 @@ Extract and fill all template fields from the transcript. Return a JSON object w
       console.error("ERROR: Missing 'type' field");
       return new Response(
         JSON.stringify({ error: "Missing required field: 'type'" }),
-        { status: 400, headers: corsHeaders }
+        { status: 400, headers: corsHeaders },
       );
     }
 
@@ -1028,8 +1852,10 @@ Extract and fill all template fields from the transcript. Return a JSON object w
       if (!body.text || !body.text.body) {
         console.error("ERROR: Missing 'text.body'");
         return new Response(
-          JSON.stringify({ error: "Missing required field: 'text.body' for text messages" }),
-          { status: 400, headers: corsHeaders }
+          JSON.stringify({
+            error: "Missing required field: 'text.body' for text messages",
+          }),
+          { status: 400, headers: corsHeaders },
         );
       }
     }
@@ -1038,8 +1864,11 @@ Extract and fill all template fields from the transcript. Return a JSON object w
       if (!body.template || !body.template.name) {
         console.error("ERROR: Missing 'template.name'");
         return new Response(
-          JSON.stringify({ error: "Missing required field: 'template.name' for template messages" }),
-          { status: 400, headers: corsHeaders }
+          JSON.stringify({
+            error:
+              "Missing required field: 'template.name' for template messages",
+          }),
+          { status: 400, headers: corsHeaders },
         );
       }
       console.log("Template Name:", body.template.name);
@@ -1048,8 +1877,10 @@ Extract and fill all template fields from the transcript. Return a JSON object w
     if (!body.to.match(/^\+?[1-9]\d{1,14}$/)) {
       console.error("ERROR: Invalid phone number format:", body.to);
       return new Response(
-        JSON.stringify({ error: "Invalid phone number format. Use format (e.g., +1234567890)" }),
-        { status: 400, headers: corsHeaders }
+        JSON.stringify({
+          error: "Invalid phone number format. Use format (e.g., +1234567890)",
+        }),
+        { status: 400, headers: corsHeaders },
       );
     }
 
@@ -1065,44 +1896,44 @@ Extract and fill all template fields from the transcript. Return a JSON object w
     const response = await fetch(whatsappApiUrl, {
       method: "POST",
       headers: {
-        "Authorization": `Bearer ${accessToken}`,
+        Authorization: `Bearer ${accessToken}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify(whatsappPayload),
     });
 
-    const result = await response.json();
+    const responseData = await response.json();
 
     if (!response.ok) {
-      console.error("WhatsApp API Error:", JSON.stringify(result, null, 2));
+      console.error("WhatsApp API Error:", {
+        status: response.status,
+        statusText: response.statusText,
+        error: responseData,
+      });
       return new Response(
         JSON.stringify({
-          error: result?.error?.message || "WhatsApp API request failed",
-          details: result?.error,
+          error: "WhatsApp API request failed",
+          details: responseData,
+          status: response.status,
         }),
-        { status: response.status, headers: corsHeaders }
+        { status: response.status, headers: corsHeaders },
       );
     }
 
-    console.warn("Message sent successfully!");
-    console.warn("Message ID:", result.messages?.[0]?.id);
-    console.log("-----------------------------------------");
+    console.log("✅ WhatsApp API Response:", JSON.stringify(responseData));
 
+    return new Response(JSON.stringify({ success: true, data: responseData }), {
+      status: 200,
+      headers: corsHeaders,
+    });
+  } catch (err: any) {
+    console.error("🚨 Edge Function Error:", err);
     return new Response(
       JSON.stringify({
-        success: true,
-        messageId: result.messages?.[0]?.id,
-        result,
-        _debug_timestamp: new Date().toISOString()
+        error: err.message || "Internal server error",
+        stack: err.stack,
       }),
-      { status: 200, headers: corsHeaders }
-    );
-  } catch (err: any) {
-    console.error("=== WhatsApp function error ===");
-    console.error("Error message:", err.message);
-    return new Response(
-      JSON.stringify({ error: err.message || "Server error" }),
-      { status: 500, headers: corsHeaders }
+      { status: 500, headers: corsHeaders },
     );
   }
 });

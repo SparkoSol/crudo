@@ -66,7 +66,9 @@ export const routes: RouteObject[] = [
       {
         path: ROUTES.SALESPEOPLE,
         element: (
+          <RoleBasedRoute allowedRoles={[Role.MANAGER]}>
             <Salespeople />
+          </RoleBasedRoute>
         ),
       },
       {
@@ -88,7 +90,7 @@ export const routes: RouteObject[] = [
       {
         path: ROUTES.VOICE_TRANSCRIPTS,
         element: (
-          <RoleBasedRoute allowedRoles={[Role.MANAGER]}>
+          <RoleBasedRoute allowedRoles={[Role.MANAGER, Role.SALES_REPRESENTATIVE]}>
             <VoiceTranscripts />
           </RoleBasedRoute>
         ),

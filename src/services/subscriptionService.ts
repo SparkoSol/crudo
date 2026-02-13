@@ -2,7 +2,8 @@ import { supabase } from '@/lib/supabaseClient';
 import type {
     SubscriptionData,
     SubscriptionDetails,
-    SubscriptionPlanType
+    SubscriptionTier,
+    BillingPeriod
 } from '@/types';
 
 
@@ -20,6 +21,7 @@ export const subscriptionService = {
             .select('*')
             .eq('user_id', userId)
             .in('status', ['active', 'trialing', 'past_due'])
+            .in('subscription_role', ['platform', 'combined'])
             .order('updated_at', { ascending: false })
             .limit(1)
             .maybeSingle();
@@ -55,10 +57,11 @@ export const subscriptionService = {
     createCheckoutSession: async (params: {
         userId: string;
         email: string;
-        planType: SubscriptionPlanType;
+        planType: SubscriptionTier;
+        billingPeriod: BillingPeriod;
         accessToken?: string;
     }): Promise<{ url: string }> => {
-        const { userId, email, planType, accessToken: providedToken } = params;
+        const { userId, email, planType, billingPeriod, accessToken: providedToken } = params;
         const accessToken = providedToken || await subscriptionService.getAccessToken();
 
         const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-checkout-session`, {
@@ -71,6 +74,7 @@ export const subscriptionService = {
                 user_id: userId,
                 email: email,
                 plan_type: planType,
+                billing_period: billingPeriod,
             }),
         });
 
