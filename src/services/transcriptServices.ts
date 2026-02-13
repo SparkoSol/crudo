@@ -1,5 +1,5 @@
 import { supabase } from "../lib/supabase/client";
-import type { VoiceTranscript, UserTemplate } from "@/types";
+import type { VoiceTranscript, UserTemplate, TemplateField } from "@/types";
 
 export const getTranscripts = async (): Promise<VoiceTranscript[]> => {
   const {
@@ -12,14 +12,16 @@ export const getTranscripts = async (): Promise<VoiceTranscript[]> => {
 
   const { data, error } = await supabase
     .from("voice_transcripts")
-    .select(`
+    .select(
+      `
       *,
       user_templates:template_id (
         id,
         name,
         fields
       )
-    `)
+    `,
+    )
     .eq("user_id", session.user.id)
     .order("created_at", { ascending: false });
 
@@ -30,7 +32,9 @@ export const getTranscripts = async (): Promise<VoiceTranscript[]> => {
   return data as VoiceTranscript[];
 };
 
-export const getTranscript = async (transcriptId: string): Promise<VoiceTranscript | null> => {
+export const getTranscript = async (
+  transcriptId: string,
+): Promise<VoiceTranscript | null> => {
   const {
     data: { session },
   } = await supabase.auth.getSession();
@@ -41,16 +45,17 @@ export const getTranscript = async (transcriptId: string): Promise<VoiceTranscri
 
   const { data, error } = await supabase
     .from("voice_transcripts")
-    .select(`
+    .select(
+      `
       *,
       user_templates:template_id (
         id,
         name,
         fields
       )
-    `)
+    `,
+    )
     .eq("id", transcriptId)
-    .eq("user_id", session.user.id)
     .single();
 
   if (error) {
@@ -63,7 +68,56 @@ export const getTranscript = async (transcriptId: string): Promise<VoiceTranscri
   return data as VoiceTranscript;
 };
 
-export const downloadPDF = async (transcriptId: string): Promise<{ pdf: string; filename: string }> => {
+export const getManagerTranscripts = async (): Promise<VoiceTranscript[]> => {
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+
+  if (!session?.user) {
+    throw new Error("User not authenticated");
+  }
+
+  const { data: teamMembers, error: teamError } = await supabase
+    .from("profiles")
+    .select("id")
+    .eq("manager_id", session.user.id);
+
+  if (teamError) {
+    throw teamError;
+  }
+
+  const teamIds = teamMembers.map((member) => member.id);
+  const allIds = [session.user.id, ...teamIds];
+
+  const { data, error } = await supabase
+    .from("voice_transcripts")
+    .select(
+      `
+      *,
+      user_templates:template_id (
+        id,
+        name,
+        fields
+      ),
+      profiles:user_id (
+        full_name,
+        phone_number
+      )
+    `,
+    )
+    .in("user_id", allIds)
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    throw error;
+  }
+
+  return data as VoiceTranscript[];
+};
+
+export const downloadPDF = async (
+  transcriptId: string,
+): Promise<{ pdf: string; filename: string }> => {
   const {
     data: { session },
   } = await supabase.auth.getSession();
@@ -114,7 +168,9 @@ export const getUserTemplates = async (): Promise<UserTemplate[]> => {
   return data as UserTemplate[];
 };
 
-export const getUserTemplate = async (templateId?: string): Promise<UserTemplate | null> => {
+export const getUserTemplate = async (
+  templateId?: string,
+): Promise<UserTemplate | null> => {
   const {
     data: { session },
   } = await supabase.auth.getSession();
@@ -161,9 +217,11 @@ export const getUserTemplate = async (templateId?: string): Promise<UserTemplate
 
 export const createUserTemplate = async (
   name: string,
-  fields: Array<{ name: string; type: string; required: boolean }>,
-  templateStructure?: Record<string, any>,
-  isDefault?: boolean
+  fields: TemplateField[],
+  templateStructure?: Record<string, unknown>,
+  isDefault?: boolean,
+  description?: string,
+  templateType?: string,
 ): Promise<UserTemplate> => {
   const {
     data: { session },
@@ -181,13 +239,13 @@ export const createUserTemplate = async (
       fields,
       template_structure: templateStructure || null,
       is_default: isDefault || false,
+      description: description || null,
+      template_type: templateType || "regular",
     })
     .select()
     .single();
 
-  if (error) {
-    throw error;
-  }
+  if (error) throw error;
 
   return data as UserTemplate;
 };
@@ -196,10 +254,12 @@ export const updateUserTemplate = async (
   templateId: string,
   updates: {
     name?: string;
-    fields?: Array<{ name: string; type: string; required: boolean }>;
-    template_structure?: Record<string, any>;
+    fields?: TemplateField[];
+    template_structure?: Record<string, unknown>;
+    description?: string;
+    template_type?: string;
     is_default?: boolean;
-  }
+  },
 ): Promise<UserTemplate> => {
   const {
     data: { session },
@@ -217,9 +277,7 @@ export const updateUserTemplate = async (
     .select()
     .single();
 
-  if (error) {
-    throw error;
-  }
+  if (error) throw error;
 
   return data as UserTemplate;
 };
