@@ -22,7 +22,7 @@ export const getProfile = async (userId?: string): Promise<Profile | null> => {
     .single();
 
   if (error) {
-    if (error.code === 'PGRST116') {
+    if (error.code === "PGRST116") {
       return null;
     }
     throw error;
@@ -32,7 +32,7 @@ export const getProfile = async (userId?: string): Promise<Profile | null> => {
 };
 
 export const updateProfile = async (
-  updates: UpdateProfileData
+  updates: UpdateProfileData,
 ): Promise<Profile> => {
   const {
     data: { session },
