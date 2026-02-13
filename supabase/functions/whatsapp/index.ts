@@ -850,6 +850,202 @@ serve(async (req) => {
                           `User verified: ${userId}, Manager: ${effectiveManagerId}`,
                         );
 
+                        // Check if there's an ongoing conversation in collecting_fields state
+                        const { data: ongoingConversation } = await adminClient
+                          .from("voice_transcripts")
+                          .select("*")
+                          .eq("phone_number", from)
+                          .eq("conversation_state", "collecting_fields")
+                          .order("created_at", { ascending: false })
+                          .limit(1)
+                          .maybeSingle();
+
+                        if (ongoingConversation) {
+                          console.log(
+                            "Found ongoing conversation, merging transcripts",
+                            ongoingConversation.id,
+                          );
+
+                          // Get the template
+                          const { data: template } = await adminClient
+                            .from("user_templates")
+                            .select("*")
+                            .eq("id", ongoingConversation.template_id)
+                            .single();
+
+                          if (!template) {
+                            console.error("Template not found for ongoing conversation");
+                            continue;
+                          }
+
+                          // Merge transcripts
+                          const mergedTranscript =
+                            `${ongoingConversation.transcript}\n\n[Additional Voice Message]\n${transcript}`;
+
+                          console.log("Merged transcript:", mergedTranscript);
+
+                          // Re-extract fields from merged transcript
+                          let filledData: Record<string, any> = {};
+                          if (
+                            openaiApiKey &&
+                            template.fields &&
+                            Array.isArray(template.fields)
+                          ) {
+                            filledData = await extractFieldsWithGPT(
+                              mergedTranscript,
+                              template.fields,
+                              openaiApiKey,
+                            ) || {};
+                          }
+
+                          console.log("Re-extracted fields after merge:", filledData);
+
+                          // Merge with already collected data
+                          const collectedData =
+                            ongoingConversation.collected_data || {};
+                          const mergedFilledData = {
+                            ...filledData,
+                            ...collectedData,
+                          };
+
+                          // Check if we still have missing required fields
+                          const currentMissingFields =
+                            identifyMissingRequiredFields(
+                              mergedFilledData,
+                              template.fields,
+                            );
+
+                          // Filter out fields already collected via text
+                          const missingFields = currentMissingFields.filter(
+                            (field) => !(field.name in collectedData),
+                          );
+
+                          console.log(
+                            "Missing fields after merge:",
+                            missingFields.map((f) => f.name),
+                          );
+
+                          // Update the existing record
+                          if (missingFields.length === 0) {
+                            // All fields collected, move to confirmation
+                            await adminClient
+                              .from("voice_transcripts")
+                              .update({
+                                transcript: mergedTranscript,
+                                filled_data: mergedFilledData,
+                                conversation_state: "awaiting_confirmation",
+                                missing_required_fields: [],
+                                current_field_index: 0,
+                              })
+                              .eq("id", ongoingConversation.id);
+
+                            // Send confirmation message
+                            const confirmationMessage = buildConfirmationMessage(
+                              mergedFilledData,
+                              template.fields,
+                            );
+
+                            const interactivePayload = {
+                              messaging_product: "whatsapp",
+                              recipient_type: "individual",
+                              to: normalizePhoneNumber(from),
+                              type: "interactive",
+                              interactive: {
+                                type: "button",
+                                body: {
+                                  text: confirmationMessage,
+                                },
+                                action: {
+                                  buttons: [
+                                    {
+                                      type: "reply",
+                                      reply: {
+                                        id: "Confirm",
+                                        title: "Confirm",
+                                      },
+                                    },
+                                    {
+                                      type: "reply",
+                                      reply: {
+                                        id: "Retake",
+                                        title: "Retake",
+                                      },
+                                    },
+                                  ],
+                                },
+                              },
+                            };
+
+                            await fetch(
+                              `https://graph.facebook.com/${apiVersion}/${phoneNumberId}/messages`,
+                              {
+                                method: "POST",
+                                headers: {
+                                  Authorization: `Bearer ${accessToken}`,
+                                  "Content-Type": "application/json",
+                                },
+                                body: JSON.stringify(interactivePayload),
+                              },
+                            );
+
+                            console.log(
+                              "All fields collected via voice merge, sent confirmation",
+                            );
+                          } else {
+                            // Still missing fields, continue collection
+                            const currentIndex =
+                              ongoingConversation.current_field_index || 0;
+                            const nextFieldIndex = Math.min(
+                              currentIndex,
+                              missingFields.length - 1,
+                            );
+
+                            await adminClient
+                              .from("voice_transcripts")
+                              .update({
+                                transcript: mergedTranscript,
+                                filled_data: mergedFilledData,
+                                missing_required_fields: missingFields,
+                                current_field_index: nextFieldIndex,
+                              })
+                              .eq("id", ongoingConversation.id);
+
+                            // Ask for the current missing field
+                            const currentField = missingFields[nextFieldIndex];
+                            const promptMessage = buildFieldPromptMessage(
+                              currentField,
+                            );
+
+                            const fieldPromptPayload = {
+                              messaging_product: "whatsapp",
+                              recipient_type: "individual",
+                              to: normalizePhoneNumber(from),
+                              type: "text",
+                              text: {
+                                body: `✓ Additional voice message received!\n\n${promptMessage}`,
+                              },
+                            };
+
+                            await fetch(
+                              `https://graph.facebook.com/${apiVersion}/${phoneNumberId}/messages`,
+                              {
+                                method: "POST",
+                                headers: {
+                                  Authorization: `Bearer ${accessToken}`,
+                                  "Content-Type": "application/json",
+                                },
+                                body: JSON.stringify(fieldPromptPayload),
+                              },
+                            );
+
+                            console.log(
+                              "Still missing fields after voice merge, continuing collection",
+                            );
+                          }
+                          continue;
+                        }
+
+                        // No ongoing conversation - create new transcript record
                         // Get the user's assigned template or fall back to default
                         let activeTemplate: UserTemplate | null = null;
 
