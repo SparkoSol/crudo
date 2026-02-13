@@ -31,10 +31,12 @@ import {
   updateUserTemplate,
   deleteUserTemplate,
 } from "@/services/transcriptServices";
+// import { subscriptionService } from "@/services/subscriptionService";
 import type { UserTemplate } from "@/types";
 import { Badge } from "@/components/ui/badge";
 import toast from "react-hot-toast";
 import { format } from "date-fns";
+import { supabase } from "@/lib/supabase/client";
 
 interface TemplateField {
   name: string;
@@ -51,6 +53,7 @@ export default function Templates() {
   const [editingTemplate, setEditingTemplate] = useState<UserTemplate | null>(
     null,
   );
+  const [planType, setPlanType] = useState<string>("starter");
   const [templateName, setTemplateName] = useState("");
   const [templateType, setTemplateType] = useState("regular"); // UI only
   const [description, setDescription] = useState(""); // UI only
@@ -67,6 +70,17 @@ export default function Templates() {
       setLoading(true);
       const data = await getUserTemplates();
       setTemplates(data);
+      // Get subscription
+      const { data: subscription } = await supabase
+        .from("subscriptions")
+        .select("plan_type")
+        .eq("user_id", (await supabase.auth.getUser()).data.user?.id)
+        .in("status", ["active", "trialing"])
+        .order("updated_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      setPlanType(subscription?.plan_type || "starter");
     } catch (error) {
       toast.error("Failed to load templates");
     } finally {
@@ -178,9 +192,8 @@ export default function Templates() {
         </div>
         <Button
           onClick={openCreateDialog}
-          className="gap-2 bg-gradient-to-r from-brand-primary-600 to-brand-primary-700 hover:from-brand-primary-700 hover:to-brand-primary-800 shadow-md"
+          disabled={planType === "starter" && templates.length >= 3}
         >
-          <Plus className="h-4 w-4" />
           Create Template
         </Button>
       </div>
