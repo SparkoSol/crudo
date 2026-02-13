@@ -105,7 +105,15 @@ serve(async (req) => {
     const systemPrompt = `You are a helpful assistant that extracts structured data from voice transcripts. 
 Given a transcript and a list of template fields, extract the relevant information and fill in the template fields.
 Return ONLY a valid JSON object with field names as keys and extracted values as values.
-If a field cannot be found in the transcript, use null for optional fields or make your best inference for required fields.
+
+IMPORTANT: For fields marked as "required":
+- If the information is clearly present in the transcript, extract it accurately
+- If the information is NOT in the transcript or unclear, return null for that field
+
+For fields marked as "optional":
+- Extract the value if present
+- Return null if not present or unclear
+
 Be accurate and only extract information that is clearly stated in the transcript.`;
 
     const userPrompt = `Transcript:
