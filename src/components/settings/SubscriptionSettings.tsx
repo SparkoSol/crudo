@@ -2,12 +2,13 @@ import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/AuthContext';
-import { Loader2, Zap, CreditCard, AlertTriangle } from 'lucide-react';
+import { Loader2, Zap, CreditCard, AlertTriangle, ShoppingCart } from 'lucide-react';
+import { TIER_LABELS, BILLING_PERIOD_LABELS } from '@/constants/subscription';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
 import { subscriptionService } from '@/services/subscriptionService';
-import type { SubscriptionData, SubscriptionDetails, CreditsWallet } from '@/types';
+import type { SubscriptionData, SubscriptionDetails, CreditsWallet, CreditBatch } from '@/types';
 
 interface SubscriptionSettingsProps {
     initialSubscription?: SubscriptionData | null;
@@ -24,6 +25,7 @@ export function SubscriptionSettings({ initialSubscription, initialDetails, init
         initialDetails || { next_billing_date: null, usage_credits: 0 }
     );
     const [wallet, setWallet] = useState<CreditsWallet | null>(initialWallet || null);
+    const [batches, setBatches] = useState<CreditBatch[]>([]);
     const [cancelLoading, setCancelLoading] = useState(false);
     const [showCancelDialog, setShowCancelDialog] = useState(false);
 
@@ -34,6 +36,9 @@ export function SubscriptionSettings({ initialSubscription, initialDetails, init
             setSubscription(initialSubscription);
             if (initialDetails) setDetails(initialDetails);
             if (initialWallet) setWallet(initialWallet);
+            import('@/services/creditService').then(m => m.creditService.getBatches())
+                .then(setBatches)
+                .catch(() => {});
             setLoading(false);
             return;
         }
@@ -44,12 +49,14 @@ export function SubscriptionSettings({ initialSubscription, initialDetails, init
                 const subData = await subscriptionService.getUserSubscription(user.id);
                 if (subData) {
                     setSubscription(subData);
-                    const [detailData, walletData] = await Promise.all([
+                    const [detailData, walletData, batchesData] = await Promise.all([
                         subscriptionService.getSubscriptionDetails(),
-                        import('@/services/creditService').then(m => m.creditService.getWallet())
+                        import('@/services/creditService').then(m => m.creditService.getWallet()),
+                        import('@/services/creditService').then(m => m.creditService.getBatches())
                     ]);
                     setDetails(detailData);
                     setWallet(walletData);
+                    setBatches(batchesData);
                 }
             } catch (err) {
                 console.error("Failed to fetch subscription data", err);
@@ -106,7 +113,7 @@ export function SubscriptionSettings({ initialSubscription, initialDetails, init
                     </div>
                 </CardHeader>
                 <CardContent>
-                    <p className="text-gray-600 mb-4">Upgrade to Platform Access to unlock premium features and metered credits.</p>
+                    <p className="text-gray-600 mb-4">Upgrade to a plan to unlock premium features and usage credits.</p>
                     <Button onClick={() => navigate('/subscription')} className="bg-brand-primary-600 hover:bg-brand-primary-700">
                         View Plans
                     </Button>
@@ -140,8 +147,16 @@ export function SubscriptionSettings({ initialSubscription, initialDetails, init
                         <div>
                             <p className="text-xs font-medium text-gray-500 mb-1 uppercase tracking-wider">Current Plan</p>
                             <p className="text-lg font-bold text-gray-900 capitalize flex items-center gap-2">
-                                {subscription.plan_type}
-                                <span className="text-sm font-normal text-gray-500">({subscription.subscription_role})</span>
+                                {TIER_LABELS[subscription.plan_type] || subscription.plan_type}
+                                {subscription.billing_period && (
+                                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                                        subscription.billing_period === 'annual'
+                                            ? 'bg-green-100 text-green-700'
+                                            : 'bg-gray-200 text-gray-600'
+                                    }`}>
+                                        {BILLING_PERIOD_LABELS[subscription.billing_period] || subscription.billing_period}
+                                    </span>
+                                )}
                             </p>
                         </div>
                         {details.next_billing_date && (
@@ -159,23 +174,39 @@ export function SubscriptionSettings({ initialSubscription, initialDetails, init
                     </div>
                     <div className="p-4 bg-gray-50 rounded-xl border border-gray-100 flex flex-col justify-between">
                         <div>
-                            <p className="text-xs font-medium text-gray-500 mb-1 uppercase tracking-wider">Credits Usage</p>
+                            <p className="text-xs font-medium text-gray-500 mb-1 uppercase tracking-wider">Credits</p>
                             <div className="flex items-end gap-2">
                                 <p className="text-2xl font-bold text-gray-900">
-                                    {wallet ? wallet.used_credits_this_month : details.usage_credits}
+                                    {batches.reduce((sum, b) => sum + b.credits_remaining, 0) || (wallet?.total_credits ?? 0)}
                                 </p>
-                                <p className="text-sm font-normal text-gray-500 mb-1">used this month</p>
+                                <p className="text-sm font-normal text-gray-500 mb-1">available</p>
                                 <CreditCard className="h-5 w-5 text-orange-500 mb-1 ml-auto" />
                             </div>
-                            {wallet && (
-                                <p className="text-xs text-gray-400 mt-1">
-                                    Total used: {wallet.used_credits} credits
-                                </p>
-                            )}
+                            <div className="flex items-center gap-3 mt-2">
+                                <span className="text-xs text-gray-500">
+                                    {wallet ? wallet.used_credits_this_month : details.usage_credits} used this month
+                                </span>
+                                {batches.filter(b => b.source === 'rollover').reduce((sum, b) => sum + b.credits_remaining, 0) > 0 && (
+                                    <span className="text-xs text-blue-600 font-medium">
+                                        {batches.filter(b => b.source === 'rollover').reduce((sum, b) => sum + b.credits_remaining, 0)} rollover
+                                    </span>
+                                )}
+                            </div>
                         </div>
-                        <p className="text-xs text-gray-500 mt-2">
-                            Usage is calculated monthly. You are billed for {wallet ? wallet.used_credits_this_month : details.usage_credits} credits.
-                        </p>
+                        <div className="flex items-center gap-2 mt-3">
+                            <p className="text-xs text-gray-500 flex-1">
+                                Your oldest credits are used first. Unused credits carry over to the next month (up to 100% of your last purchase).
+                            </p>
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => navigate('/subscription#credit-packs')}
+                                className="flex-shrink-0 gap-1.5 text-xs text-green-700 border-green-200 hover:bg-green-50 hover:border-green-300"
+                            >
+                                <ShoppingCart className="h-3 w-3" />
+                                Buy Credits
+                            </Button>
+                        </div>
                     </div>
                 </div>
 
@@ -208,7 +239,7 @@ export function SubscriptionSettings({ initialSubscription, initialDetails, init
                 onOpenChange={setShowCancelDialog}
                 onConfirm={executeCancellation}
                 title="Cancel Subscription"
-                description="Canceling will end Platform Access, forfeit remaining credits, and charge any used credits for this month immediately. This action cannot be undone."
+                description="If you cancel, you'll lose access to the platform and any remaining credits. Any credits you've already used this month will be charged. This can't be undone."
                 confirmText="Yes, cancel everything"
                 cancelText="Keep my plan"
                 variant="destructive"

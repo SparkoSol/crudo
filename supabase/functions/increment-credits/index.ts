@@ -15,6 +15,57 @@ const corsHeaders = {
     "Access-Control-Allow-Headers": "Content-Type, Authorization",
 };
 
+function getCycleMonth(billingCycleAnchor: number): string {
+    const date = new Date(billingCycleAnchor * 1000);
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+}
+
+async function callRolloverFunction(managerId: string, cycleMonth: string) {
+    try {
+        const response = await fetch(`${supabaseUrl}/functions/v1/process-credit-rollover`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${supabaseServiceKey}`,
+            },
+            body: JSON.stringify({
+                action: 'rollover',
+                manager_id: managerId,
+                cycle_month: cycleMonth,
+            }),
+        });
+        const result = await response.json();
+        console.log(`🔄 Rollover result:`, result);
+    } catch (err: any) {
+        console.error('Error calling rollover function:', err.message);
+    }
+}
+
+async function consumeCreditsFromBatches(managerId: string, amount: number): Promise<{ consumed: number; overage: number }> {
+    const { data, error } = await supabase.rpc('consume_credits_fifo', {
+        p_manager_id: managerId,
+        p_amount: amount,
+    });
+
+    if (error) {
+        console.error('Error calling consume_credits_fifo RPC:', error);
+        return { consumed: 0, overage: amount };
+    }
+
+    const row = Array.isArray(data) ? data[0] : data;
+    return { consumed: row?.consumed ?? 0, overage: row?.overage ?? amount };
+}
+
+async function getAvailableBatchCredits(managerId: string): Promise<number> {
+    const { data: batches } = await supabase
+        .from('credit_batches')
+        .select('credits_remaining')
+        .eq('manager_id', managerId)
+        .eq('is_active', true);
+
+    return (batches || []).reduce((sum: number, b: any) => sum + b.credits_remaining, 0);
+}
+
 Deno.serve(async (req) => {
     const { method } = req;
 
@@ -174,6 +225,7 @@ Deno.serve(async (req) => {
             throw new Error("Subscription item is not metered");
         }
 
+        // --- Database updates: credit batches (FIFO) + wallet summary ---
         try {
             const { data: profile } = await supabase
                 .from("profiles")
@@ -200,24 +252,37 @@ Deno.serve(async (req) => {
                     }
 
                     const stripeSub = await stripe.subscriptions.retrieve(currentSubId);
-                    console.log("stribe sub", stripeSub)
+                    const billingCycleAnchor = stripeSub.current_period_start;
+                    const cycleMonth = getCycleMonth(billingCycleAnchor);
 
-                    const billingCycleAnchor = stripeSub.current_period_start; 
                     const { data: currentWallet } = await supabase
-                    .from("credits_wallet")
-                    .select("used_credits, used_credits_this_month, billing_cycle_anchor")
-                    .eq("manager_id", managerId)
-                    .maybeSingle();
-                    
-                    console.log("currentWallet", currentWallet)
-                    if (currentWallet) {
-                        const isNewCycle =  currentWallet.billing_cycle_anchor !== billingCycleAnchor;
-                        console.log("isNewCycle", isNewCycle)
-                        const newMonthlyUsage = isNewCycle ? incrementAmount : (currentWallet.used_credits_this_month || 0) + incrementAmount;
+                        .from("credits_wallet")
+                        .select("used_credits, used_credits_this_month, billing_cycle_anchor")
+                        .eq("manager_id", managerId)
+                        .maybeSingle();
 
+                    const isNewCycle = currentWallet
+                        ? currentWallet.billing_cycle_anchor !== billingCycleAnchor
+                        : false;
+
+                    if (isNewCycle) {
+                        console.log(`New billing cycle detected for manager ${managerId}, processing rollover...`);
+                        await callRolloverFunction(managerId, cycleMonth);
+                    }
+
+                    const { consumed, overage } = await consumeCreditsFromBatches(managerId, incrementAmount);
+                    console.log(`FIFO consumption: ${consumed} from batches, ${overage} overage`);
+
+                    const totalAvailable = await getAvailableBatchCredits(managerId);
+                    const newMonthlyUsage = isNewCycle
+                        ? incrementAmount
+                        : (currentWallet?.used_credits_this_month || 0) + incrementAmount;
+
+                    if (currentWallet) {
                         await supabase
                             .from("credits_wallet")
                             .update({
+                                total_credits: totalAvailable,
                                 used_credits: (currentWallet.used_credits || 0) + incrementAmount,
                                 used_credits_this_month: newMonthlyUsage,
                                 billing_cycle_anchor: billingCycleAnchor,
@@ -227,7 +292,7 @@ Deno.serve(async (req) => {
                     } else {
                         await supabase.from("credits_wallet").insert({
                             manager_id: managerId,
-                            total_credits: 0,
+                            total_credits: totalAvailable,
                             used_credits: incrementAmount,
                             used_credits_this_month: incrementAmount,
                             billing_cycle_anchor: billingCycleAnchor,

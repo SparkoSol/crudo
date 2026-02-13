@@ -86,7 +86,14 @@ export default function DashboardStatus() {
                                 {subscription && (
                                     <div className="flex justify-between text-sm">
                                         <span className="text-gray-500">Plan</span>
-                                        <span className="font-bold text-gray-900 capitalize">{subscription.plan_type}</span>
+                                        <span className="font-bold text-gray-900 capitalize">
+                                            {subscription.plan_type}
+                                            {subscription.billing_period && (
+                                                <span className="text-gray-500 text-xs font-normal ml-1">
+                                                    ({subscription.billing_period})
+                                                </span>
+                                            )}
+                                        </span>
                                     </div>
                                 )}
                             </div>
