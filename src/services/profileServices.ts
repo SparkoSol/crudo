@@ -1,4 +1,3 @@
-
 import { supabase } from "../lib/supabase/client";
 import type { Profile, UpdateProfileData } from "../types/profile.types";
 
@@ -23,7 +22,7 @@ export const getProfile = async (userId?: string): Promise<Profile | null> => {
     .single();
 
   if (error) {
-    if (error.code === 'PGRST116') {
+    if (error.code === "PGRST116") {
       return null;
     }
     throw error;
@@ -33,7 +32,7 @@ export const getProfile = async (userId?: string): Promise<Profile | null> => {
 };
 
 export const updateProfile = async (
-  updates: UpdateProfileData
+  updates: UpdateProfileData,
 ): Promise<Profile> => {
   const {
     data: { session },
@@ -72,4 +71,36 @@ export const getProfileById = async (id: string): Promise<Profile | null> => {
   }
 
   return data;
+};
+
+export const getManagedProfiles = async (): Promise<Profile[]> => {
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+
+  if (!session?.user) {
+    throw new Error("No authenticated user");
+  }
+
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("*")
+    .eq("manager_id", session.user.id);
+
+  if (error) {
+    throw error;
+  }
+
+  return data as Profile[];
+};
+
+export const unlinkPhoneNumber = async (profileId: string): Promise<void> => {
+  const { error } = await supabase
+    .from("profiles")
+    .update({ phone_number: null, updated_at: new Date().toISOString() })
+    .eq("id", profileId);
+
+  if (error) {
+    throw error;
+  }
 };

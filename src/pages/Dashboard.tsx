@@ -1,12 +1,52 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { StatsCard } from '@/components/dashboard/StatsCard';
 import { SearchBar } from '@/components/dashboard/SearchBar';
 import { Loading } from '@/components/Loading';
 import { FileText, Calendar, Users } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
+import { getTranscripts, getManagerTranscripts } from '@/services/transcriptServices';
+import { getManagedProfiles } from '@/services/profileServices';
 export default function Dashboard() {
-  const { isLoading: authLoading } = useAuth();
+  const { profile, isLoading: authLoading } = useAuth();
   const [searchQuery, setSearchQuery] = useState('');
+  const [stats, setStats] = useState({
+    totalReports: 0,
+    thisWeekReports: 0,
+    activeSalespeople: 0
+  });
+
+  useEffect(() => {
+    const fetchStats = async () => {
+      try {
+        const transcripts = profile?.role === 'manager'
+          ? await getManagerTranscripts()
+          : await getTranscripts();
+
+        const now = new Date();
+        const startOfWeek = new Date(now.getFullYear(), now.getMonth(), now.getDate() - now.getDay());
+
+        const thisWeekCount = transcripts.filter(t => new Date(t.created_at) >= startOfWeek).length;
+
+        let salespeopleCount = 0;
+        if (profile?.role === 'manager') {
+          const profiles = await getManagedProfiles();
+          salespeopleCount = profiles.length;
+        }
+
+        setStats({
+          totalReports: transcripts.length,
+          thisWeekReports: thisWeekCount,
+          activeSalespeople: salespeopleCount
+        });
+      } catch (error) {
+        console.error('Error fetching dashboard stats:', error);
+      }
+    };
+
+    if (profile) {
+      fetchStats();
+    }
+  }, [profile]);
 
   if (authLoading) {
     return <Loading message="Loading dashboard..." fullScreen />;
@@ -32,22 +72,24 @@ export default function Dashboard() {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
         <StatsCard
           title="Total Reports"
-          value="23"
+          value={stats.totalReports.toString()}
           icon={FileText}
           iconColor="text-brand-primary-600"
         />
         <StatsCard
           title="This Week"
-          value="1"
+          value={stats.thisWeekReports.toString()}
           icon={Calendar}
           iconColor="text-green-600"
         />
-        <StatsCard
-          title="Active Salespeople"
-          value="1"
-          icon={Users}
-          iconColor="text-purple-600"
-        />
+        {profile?.role === 'manager' && (
+          <StatsCard
+            title="Active Salespeople"
+            value={stats.activeSalespeople.toString()}
+            icon={Users}
+            iconColor="text-purple-600"
+          />
+        )}
       </div>
     </div>
   );

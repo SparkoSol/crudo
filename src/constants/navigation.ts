@@ -33,7 +33,7 @@ export const navItems: NavItem[] = [
         icon: Users,
         path: "/salespeople",
         description: "Manage your sales team members and their profiles",
-        roles: [Role.MANAGER, Role.SALES_REPRESENTATIVE],
+        roles: [Role.MANAGER],
         requiresActiveSubscription: true,
     },
     {
@@ -65,7 +65,7 @@ export const navItems: NavItem[] = [
         icon: Mic,
         path: "/voice-transcripts",
         description: "View and manage your voice message transcripts",
-        roles: [Role.MANAGER],
+        roles: [Role.MANAGER, Role.SALES_REPRESENTATIVE],
         requiresActiveSubscription: true,
     },
     {
