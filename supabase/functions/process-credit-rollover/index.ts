@@ -126,7 +126,14 @@ async function processRollover(managerId: string, newCycleMonth: string) {
         return { rollover_amount: 0, expired: 0 };
     }
 
-    const totalRemaining = activeBatches.reduce((sum: number, b: any) => sum + b.credits_remaining, 0);
+    // Only roll over batches from previous cycles; keep current-cycle batches intact
+    const batchesToDeactivate = activeBatches.filter((b: any) => b.cycle_month !== newCycleMonth);
+
+    if (batchesToDeactivate.length === 0) {
+        return { rollover_amount: 0, expired: 0 };
+    }
+
+    const totalRemaining = batchesToDeactivate.reduce((sum: number, b: any) => sum + b.credits_remaining, 0);
 
     const { data: lastCycleBatches } = await supabase
         .from('credit_batches')
@@ -139,7 +146,7 @@ async function processRollover(managerId: string, newCycleMonth: string) {
     const maxRollover = lastCyclePurchased;
     const rolloverAmount = Math.min(totalRemaining, maxRollover);
 
-    const batchIds = activeBatches.map((b: any) => b.id);
+    const batchIds = batchesToDeactivate.map((b: any) => b.id);
     await supabase
         .from('credit_batches')
         .update({ is_active: false, updated_at: new Date().toISOString() })

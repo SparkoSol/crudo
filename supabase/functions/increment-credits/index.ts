@@ -261,7 +261,7 @@ Deno.serve(async (req) => {
                         .eq("manager_id", managerId)
                         .maybeSingle();
 
-                    const isNewCycle = currentWallet
+                    const isNewCycle = currentWallet?.billing_cycle_anchor != null
                         ? currentWallet.billing_cycle_anchor !== billingCycleAnchor
                         : false;
 
