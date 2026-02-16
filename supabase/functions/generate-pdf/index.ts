@@ -88,19 +88,35 @@ serve(async (req) => {
           name,
           fields,
           template_structure
+        ),
+        profiles:user_id (
+          id,
+          full_name,
+          phone_number,
+          manager_id
         )
       `)
       .eq("id", body.transcriptId)
-      .eq("user_id", user.id)
       .single();
 
     if (transcriptError || !transcript) {
       return new Response(
         JSON.stringify({
-          error: "Transcript not found or access denied",
+          error: "Transcript not found",
           details: transcriptError,
         }),
         { status: 404, headers: corsHeaders }
+      );
+    }
+
+    const owner = transcript.profiles;
+    const isOwner = transcript.user_id === user.id;
+    const isManager = owner?.manager_id === user.id;
+
+    if (!isOwner && !isManager) {
+      return new Response(
+        JSON.stringify({ error: "Unauthorized access to this transcript" }),
+        { status: 403, headers: corsHeaders }
       );
     }
 
@@ -181,6 +197,18 @@ serve(async (req) => {
       boldFont
     );
     yPosition -= sectionSpacing;
+
+    if (owner && typeof owner === 'object' && !Array.isArray(owner)) {
+      const profile = owner as any;
+      if (profile.full_name) {
+        yPosition = addText(`Salesperson: ${profile.full_name}`, margin, yPosition, 12, font);
+        yPosition -= 5;
+      }
+      if (profile.phone_number) {
+        yPosition = addText(`Phone: ${profile.phone_number}`, margin, yPosition, 12, font);
+        yPosition -= sectionSpacing;
+      }
+    }
 
     const dateStr = new Date(transcript.created_at).toLocaleString();
     yPosition = addText(`Generated: ${dateStr}`, margin, yPosition, 10, font);
