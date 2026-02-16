@@ -16,27 +16,17 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { FileText, Plus, Search, Edit, Trash2, Loader2 } from "lucide-react";
 import {
-  FileText,
-  Plus,
-  Search,
-  Edit,
-  Trash2,
-  CheckCircle2,
-  Loader2,
-} from "lucide-react";
-import {
-  getUserTemplates,
+  getUserTemplatesWithPlan,
   createUserTemplate,
   updateUserTemplate,
   deleteUserTemplate,
 } from "@/services/transcriptServices";
-// import { subscriptionService } from "@/services/subscriptionService";
 import type { UserTemplate } from "@/types";
 import { Badge } from "@/components/ui/badge";
 import toast from "react-hot-toast";
 import { format } from "date-fns";
-import { supabase } from "@/lib/supabase/client";
 
 interface TemplateField {
   name: string;
@@ -68,19 +58,11 @@ export default function Templates() {
   const loadTemplates = async () => {
     try {
       setLoading(true);
-      const data = await getUserTemplates();
-      setTemplates(data);
-      // Get subscription
-      const { data: subscription } = await supabase
-        .from("subscriptions")
-        .select("plan_type")
-        .eq("user_id", (await supabase.auth.getUser()).data.user?.id)
-        .in("status", ["active", "trialing"])
-        .order("updated_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
 
-      setPlanType(subscription?.plan_type || "starter");
+      const { templates, planType } = await getUserTemplatesWithPlan();
+
+      setTemplates(templates);
+      setPlanType(planType);
     } catch (error) {
       toast.error("Failed to load templates");
     } finally {
@@ -103,6 +85,8 @@ export default function Templates() {
     setTemplateName(template.name);
     setFields(template.fields as TemplateField[]);
     setIsDefault(template.is_default);
+    setDescription(template.description || "");
+    setTemplateType(template.template_type || "regular");
     setIsDialogOpen(true);
   };
 
@@ -148,10 +132,20 @@ export default function Templates() {
           name: templateName,
           fields,
           is_default: isDefault,
+          description,
+          template_type: templateType,
         });
+
         toast.success("Template updated successfully");
       } else {
-        await createUserTemplate(templateName, fields, undefined, isDefault);
+        await createUserTemplate(
+          templateName,
+          fields,
+          undefined,
+          isDefault,
+          description,
+          templateType,
+        );
         toast.success("Template created successfully");
       }
 
@@ -180,8 +174,6 @@ export default function Templates() {
     template.name.toLowerCase().includes(searchQuery.toLowerCase()),
   );
 
-  const defaultTemplate = templates.find((t) => t.is_default);
-
   return (
     <div className="p-6 lg:p-8 pt-20 lg:pt-6">
       {/* HEADER */}
@@ -192,41 +184,60 @@ export default function Templates() {
         </div>
         <Button
           onClick={openCreateDialog}
+          className="gap-2 bg-gradient-to-r from-brand-primary-600 to-brand-primary-700 hover:from-brand-primary-700 hover:to-brand-primary-800 shadow-md"
           disabled={planType === "starter" && templates.length >= 3}
         >
+          <Plus className="h-4 w-4" />
           Create Template
         </Button>
       </div>
 
-      {/* SEARCH */}
-      <div className="mb-6 max-w-md relative">
-        <Search className="absolute left-3 top-3 h-5 w-5 text-gray-400" />
-        <Input
-          type="text"
-          placeholder="Search templates..."
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          className="pl-10 h-11"
-        />
-      </div>
+      <div className="space-y-8">
+        {loading ? (
+          <div className="flex items-center justify-center py-12">
+            <Loader2 className="h-8 w-8 animate-spin text-brand-primary-600" />
+          </div>
+        ) : templates.length === 0 ? (
+          <Card className="border-gray-200 shadow-sm">
+            <CardContent className="p-12 text-center">
+              <FileText className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+              <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                No templates created yet
+              </h3>
+              <p className="text-gray-600 mb-6">
+                Create your first template to start generating structured
+                reports
+              </p>
+            </CardContent>
+          </Card>
+        ) : (
+          <>
+            {/* SEARCH */}
+            <div className="mb-6 max-w-md relative">
+              <Search className="absolute left-3 top-3 h-5 w-5 text-gray-400" />
+              <Input
+                type="text"
+                placeholder="Search templates..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-10 h-11"
+              />
+            </div>
 
-      {/* STATS */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-        <StatCard title="Total Templates" value={templates.length} />
-        <StatCard
-          title="Default Template"
-          value={
-            defaultTemplate ? <CheckCircle2 className="text-green-600" /> : "0"
-          }
-        />
-        <StatCard
-          title="Total Fields"
-          value={templates.reduce((sum, t) => sum + t.fields.length, 0)}
-        />
+            {/* STATS */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+              <StatCard title="Total Templates" value={templates.length} />
+              <StatCard
+                title="Total Fields"
+                value={templates.reduce((sum, t) => sum + t.fields.length, 0)}
+              />
+            </div>
+          </>
+        )}
       </div>
 
       {/* TEMPLATE CARDS */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mt-10">
         {filteredTemplates.map((template) => (
           <Card key={template.id}>
             <CardHeader>
@@ -273,14 +284,15 @@ export default function Templates() {
             </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-6 mt-6">
+          <div className="space-y-6 mt-6 ">
             {/* NAME + TYPE */}
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-2 gap-4 ">
               <div>
                 <Label>Template Name</Label>
                 <Input
                   value={templateName}
                   onChange={(e) => setTemplateName(e.target.value)}
+                  className="mt-3"
                 />
               </div>
 
@@ -289,7 +301,7 @@ export default function Templates() {
                 <select
                   value={templateType}
                   onChange={(e) => setTemplateType(e.target.value)}
-                  className=" w-full h-10 px-3 rounded-md border"
+                  className=" w-full h-10 px-3 rounded-md border  mt-3"
                 >
                   <option value="regular">Regular Template</option>
                 </select>
@@ -302,7 +314,8 @@ export default function Templates() {
               <textarea
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
-                className="mt-1 w-full h-16 px-3 py-2 rounded-md border"
+                rows={3}
+                className="mt-1 w-full px-3 py-2 rounded-md border text-sm resize-none"
               />
             </div>
 
