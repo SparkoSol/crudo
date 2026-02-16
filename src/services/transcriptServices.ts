@@ -1,6 +1,5 @@
 import { supabase } from "../lib/supabase/client";
 import type { VoiceTranscript, UserTemplate, TemplateField } from "@/types";
-// import { subscriptionService } from "./subscriptionService";
 
 export const getTranscripts = async (): Promise<VoiceTranscript[]> => {
   const {
@@ -147,7 +146,10 @@ export const downloadPDF = async (
   return json;
 };
 
-export const getUserTemplates = async (): Promise<UserTemplate[]> => {
+export const getUserTemplatesWithPlan = async (): Promise<{
+  templates: UserTemplate[];
+  planType: string;
+}> => {
   const {
     data: { session },
   } = await supabase.auth.getSession();
@@ -156,17 +158,33 @@ export const getUserTemplates = async (): Promise<UserTemplate[]> => {
     throw new Error("User not authenticated");
   }
 
-  const { data, error } = await supabase
+  const userId = session.user.id;
+
+  //  Get templates
+  const { data: templates, error: templateError } = await supabase
     .from("user_templates")
     .select("*")
-    .eq("user_id", session.user.id)
+    .eq("user_id", userId)
     .order("created_at", { ascending: false });
 
-  if (error) {
-    throw error;
-  }
+  if (templateError) throw templateError;
 
-  return data as UserTemplate[];
+  //  Get subscription
+  const { data: subscription } = await supabase
+    .from("subscriptions")
+    .select("plan_type")
+    .eq("user_id", userId)
+    .in("status", ["active", "trialing"])
+    .order("updated_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  const planType = subscription?.plan_type || "starter";
+
+  return {
+    templates: templates as UserTemplate[],
+    planType,
+  };
 };
 
 export const getUserTemplate = async (
@@ -216,40 +234,6 @@ export const getUserTemplate = async (
   }
 };
 
-// export const createUserTemplate = async (
-//   name: string,
-//   fields: TemplateField[],
-//   templateStructure?: Record<string, unknown>,
-//   isDefault?: boolean,
-//   description?: string,
-//   templateType?: string,
-// ): Promise<UserTemplate> => {
-//   const {
-//     data: { session },
-//   } = await supabase.auth.getSession();
-
-//   if (!session?.user) {
-//     throw new Error("User not authenticated");
-//   }
-
-//   const { data, error } = await supabase
-//     .from("user_templates")
-//     .insert({
-//       user_id: session.user.id,
-//       name,
-//       fields,
-//       template_structure: templateStructure || null,
-//       is_default: isDefault || false,
-//       description: description || null,
-//       template_type: templateType || "regular",
-//     })
-//     .select()
-//     .single();
-
-//   if (error) throw error;
-
-//   return data as UserTemplate;
-// };
 export const createUserTemplate = async (
   name: string,
   fields: TemplateField[],
@@ -268,7 +252,7 @@ export const createUserTemplate = async (
 
   const userId = session.user.id;
 
-  // 🔎 1. Get user subscription
+  //  1. Get user subscription
   const { data: subscription } = await supabase
     .from("subscriptions")
     .select("plan_type")
@@ -280,13 +264,13 @@ export const createUserTemplate = async (
 
   const planType = subscription?.plan_type || "starter";
 
-  // 🔎 2. Count existing templates
+  //  2. Count existing templates
   const { count } = await supabase
     .from("user_templates")
     .select("*", { count: "exact", head: true })
     .eq("user_id", userId);
 
-  // 🚨 3. Enforce Starter limit
+  //  3. Enforce Starter limit
   if (planType === "starter" && (count ?? 0) >= 3) {
     throw new Error(
       "Starter plan allows maximum 3 templates. Please upgrade your plan.",
