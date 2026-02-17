@@ -302,16 +302,17 @@ Deno.serve(async (req) => {
                                 if (wallet) {
                                     const newBillingCycleAnchor = subscription.current_period_start;
 
+                                    // Only reset usage on new billing cycle, NOT on subscription upgrade
+                                    // The usage reset for subscription_cycle is handled in invoice.payment_succeeded
                                     await supabase
                                         .from("credits_wallet")
                                         .update({
-                                            used_credits_this_month: 0,
                                             billing_cycle_anchor: newBillingCycleAnchor,
                                             updated_at: new Date().toISOString(),
                                         })
                                         .eq("manager_id", userId);
 
-                                    console.log(`🔄 Credit wallet reset for new billing cycle (anchor: ${newBillingCycleAnchor}).`);
+                                    console.log(`🔄 Billing cycle anchor updated for upgrade (anchor: ${newBillingCycleAnchor}). Usage preserved: ${wallet.used_credits_this_month}`);
                                 }
 
                             } catch (cancelError: any) {
