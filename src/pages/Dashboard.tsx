@@ -71,7 +71,7 @@ export default function Dashboard() {
   const handlePlayAudio = (e: React.MouseEvent, transcript: VoiceTranscript) => {
     e.stopPropagation();
     if (!transcript.audio_url) {
-      toast.error('No audio available for this report');
+      toast.error('Audio Feature is under development');
       return;
     }
 
