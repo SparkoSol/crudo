@@ -12,7 +12,7 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type",
 };
 
-const OPENAI_WHISPER_API_URL = "https://api.openai.com/v1/audio/transcriptions";
+const OPENAI_WHISPER_API_URL = "https://api.openai.com/v1/audio/translations";
 const OPENAI_API_URL = "https://api.openai.com/v1/chat/completions";
 
 interface TemplateField {
@@ -107,7 +107,7 @@ async function extractFieldsWithGPT(
     const fieldsDescription = templateFields
       .map(
         (field) =>
-          `- ${field.name} (${field.type}${field.required ? ", required" : ", optional"})`,
+          `- ${field.name || (field as any).key || (field as any).id || "field"} (${field.type}${field.required ? ", required" : ", optional"})`,
       )
       .join("\n");
 
@@ -203,7 +203,8 @@ function identifyMissingRequiredFields(
 
 // Helper function to build field collection message
 function buildFieldPromptMessage(field: TemplateField): string {
-  return `I need some more information. Please provide: ${field.label}`;
+  const label = field.label || (field as any).title || field.name || (field as any).key || "this field";
+  return `I need some more information. Please provide: ${label}`;
 }
 
 // Helper function to check if response is valid (not empty/unclear)
@@ -243,11 +244,21 @@ function buildConfirmationMessage(
   let message = "Perfect! I've collected all the information. Here's your report:\n\n";
 
   for (const field of templateFields) {
-    const value = filledData[field.name];
+    const name = field.name || (field as any).key || (field as any).id || "";
+    if (!name) continue;
+
+    let value = filledData[name];
+    if (value === undefined || value === null) {
+      const capitalizedKey = name.charAt(0).toUpperCase() + name.slice(1);
+      value = filledData[capitalizedKey];
+    }
+
     const displayValue = value !== null && value !== undefined && value !== ""
       ? String(value)
       : "(not provided)";
-    message += `${field.label}: ${displayValue}\n`;
+
+    const label = field.label || (field as any).title || name || "Field";
+    message += `${label}: ${displayValue}\n`;
   }
 
   message += "\nIs this correct?";
@@ -532,15 +543,40 @@ serve(async (req) => {
                       );
 
                       // Get the template
-                      const { data: template } = await adminClient
+                      let { data: template } = await adminClient
                         .from("user_templates")
                         .select("*")
                         .eq("id", activeTranscript.template_id)
                         .single();
 
                       if (!template) {
-                        console.error("Template not found for transcript");
-                        continue;
+                        if (!activeTranscript.template_id) {
+                          template = {
+                            id: null as any,
+                            user_id: effectiveManagerId as any,
+                            name: "Standard Sales Report",
+                            fields: [
+                              {
+                                name: "Summary",
+                                label: "Summary",
+                                type: "textarea",
+                                required: true,
+                              },
+                            ],
+                          };
+                        } else {
+                          console.error(
+                            `Template not found for transcript ${activeTranscript.id} (template_id: ${activeTranscript.template_id}). Resetting conversation.`,
+                          );
+
+                          await adminClient
+                            .from("voice_transcripts")
+                            .update({
+                              conversation_state: "error",
+                              status: "error",
+                            })
+                            .eq("id", activeTranscript.id);
+                        }
                       }
 
                       const missingFields: TemplateField[] =
@@ -554,13 +590,14 @@ serve(async (req) => {
                         // Check if response is valid
                         if (!isValidFieldResponse(textBody)) {
                           console.log("Invalid field response, re-asking");
+                          const label = currentField.label || (currentField as any).title || currentField.name || (currentField as any).key || "this field";
                           const reaskPayload = {
                             messaging_product: "whatsapp",
                             recipient_type: "individual",
                             to: normalizePhoneNumber(from),
                             type: "text",
                             text: {
-                              body: `I didn't catch that. Please provide ${currentField.label} again.`,
+                              body: `I didn't catch that. Please provide ${label} again.`,
                             },
                           };
                           await fetch(
@@ -795,6 +832,7 @@ serve(async (req) => {
                           `audio.${fileExtension}`,
                         );
                         formData.append("model", "whisper-1");
+                        formData.append("prompt", "Professional English transcription of a sales visit report. Maintain business terminology and professional tone.");
 
                         const whisperResponse = await fetch(
                           OPENAI_WHISPER_API_URL,
@@ -816,6 +854,41 @@ serve(async (req) => {
                         const transcriptionResult =
                           await whisperResponse.json();
                         let transcript = transcriptionResult.text;
+
+                        // Upload audio to Supabase Storage
+                        let audioUrl = null;
+                        try {
+                          const fileName = `${userId || 'anonymous'}/${Date.now()}.${fileExtension}`;
+                          const { data: uploadData, error: uploadError } = await adminClient
+                            .storage
+                            .from('audio-transcripts')
+                            .upload(fileName, audioBuffer, {
+                              contentType: mimeType,
+                              upsert: true
+                            });
+
+                          if (uploadError) {
+                            console.error("Storage upload error:", uploadError);
+                            // Fallback: try to create bucket if it doesn't exist
+                            if ((uploadError as any).message?.includes("bucket not found")) {
+                              console.log("Attempting to create audio-transcripts bucket...");
+                              await adminClient.storage.createBucket('audio-transcripts', { public: true });
+                              // Retry upload once
+                              await adminClient.storage.from('audio-transcripts').upload(fileName, audioBuffer, { contentType: mimeType });
+                              const { data: urlData } = adminClient.storage.from('audio-transcripts').getPublicUrl(fileName);
+                              audioUrl = urlData.publicUrl;
+                            }
+                          } else {
+                            const { data: urlData } = adminClient
+                              .storage
+                              .from('audio-transcripts')
+                              .getPublicUrl(fileName);
+                            audioUrl = urlData.publicUrl;
+                            console.log("Audio uploaded to storage:", audioUrl);
+                          }
+                        } catch (storageErr) {
+                          console.error("Error managing storage:", storageErr);
+                        }
 
                         if (!transcript || transcript.trim().length === 0) {
                           console.warn(
@@ -867,182 +940,212 @@ serve(async (req) => {
                           );
 
                           // Get the template
-                          const { data: template } = await adminClient
+                          let { data: template } = await adminClient
                             .from("user_templates")
                             .select("*")
                             .eq("id", ongoingConversation.template_id)
                             .single();
 
                           if (!template) {
-                            console.error("Template not found for ongoing conversation");
+                            if (!ongoingConversation.template_id) {
+                              template = {
+                                id: null as any,
+                                user_id: effectiveManagerId as any,
+                                name: "Standard Sales Report",
+                                fields: [
+                                  {
+                                    name: "Summary",
+                                    label: "Summary",
+                                    type: "textarea",
+                                    required: true,
+                                  },
+                                ],
+                              };
+                            } else {
+                              console.error(
+                                `Template not found for ongoing conversation ${ongoingConversation.id} (template_id: ${ongoingConversation.template_id}). Resetting conversation.`,
+                              );
+
+                              await adminClient
+                                .from("voice_transcripts")
+                                .update({
+                                  conversation_state: "error",
+                                  status: "error",
+                                })
+                                .eq("id", ongoingConversation.id);
+                            }
+                          }
+
+                          if (template) {
+                            // Merge transcripts
+                            const mergedTranscript =
+                              `${ongoingConversation.transcript}\n\n[Additional Voice Message]\n${transcript}`;
+
+                            console.log("Merged transcript:", mergedTranscript);
+
+                            // Re-extract fields from merged transcript
+                            let filledData: Record<string, any> = {};
+                            if (
+                              openaiApiKey &&
+                              template.fields &&
+                              Array.isArray(template.fields)
+                            ) {
+                              filledData = await extractFieldsWithGPT(
+                                mergedTranscript,
+                                template.fields,
+                                openaiApiKey,
+                              ) || {};
+                            }
+
+                            console.log("Re-extracted fields after merge:", filledData);
+
+                            // Merge with already collected data
+                            const collectedData =
+                              ongoingConversation.collected_data || {};
+                            const mergedFilledData = {
+                              ...filledData,
+                              ...collectedData,
+                            };
+
+                            // Check if we still have missing required fields
+                            const currentMissingFields =
+                              identifyMissingRequiredFields(
+                                mergedFilledData,
+                                template.fields,
+                              );
+
+                            // Filter out fields already collected via text
+                            const missingFields = currentMissingFields.filter(
+                              (field) => !(field.name in collectedData),
+                            );
+
+                            console.log(
+                              "Missing fields after merge:",
+                              missingFields.map((f) => f.name),
+                            );
+
+                            // Update the existing record
+                            if (missingFields.length === 0) {
+                              // All fields collected, move to confirmation
+                              await adminClient
+                                .from("voice_transcripts")
+                                .update({
+                                  transcript: mergedTranscript,
+                                  filled_data: mergedFilledData,
+                                  conversation_state: "awaiting_confirmation",
+                                  missing_required_fields: [],
+                                  current_field_index: 0,
+                                  audio_url: audioUrl,
+                                })
+                                .eq("id", ongoingConversation.id);
+
+                              // Send confirmation message
+                              const confirmationMessage = buildConfirmationMessage(
+                                mergedFilledData,
+                                template.fields,
+                              );
+
+                              const interactivePayload = {
+                                messaging_product: "whatsapp",
+                                recipient_type: "individual",
+                                to: normalizePhoneNumber(from),
+                                type: "interactive",
+                                interactive: {
+                                  type: "button",
+                                  body: {
+                                    text: confirmationMessage,
+                                  },
+                                  action: {
+                                    buttons: [
+                                      {
+                                        type: "reply",
+                                        reply: {
+                                          id: "Confirm",
+                                          title: "Confirm",
+                                        },
+                                      },
+                                      {
+                                        type: "reply",
+                                        reply: {
+                                          id: "Retake",
+                                          title: "Retake",
+                                        },
+                                      },
+                                    ],
+                                  },
+                                },
+                              };
+
+                              await fetch(
+                                `https://graph.facebook.com/${apiVersion}/${phoneNumberId}/messages`,
+                                {
+                                  method: "POST",
+                                  headers: {
+                                    Authorization: `Bearer ${accessToken}`,
+                                    "Content-Type": "application/json",
+                                  },
+                                  body: JSON.stringify(interactivePayload),
+                                },
+                              );
+
+                              console.log(
+                                "All fields collected via voice merge, sent confirmation",
+                              );
+                            } else {
+                              // Still missing fields, continue collection
+                              const currentIndex =
+                                ongoingConversation.current_field_index || 0;
+                              const nextFieldIndex = Math.min(
+                                currentIndex,
+                                missingFields.length - 1,
+                              );
+
+                              await adminClient
+                                .from("voice_transcripts")
+                                .update({
+                                  transcript: mergedTranscript,
+                                  filled_data: mergedFilledData,
+                                  missing_required_fields: missingFields,
+                                  current_field_index: nextFieldIndex,
+                                  audio_url: audioUrl, // Save latest audio URL
+                                })
+                                .eq("id", ongoingConversation.id);
+
+                              // Ask for the current missing field
+                              const currentField = missingFields[nextFieldIndex];
+                              const promptMessage = buildFieldPromptMessage(
+                                currentField,
+                              );
+
+                              const fieldPromptPayload = {
+                                messaging_product: "whatsapp",
+                                recipient_type: "individual",
+                                to: normalizePhoneNumber(from),
+                                type: "text",
+                                text: {
+                                  body: `✓ Additional voice message received!\n\n${promptMessage}`,
+                                },
+                              };
+
+                              await fetch(
+                                `https://graph.facebook.com/${apiVersion}/${phoneNumberId}/messages`,
+                                {
+                                  method: "POST",
+                                  headers: {
+                                    Authorization: `Bearer ${accessToken}`,
+                                    "Content-Type": "application/json",
+                                  },
+                                  body: JSON.stringify(fieldPromptPayload),
+                                },
+                              );
+
+                              console.log(
+                                "Still missing fields after voice merge, continuing collection",
+                              );
+                            }
                             continue;
                           }
-
-                          // Merge transcripts
-                          const mergedTranscript =
-                            `${ongoingConversation.transcript}\n\n[Additional Voice Message]\n${transcript}`;
-
-                          console.log("Merged transcript:", mergedTranscript);
-
-                          // Re-extract fields from merged transcript
-                          let filledData: Record<string, any> = {};
-                          if (
-                            openaiApiKey &&
-                            template.fields &&
-                            Array.isArray(template.fields)
-                          ) {
-                            filledData = await extractFieldsWithGPT(
-                              mergedTranscript,
-                              template.fields,
-                              openaiApiKey,
-                            ) || {};
-                          }
-
-                          console.log("Re-extracted fields after merge:", filledData);
-
-                          // Merge with already collected data
-                          const collectedData =
-                            ongoingConversation.collected_data || {};
-                          const mergedFilledData = {
-                            ...filledData,
-                            ...collectedData,
-                          };
-
-                          // Check if we still have missing required fields
-                          const currentMissingFields =
-                            identifyMissingRequiredFields(
-                              mergedFilledData,
-                              template.fields,
-                            );
-
-                          // Filter out fields already collected via text
-                          const missingFields = currentMissingFields.filter(
-                            (field) => !(field.name in collectedData),
-                          );
-
-                          console.log(
-                            "Missing fields after merge:",
-                            missingFields.map((f) => f.name),
-                          );
-
-                          // Update the existing record
-                          if (missingFields.length === 0) {
-                            // All fields collected, move to confirmation
-                            await adminClient
-                              .from("voice_transcripts")
-                              .update({
-                                transcript: mergedTranscript,
-                                filled_data: mergedFilledData,
-                                conversation_state: "awaiting_confirmation",
-                                missing_required_fields: [],
-                                current_field_index: 0,
-                              })
-                              .eq("id", ongoingConversation.id);
-
-                            // Send confirmation message
-                            const confirmationMessage = buildConfirmationMessage(
-                              mergedFilledData,
-                              template.fields,
-                            );
-
-                            const interactivePayload = {
-                              messaging_product: "whatsapp",
-                              recipient_type: "individual",
-                              to: normalizePhoneNumber(from),
-                              type: "interactive",
-                              interactive: {
-                                type: "button",
-                                body: {
-                                  text: confirmationMessage,
-                                },
-                                action: {
-                                  buttons: [
-                                    {
-                                      type: "reply",
-                                      reply: {
-                                        id: "Confirm",
-                                        title: "Confirm",
-                                      },
-                                    },
-                                    {
-                                      type: "reply",
-                                      reply: {
-                                        id: "Retake",
-                                        title: "Retake",
-                                      },
-                                    },
-                                  ],
-                                },
-                              },
-                            };
-
-                            await fetch(
-                              `https://graph.facebook.com/${apiVersion}/${phoneNumberId}/messages`,
-                              {
-                                method: "POST",
-                                headers: {
-                                  Authorization: `Bearer ${accessToken}`,
-                                  "Content-Type": "application/json",
-                                },
-                                body: JSON.stringify(interactivePayload),
-                              },
-                            );
-
-                            console.log(
-                              "All fields collected via voice merge, sent confirmation",
-                            );
-                          } else {
-                            // Still missing fields, continue collection
-                            const currentIndex =
-                              ongoingConversation.current_field_index || 0;
-                            const nextFieldIndex = Math.min(
-                              currentIndex,
-                              missingFields.length - 1,
-                            );
-
-                            await adminClient
-                              .from("voice_transcripts")
-                              .update({
-                                transcript: mergedTranscript,
-                                filled_data: mergedFilledData,
-                                missing_required_fields: missingFields,
-                                current_field_index: nextFieldIndex,
-                              })
-                              .eq("id", ongoingConversation.id);
-
-                            // Ask for the current missing field
-                            const currentField = missingFields[nextFieldIndex];
-                            const promptMessage = buildFieldPromptMessage(
-                              currentField,
-                            );
-
-                            const fieldPromptPayload = {
-                              messaging_product: "whatsapp",
-                              recipient_type: "individual",
-                              to: normalizePhoneNumber(from),
-                              type: "text",
-                              text: {
-                                body: `✓ Additional voice message received!\n\n${promptMessage}`,
-                              },
-                            };
-
-                            await fetch(
-                              `https://graph.facebook.com/${apiVersion}/${phoneNumberId}/messages`,
-                              {
-                                method: "POST",
-                                headers: {
-                                  Authorization: `Bearer ${accessToken}`,
-                                  "Content-Type": "application/json",
-                                },
-                                body: JSON.stringify(fieldPromptPayload),
-                              },
-                            );
-
-                            console.log(
-                              "Still missing fields after voice merge, continuing collection",
-                            );
-                          }
-                          continue;
+                          // Template was not found — fall through to create a new transcript below
                         }
 
                         // No ongoing conversation - create new transcript record
@@ -1142,6 +1245,7 @@ serve(async (req) => {
                               missing_required_fields: missingFields,
                               collected_data: {},
                               current_field_index: currentFieldIndex,
+                              audio_url: audioUrl,
                             })
                             .select()
                             .single();
@@ -1439,40 +1543,63 @@ serve(async (req) => {
                           const drawOptions: any = { x, size, font: fontType };
                           if (color) drawOptions.color = color;
 
-                          // Replace newlines with spaces to avoid encoding issues
-                          const sanitizedText = text.replace(/\n/g, " ").replace(/\r/g, "").replace(/\t/g, " ");
+                          let processedText = text.replace(/\n/g, " ").replace(/\r/g, "").replace(/\t/g, " ");
+
+                          const ensureSafeText = (t: string) => {
+                            try {
+                              fontType.widthOfTextAtSize(t, size);
+                              return t;
+                            } catch (e) {
+                              return t.replace(/[^\x20-\x7E\x80-\xFF]/g, "");
+                            }
+                          };
+
+                          processedText = ensureSafeText(processedText);
 
                           if (maxWidth) {
-                            const words = sanitizedText.split(" ").filter(word => word.length > 0);
+                            const words = processedText.split(" ").filter(word => word.length > 0);
                             let line = "";
                             let currentY = y;
                             for (const word of words) {
                               const testLine = line + (line ? " " : "") + word;
-                              const width = fontType.widthOfTextAtSize(
-                                testLine,
-                                size,
-                              );
-                              if (width > maxWidth && line) {
+                              try {
+                                const width = fontType.widthOfTextAtSize(
+                                  testLine,
+                                  size,
+                                );
+                                if (width > maxWidth && line) {
+                                  page.drawText(line, {
+                                    ...drawOptions,
+                                    y: currentY,
+                                  });
+                                  line = word;
+                                  currentY -= lineHeight;
+                                } else {
+                                  line = testLine;
+                                }
+                              } catch (e) {
+                                line = line + (line ? " " : "") + "[...]";
+                              }
+                            }
+                            if (line) {
+                              try {
                                 page.drawText(line, {
                                   ...drawOptions,
                                   y: currentY,
                                 });
-                                line = word;
-                                currentY -= lineHeight;
-                              } else {
-                                line = testLine;
+                              } catch (e) {
+                                console.error("Final line draw error:", e);
                               }
-                            }
-                            if (line) {
-                              page.drawText(line, {
-                                ...drawOptions,
-                                y: currentY,
-                              });
                               currentY -= lineHeight;
                             }
                             return currentY;
                           } else {
-                            page.drawText(sanitizedText, { ...drawOptions, y });
+                            try {
+                              page.drawText(processedText, { ...drawOptions, y });
+                            } catch (e) {
+                              const flatText = processedText.replace(/[^\x20-\x7E]/g, "?");
+                              page.drawText(flatText, { ...drawOptions, y });
+                            }
                             return y - lineHeight;
                           }
                         };
@@ -1561,16 +1688,18 @@ serve(async (req) => {
                           const fieldLabelMap: Record<string, string> = {};
                           if (activeTemplate.fields) {
                             for (const field of activeTemplate.fields) {
-                              fieldLabelMap[field.name] = field.label;
+                              const name = field.name || (field as any).key || (field as any).id || "";
+                              const label = field.label || (field as any).title || name || "Field";
+                              if (name) fieldLabelMap[name] = label;
                             }
                           }
 
                           for (const [key, value] of Object.entries(filledData)) {
                             const label = fieldLabelMap[key] ||
                               key.charAt(0).toUpperCase() +
-                                key.slice(1).replace(/_/g, " ");
+                              key.slice(1).replace(/_/g, " ");
                             const valStr = value !== null &&
-                                value !== undefined && String(value).trim() !== ""
+                              value !== undefined && String(value).trim() !== ""
                               ? String(value)
                               : "N/A";
 

@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { StatsCard } from '@/components/dashboard/StatsCard';
 import { SearchBar } from '@/components/dashboard/SearchBar';
 import { Loading } from '@/components/Loading';
-import { FileText, Calendar, Users, Clock, CheckCircle2, RefreshCw, Download, Loader2 } from 'lucide-react';
+import { FileText, Calendar, Users, Clock, CheckCircle2, RefreshCw, Download, Loader2, Play, Share } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { getTranscripts, getManagerTranscripts, downloadPDF } from '@/services/transcriptServices';
 import { getManagedProfiles } from '@/services/profileServices';
@@ -13,9 +13,11 @@ import { Button } from '@/components/ui/button';
 import { format } from 'date-fns';
 import type { VoiceTranscript } from '@/types';
 import toast from 'react-hot-toast';
+import { useNavigate } from 'react-router-dom';
 
 export default function Dashboard() {
   const { profile, isLoading: authLoading } = useAuth();
+  const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState('');
   const [stats, setStats] = useState({
     totalReports: 0,
@@ -25,6 +27,8 @@ export default function Dashboard() {
   const [isLoadingStats, setIsLoadingStats] = useState(true);
   const [transcripts, setTranscripts] = useState<VoiceTranscript[]>([]);
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
+  const [playingId, setPlayingId] = useState<string | null>(null);
+  const [audio, setAudio] = useState<HTMLAudioElement | null>(null);
 
   useEffect(() => {
     const fetchStats = async () => {
@@ -63,6 +67,33 @@ export default function Dashboard() {
       fetchStats();
     }
   }, [profile]);
+
+  const handlePlayAudio = (e: React.MouseEvent, transcript: VoiceTranscript) => {
+    e.stopPropagation();
+    if (!transcript.audio_url) {
+      toast.error('No audio available for this report');
+      return;
+    }
+
+    if (playingId === transcript.id) {
+      audio?.pause();
+      setPlayingId(null);
+      return;
+    }
+
+    if (audio) {
+      audio.pause();
+    }
+
+    const newAudio = new Audio(transcript.audio_url);
+    newAudio.play();
+    setAudio(newAudio);
+    setPlayingId(transcript.id);
+
+    newAudio.onended = () => {
+      setPlayingId(null);
+    };
+  };
 
   const handleDownloadPDF = async (transcriptId: string) => {
     try {
@@ -208,49 +239,125 @@ export default function Dashboard() {
             </CardContent>
           </Card>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {filteredTranscripts.slice(0, 10).map((transcript) => (
-              <Card key={transcript.id} className="group border border-gray-100 shadow-sm hover:shadow-md transition-all duration-200 bg-white overflow-hidden">
-                <div className="p-4 sm:p-5 flex items-center justify-between gap-4">
-                  <div className="min-w-0 flex-1 flex flex-col gap-1">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <h3 className="font-bold text-gray-900 truncate text-base">
-                        {transcript.user_templates?.name || 'Untitled Template'}
-                      </h3>
-                      {getStatusBadge(transcript.status)}
+          <div className="flex flex-col gap-6">
+            {filteredTranscripts.slice(0, 10).map((transcript) => {
+              const previewFields = transcript.user_templates?.fields?.slice(0, 2) || [];
+              const filledData = transcript.filled_data || {};
+
+              return (
+                <Card
+                  key={transcript.id}
+                  className="group border border-gray-100 shadow-sm hover:shadow-md transition-all duration-200 bg-white overflow-hidden cursor-pointer"
+                  onClick={() => navigate(`/reporte/${transcript.id}`)}
+                >
+                  <div className="p-6">
+                    {/* Header */}
+                    <div className="flex items-center justify-between gap-4 mb-4">
+                      <div className="flex items-center gap-3">
+                        {getStatusBadge(transcript.status)}
+                        <div>
+                          <h3 className="font-bold text-gray-900 text-lg group-hover:text-brand-primary-600 transition-colors">
+                            {transcript.user_templates?.name || 'Untitled Template'}
+                          </h3>
+                          <div className="text-sm text-gray-500 font-medium">
+                            by <span className="text-gray-700">{transcript.profiles?.full_name || 'Unknown Salesperson'}</span> • {format(new Date(transcript.created_at), "MMM d, yyyy")}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Status Badge in the mockup is actually on the right, but we can keep standard or adjust */}
+                      <div className="hidden sm:block">
+                        {/* Mockup shows "Completado" badge here but we have it on the left above. Let's keep it on the left. */}
+                      </div>
                     </div>
 
-                    <div className="flex flex-col gap-0.5">
-                      <p className="text-sm font-medium text-gray-600 truncate">
-                        {transcript.profiles?.full_name || 'Unknown Salesperson'}
-                      </p>
-                      <p className="text-[11px] text-gray-400 font-medium uppercase tracking-wider">
-                        {format(new Date(transcript.created_at), 'MMM d, h:mm a')}
-                      </p>
-                    </div>
-                  </div>
-
-                  {transcript.status === 'confirmed' && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handleDownloadPDF(transcript.id)}
-                      disabled={downloadingId === transcript.id}
-                      className="h-10 px-4 gap-2 border-brand-primary-100 text-brand-primary-700 hover:bg-brand-primary-50 hover:text-brand-primary-800 shrink-0 rounded-xl font-semibold transition-colors"
-                    >
-                      {downloadingId === transcript.id ? (
-                        <Loader2 className="h-4 w-4 animate-spin text-brand-primary-600" />
-                      ) : (
-                        <div className="flex items-center gap-2">
-                          <Download className="h-4 w-4" />
-                          <span className="hidden sm:inline">Download</span>
+                    {/* Preview Content */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4 mb-6">
+                      {previewFields.map((field) => (
+                        <div key={field.name}>
+                          <h4 className="text-sm font-semibold text-gray-700 mb-1">{field.label}</h4>
+                          <p className="text-gray-600 text-sm line-clamp-3 leading-relaxed">
+                            {String(filledData[field.name] || '')}
+                          </p>
+                        </div>
+                      ))}
+                      {previewFields.length === 0 && (
+                        <div className="col-span-full">
+                          <p className="text-gray-500 italic text-sm">No data to preview.</p>
                         </div>
                       )}
-                    </Button>
-                  )}
-                </div>
-              </Card>
-            ))}
+                    </div>
+
+                    <div className="h-px bg-gray-100 w-full mb-4" />
+
+                    {/* Footer */}
+                    <div className="flex items-center justify-between text-sm text-gray-500">
+                      <div className="flex items-center gap-4">
+                        <div className="flex items-center gap-1.5">
+                          <Clock className="w-4 h-4" />
+                          <span>1:02 duration</span>
+                        </div>
+                        <div className="flex items-center gap-1.5 hidden sm:flex">
+                          <Calendar className="w-4 h-4" />
+                          <span>{format(new Date(transcript.created_at), "MMM d, yyyy")}</span>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-3">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={(e) => handlePlayAudio(e, transcript)}
+                          className={`h-8 w-8 transition-colors ${playingId === transcript.id
+                              ? "text-brand-primary-600 bg-brand-primary-50"
+                              : "text-gray-400 hover:text-brand-primary-600 hover:bg-brand-primary-50"
+                            }`}
+                        >
+                          {playingId === transcript.id ? (
+                            <div className="flex gap-0.5 items-end h-3">
+                              <div className="w-0.5 bg-current animate-[bounce_0.6s_infinite] h-full" />
+                              <div className="w-0.5 bg-current animate-[bounce_0.8s_infinite] h-2" />
+                              <div className="w-0.5 bg-current animate-[bounce_0.5s_infinite] h-3" />
+                            </div>
+                          ) : (
+                            <Play className="h-4 w-4" />
+                          )}
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (transcript.status === 'confirmed') {
+                              handleDownloadPDF(transcript.id);
+                            }
+                          }}
+                          disabled={downloadingId === transcript.id || transcript.status !== 'confirmed'}
+                          className="h-8 w-8 text-gray-400 hover:text-brand-primary-600 hover:bg-brand-primary-50 transition-colors"
+                        >
+                          {downloadingId === transcript.id ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <Download className="h-4 w-4" />
+                          )}
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            // Placeholder export action
+                          }}
+                          className="h-8 w-8 text-gray-400 hover:text-brand-primary-600 hover:bg-brand-primary-50 transition-colors"
+                        >
+                          <Share className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                </Card>
+              );
+            })}
           </div>
         )}
       </div>
