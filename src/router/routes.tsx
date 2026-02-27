@@ -24,9 +24,11 @@ const Subscription = lazy(() => import("../pages/Subscription"));
 const DashboardStatus = lazy(() => import("../pages/DashboardStatus"));
 const NotFound = lazy(() => import("../pages/NotFound"));
 const AccessDenied = lazy(() => import("../pages/AccessDenied"));
+const ReportDetail = lazy(() => import("../pages/ReportDetail"));
 
 export const ROUTES = {
   DASHBOARD: "/",
+  REPORT_DETAIL: "/reporte/:id",
   SETTINGS: "/settings",
   SALESPEOPLE: "/salespeople",
   TEMPLATES: "/templates",
@@ -54,6 +56,10 @@ export const routes: RouteObject[] = [
       {
         path: ROUTES.DASHBOARD,
         element: <Dashboard />,
+      },
+      {
+        path: ROUTES.REPORT_DETAIL,
+        element: <ReportDetail />,
       },
       {
         path: ROUTES.DASHBOARD_STATUS,

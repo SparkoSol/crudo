@@ -6,6 +6,8 @@ export interface VoiceTranscript {
   template_id: string | null;
   filled_data: Record<string, unknown> | null;
   status: "pending" | "confirmed" | "retaken";
+  audio_url: string | null;
+  audio_duration: string | null;
   created_at: string;
   updated_at: string;
   user_templates?: {
