@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { StatsCard } from '@/components/dashboard/StatsCard';
 import { SearchBar } from '@/components/dashboard/SearchBar';
 import { Loading } from '@/components/Loading';
@@ -28,7 +28,16 @@ export default function Dashboard() {
   const [transcripts, setTranscripts] = useState<VoiceTranscript[]>([]);
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
   const [playingId, setPlayingId] = useState<string | null>(null);
-  const [audio, setAudio] = useState<HTMLAudioElement | null>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current = null;
+      }
+    };
+  }, []);
 
   useEffect(() => {
     const fetchStats = async () => {
@@ -71,28 +80,39 @@ export default function Dashboard() {
   const handlePlayAudio = (e: React.MouseEvent, transcript: VoiceTranscript) => {
     e.stopPropagation();
     if (!transcript.audio_url) {
-      toast.error('Audio Feature is under development');
+      toast.error('No audio recording available for this report');
       return;
     }
 
     if (playingId === transcript.id) {
-      audio?.pause();
+      audioRef.current?.pause();
       setPlayingId(null);
       return;
     }
 
-    if (audio) {
-      audio.pause();
+    if (audioRef.current) {
+      audioRef.current.pause();
     }
 
     const newAudio = new Audio(transcript.audio_url);
-    newAudio.play();
-    setAudio(newAudio);
-    setPlayingId(transcript.id);
-
+    
     newAudio.onended = () => {
       setPlayingId(null);
     };
+
+    newAudio.onerror = () => {
+      console.error('Audio playback failed for URL:', transcript.audio_url);
+      toast.error('Failed to play audio. The recording may be unavailable.');
+      setPlayingId(null);
+    };
+
+    newAudio.play().then(() => {
+      audioRef.current = newAudio;
+      setPlayingId(transcript.id);
+    }).catch((err) => {
+      console.error('Audio play error:', err);
+      toast.error('Failed to play audio. The recording may be unavailable.');
+    });
   };
 
   const handleDownloadPDF = async (transcriptId: string) => {
@@ -269,14 +289,13 @@ export default function Dashboard() {
 
                     <div className="h-px bg-gray-100 w-full mt-3 mb-4" />
 
-                    {/* Footer */}
                     <div className="flex items-center justify-between text-sm text-gray-500">
                       <div className="flex items-center gap-4">
                         <div className="flex items-center gap-1.5">
                           <Clock className="w-4 h-4" />
-                          <span>1:02 duration</span>
+                          <span>{transcript.audio_duration || 'N/A'}</span>
                         </div>
-                        <div className="flex items-center gap-1.5 hidden sm:flex">
+                        <div className="flex items-center gap-1.5 sm:flex">
                           <Calendar className="w-4 h-4" />
                           <span>{format(new Date(transcript.created_at), "MMM d, yyyy")}</span>
                         </div>

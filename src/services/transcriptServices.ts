@@ -19,6 +19,10 @@ export const getTranscripts = async (): Promise<VoiceTranscript[]> => {
         id,
         name,
         fields
+      ),
+      profiles:user_id (
+        full_name,
+        phone_number
       )
     `,
     )
@@ -52,6 +56,10 @@ export const getTranscript = async (
         id,
         name,
         fields
+      ),
+      profiles:user_id (
+        full_name,
+        phone_number
       )
     `,
     )

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -14,7 +14,8 @@ import {
     Play,
     User,
     CalendarDays,
-    Volume2
+    Volume2,
+    Phone
 } from 'lucide-react';
 import { getTranscript, downloadPDF } from '@/services/transcriptServices';
 import type { VoiceTranscript } from '@/types';
@@ -28,7 +29,16 @@ export default function ReportDetail() {
     const [loading, setLoading] = useState(true);
     const [downloading, setDownloading] = useState(false);
     const [isPlaying, setIsPlaying] = useState(false);
-    const [audio, setAudio] = useState<HTMLAudioElement | null>(null);
+    const audioRef = useRef<HTMLAudioElement | null>(null);
+
+    useEffect(() => {
+        return () => {
+            if (audioRef.current) {
+                audioRef.current.pause();
+                audioRef.current = null;
+            }
+        };
+    }, []);
 
     useEffect(() => {
         const fetchTranscript = async () => {
@@ -55,25 +65,41 @@ export default function ReportDetail() {
 
     const handlePlayAudio = () => {
         if (!transcript?.audio_url) {
-            toast.error('No audio available for this report');
+            toast.error('No audio recording available for this report');
             return;
         }
 
         if (isPlaying) {
-            audio?.pause();
+            audioRef.current?.pause();
             setIsPlaying(false);
             return;
         }
 
-        if (audio) {
-            audio.play();
-            setIsPlaying(true);
+        if (audioRef.current) {
+            audioRef.current.play().then(() => {
+                setIsPlaying(true);
+            }).catch((err) => {
+                console.error('Audio play error:', err);
+                toast.error('Failed to play audio. The recording may be unavailable.');
+            });
         } else {
             const newAudio = new Audio(transcript.audio_url);
-            newAudio.play();
-            setAudio(newAudio);
-            setIsPlaying(true);
+            
             newAudio.onended = () => setIsPlaying(false);
+            
+            newAudio.onerror = () => {
+                console.error('Audio playback failed for URL:', transcript.audio_url);
+                toast.error('Failed to play audio. The recording may be unavailable.');
+                setIsPlaying(false);
+            };
+
+            newAudio.play().then(() => {
+                audioRef.current = newAudio;
+                setIsPlaying(true);
+            }).catch((err) => {
+                console.error('Audio play error:', err);
+                toast.error('Failed to play audio. The recording may be unavailable.');
+            });
         }
     };
 
@@ -147,6 +173,7 @@ export default function ReportDetail() {
 
     const title = transcript.user_templates?.name || 'Untitled Template';
     const authorName = transcript.profiles?.full_name || 'Unknown Salesperson';
+    const phoneNumber = transcript.profiles?.phone_number || 'N/A';
     const formattedDate = format(new Date(transcript.created_at), "EEEE, MMMM d, yyyy, HH:mm");
     const fields = transcript.user_templates?.fields || [];
     const filledData = transcript.filled_data || {};
@@ -243,13 +270,19 @@ export default function ReportDetail() {
                                 <div className="flex items-center gap-3">
                                     <Clock className="h-4 w-4 text-gray-400" />
                                     <span className="text-sm text-gray-600">
-                                        1:02  {/* Placeholder for duration */}
+                                        {transcript.audio_duration || 'N/A'}
                                     </span>
                                 </div>
                                 <div className="flex items-center gap-3">
                                     <User className="h-4 w-4 text-gray-400" />
                                     <span className="text-sm text-gray-600 font-medium">
                                         {authorName}
+                                    </span>
+                                </div>
+                                <div className="flex items-center gap-3">
+                                    <Phone className="h-4 w-4 text-gray-400" />
+                                    <span className="text-sm text-gray-600">
+                                        {phoneNumber}
                                     </span>
                                 </div>
                             </CardContent>
@@ -270,7 +303,7 @@ export default function ReportDetail() {
                                     disabled={downloading}
                                 >
                                     <Download className="h-4 w-4 text-gray-500" />
-                                    {downloading ? 'Descargando...' : 'Descargar Reporte'}
+                                    {downloading ? 'Downloading...' : 'Download Report'}
                                 </Button>
                                 <Button
                                     variant="outline"
@@ -283,7 +316,7 @@ export default function ReportDetail() {
                                     ) : (
                                         <Play className="h-4 w-4 text-gray-500" />
                                     )}
-                                    {isPlaying ? 'Pausar Audio' : 'Reproducir Audio'}
+                                    {isPlaying ? 'Pause Audio' : 'Play Audio'}
                                 </Button>
                             </CardContent>
                         </Card>
