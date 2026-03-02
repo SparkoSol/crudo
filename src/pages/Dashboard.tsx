@@ -241,9 +241,6 @@ export default function Dashboard() {
         ) : (
           <div className="flex flex-col gap-6">
             {filteredTranscripts.slice(0, 10).map((transcript) => {
-              const previewFields = transcript.user_templates?.fields?.slice(0, 2) || [];
-              const filledData = transcript.filled_data || {};
-
               return (
                 <Card
                   key={transcript.id}
@@ -252,8 +249,8 @@ export default function Dashboard() {
                 >
                   <div className="p-6">
                     {/* Header */}
-                    <div className="flex items-center justify-between gap-4 mb-4">
-                      <div className="flex items-center gap-3">
+                    <div className="flex items-start justify-between gap-4 mb-3">
+                      <div className="flex flex-col items-start gap-2.5">
                         {getStatusBadge(transcript.status)}
                         <div>
                           <h3 className="font-bold text-gray-900 text-lg group-hover:text-brand-primary-600 transition-colors">
@@ -265,30 +262,12 @@ export default function Dashboard() {
                         </div>
                       </div>
 
-                      {/* Status Badge in the mockup is actually on the right, but we can keep standard or adjust */}
+
                       <div className="hidden sm:block">
-                        {/* Mockup shows "Completado" badge here but we have it on the left above. Let's keep it on the left. */}
                       </div>
                     </div>
 
-                    {/* Preview Content */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4 mb-6">
-                      {previewFields.map((field) => (
-                        <div key={field.name}>
-                          <h4 className="text-sm font-semibold text-gray-700 mb-1">{field.label}</h4>
-                          <p className="text-gray-600 text-sm line-clamp-3 leading-relaxed">
-                            {String(filledData[field.name] || '')}
-                          </p>
-                        </div>
-                      ))}
-                      {previewFields.length === 0 && (
-                        <div className="col-span-full">
-                          <p className="text-gray-500 italic text-sm">No data to preview.</p>
-                        </div>
-                      )}
-                    </div>
-
-                    <div className="h-px bg-gray-100 w-full mb-4" />
+                    <div className="h-px bg-gray-100 w-full mt-3 mb-4" />
 
                     {/* Footer */}
                     <div className="flex items-center justify-between text-sm text-gray-500">
