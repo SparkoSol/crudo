@@ -833,6 +833,7 @@ serve(async (req) => {
                         );
                         formData.append("model", "whisper-1");
                         formData.append("prompt", "Professional English transcription of a sales visit report. Maintain business terminology and professional tone.");
+                        formData.append("response_format", "verbose_json");
 
                         const whisperResponse = await fetch(
                           OPENAI_WHISPER_API_URL,
@@ -856,9 +857,27 @@ serve(async (req) => {
                         let transcript = transcriptionResult.text;
 
                         // Upload audio to Supabase Storage
-                        let audioUrl = null;
+                        let audioUrl: string | null = null;
                         try {
                           const fileName = `${userId || 'anonymous'}/${Date.now()}.${fileExtension}`;
+                          console.log(`Uploading audio to storage: audio-transcripts/${fileName} (${mimeType}, ${audioBuffer.byteLength} bytes)`);
+
+                          const { data: buckets } = await adminClient.storage.listBuckets();
+                          const bucketExists = buckets?.some((b: any) => b.name === 'audio-transcripts');
+                          
+                          if (!bucketExists) {
+                            console.log("Creating audio-transcripts bucket...");
+                            const { error: createBucketError } = await adminClient.storage.createBucket('audio-transcripts', { 
+                              public: true,
+                              fileSizeLimit: 52428800
+                            });
+                            if (createBucketError) {
+                              console.error("Failed to create bucket:", createBucketError);
+                            } else {
+                              console.log("Successfully created audio-transcripts bucket");
+                            }
+                          }
+
                           const { data: uploadData, error: uploadError } = await adminClient
                             .storage
                             .from('audio-transcripts')
@@ -868,26 +887,21 @@ serve(async (req) => {
                             });
 
                           if (uploadError) {
-                            console.error("Storage upload error:", uploadError);
-                            // Fallback: try to create bucket if it doesn't exist
-                            if ((uploadError as any).message?.includes("bucket not found")) {
-                              console.log("Attempting to create audio-transcripts bucket...");
-                              await adminClient.storage.createBucket('audio-transcripts', { public: true });
-                              // Retry upload once
-                              await adminClient.storage.from('audio-transcripts').upload(fileName, audioBuffer, { contentType: mimeType });
-                              const { data: urlData } = adminClient.storage.from('audio-transcripts').getPublicUrl(fileName);
-                              audioUrl = urlData.publicUrl;
-                            }
+                            console.error("Storage upload error:", JSON.stringify(uploadError));
                           } else {
                             const { data: urlData } = adminClient
                               .storage
                               .from('audio-transcripts')
                               .getPublicUrl(fileName);
-                            audioUrl = urlData.publicUrl;
-                            console.log("Audio uploaded to storage:", audioUrl);
+                            audioUrl = urlData?.publicUrl || null;
+                            console.log("Audio uploaded successfully. Public URL:", audioUrl);
                           }
                         } catch (storageErr) {
-                          console.error("Error managing storage:", storageErr);
+                          console.error("Error managing audio storage:", storageErr);
+                        }
+
+                        if (!audioUrl) {
+                          console.warn("⚠️ Audio URL is null - audio will not be playable for this transcript");
                         }
 
                         if (!transcript || transcript.trim().length === 0) {
@@ -1246,6 +1260,9 @@ serve(async (req) => {
                               collected_data: {},
                               current_field_index: currentFieldIndex,
                               audio_url: audioUrl,
+                              audio_duration: transcriptionResult.duration
+                                ? `${Math.floor(transcriptionResult.duration / 60)}:${String(Math.floor(transcriptionResult.duration % 60)).padStart(2, '0')}`
+                                : null,
                             })
                             .select()
                             .single();

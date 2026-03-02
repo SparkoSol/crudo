@@ -1,4 +1,4 @@
-import { Building2, Smartphone, Clock, AlertCircle } from 'lucide-react';
+import { Building2, Smartphone  , CheckCircle2 } from 'lucide-react';
 
 export function BusinessProfile() {
     return (
@@ -21,18 +21,12 @@ export function BusinessProfile() {
                             <Smartphone className="h-4 w-4 text-gray-400" />
                             +34643656593
                         </span>
-                        <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800 border border-amber-200">
-                            <Clock className="h-3 w-3" />
-                            Pending Review
+                        <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 border border-green-200">
+                            <CheckCircle2 className="h-3 w-3" />
+                            Verified
                         </span>
                     </div>
                 </div>
-            </div>
-            <div className="mt-4 p-3 bg-blue-50 rounded-lg border border-blue-100 flex items-start gap-2">
-                <AlertCircle className="h-4 w-4 text-blue-600 mt-0.5" />
-                <p className="text-xs text-blue-700 leading-relaxed">
-                    <span className="font-semibold">Note:</span> Messaging will be fully enabled once the WhatsApp Business number is approved by Meta. Currently in sandbox/pending mode.
-                </p>
             </div>
         </div>
     );
