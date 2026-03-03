@@ -27,6 +27,7 @@ export const getTranscripts = async (): Promise<VoiceTranscript[]> => {
     `,
     )
     .eq("user_id", session.user.id)
+    .neq("is_session_record", true)
     .order("created_at", { ascending: false });
 
   if (error) {
@@ -114,6 +115,7 @@ export const getManagerTranscripts = async (): Promise<VoiceTranscript[]> => {
     `,
     )
     .in("user_id", allIds)
+    .neq("is_session_record", true)
     .order("created_at", { ascending: false });
 
   if (error) {
@@ -351,6 +353,32 @@ export const deleteUserTemplate = async (templateId: string): Promise<void> => {
     .delete()
     .eq("id", templateId)
     .eq("user_id", session.user.id);
+
+  if (error) {
+    throw error;
+  }
+};
+
+export const deleteTranscript = async (transcriptId: string): Promise<void> => {
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+
+  if (!session?.user) {
+    throw new Error("User not authenticated");
+  }
+
+  // Delete any session/state records that reference this report as a modification target
+  await supabase
+    .from("voice_transcripts")
+    .delete()
+    .eq("modification_target_id", transcriptId);
+
+  // Delete the report itself
+  const { error } = await supabase
+    .from("voice_transcripts")
+    .delete()
+    .eq("id", transcriptId);
 
   if (error) {
     throw error;
