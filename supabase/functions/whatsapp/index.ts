@@ -521,12 +521,259 @@ serve(async (req) => {
                     continue;
                   }
 
+                  async function sendWAMessage(payload: any): Promise<void> {
+                    await fetch(
+                      `https://graph.facebook.com/${apiVersion}/${phoneNumberId}/messages`,
+                      {
+                        method: "POST",
+                        headers: {
+                          Authorization: `Bearer ${accessToken}`,
+                          "Content-Type": "application/json",
+                        },
+                        body: JSON.stringify(payload),
+                      },
+                    );
+                  }
+
+                  // Helper: send the menu template (sales_menu)
+                  async function sendMenuTemplate(to: string): Promise<void> {
+                    const menuTemplateName = Deno.env.get("WHATSAPP_MENU_TEMPLATE_NAME") || "sales_menu";
+                    await sendWAMessage({
+                      messaging_product: "whatsapp",
+                      recipient_type: "individual",
+                      to: normalizePhoneNumber(to),
+                      type: "template",
+                      template: {
+                        name: menuTemplateName,
+                        language: { code: "en" },
+                      },
+                    });
+                  }
+
+                  async function sendModifiedReportTemplate(to: string, reportText: string): Promise<void> {
+                    const modTemplateName = Deno.env.get("WHATSAPP_MODIFIED_REPORT_TEMPLATE_NAME") || "sales_modified_report";
+                    await sendWAMessage({
+                      messaging_product: "whatsapp",
+                      recipient_type: "individual",
+                      to: normalizePhoneNumber(to),
+                      type: "text",
+                      text: { body: `📝 *MODIFIED REPORT*\n\n${reportText}` },
+                    });
+                    await sendWAMessage({
+                      messaging_product: "whatsapp",
+                      recipient_type: "individual",
+                      to: normalizePhoneNumber(to),
+                      type: "template",
+                      template: {
+                        name: modTemplateName,
+                        language: { code: "en" },
+                      },
+                    });
+                  }
+
+                  async function applyModificationWithGPT(
+                    originalTranscript: string,
+                    modificationRequest: string,
+                    openaiKey: string,
+                  ): Promise<string> {
+                    const resp = await fetch(OPENAI_API_URL, {
+                      method: "POST",
+                      headers: {
+                        Authorization: `Bearer ${openaiKey}`,
+                        "Content-Type": "application/json",
+                      },
+                      body: JSON.stringify({
+                        model: Deno.env.get("OPENAI_GPT_MODEL") || "gpt-4o-mini",
+                        messages: [
+                          {
+                            role: "system",
+                            content:
+                              "You are an assistant that updates sales visit reports based on modification requests. " +
+                              "Return ONLY the updated report text, preserving the original formatting and structure as much as possible.",
+                          },
+                          {
+                            role: "user",
+                            content:
+                              `Original report transcript:\n${originalTranscript}\n\n` +
+                              `Modification request: ${modificationRequest}\n\n` +
+                              "Apply the modification and return the updated report text only.",
+                          },
+                        ],
+                        temperature: 0.3,
+                      }),
+                    });
+                    if (!resp.ok) return originalTranscript;
+                    const json = await resp.json();
+                    return json.choices?.[0]?.message?.content || originalTranscript;
+                  }
+
+                  function buildReportDisplay(record: any): string {
+                    const date = new Date(record.created_at).toLocaleDateString();
+                    const transcript = record.modified_transcript || record.transcript || "";
+                    const filledData = record.filled_data || {};
+                    let text = `📋 *Report – ${date}*\n\n`;
+                    if (Object.keys(filledData).length > 0) {
+                      for (const [k, v] of Object.entries(filledData)) {
+                        if (v) text += `• *${k}*: ${v}\n`;
+                      }
+                      text += "\n";
+                    }
+                    if (transcript && transcript.trim().length > 0) {
+                      const truncated = transcript.length > 800 ? transcript.substring(0, 800) + "..." : transcript;
+                      text += truncated;
+                    }
+                    return text.trim();
+                  }
+
                   // Handle text messages for field collection
                   if (messageType === "text") {
                     const textBody = message.text?.body || "";
+                    const textLower = textBody.trim().toLowerCase();
                     console.log("Received text message:", textBody);
 
-                    // Check if user has an active conversation in collecting_fields state
+                    if (textLower === "menu") {
+                      console.log("User requested menu");
+                      await sendMenuTemplate(from);
+                      continue;
+                    }
+
+                    const { data: reportSelectionConv } = await adminClient
+                      .from("voice_transcripts")
+                      .select("*")
+                      .eq("phone_number", from)
+                      .eq("conversation_state", "awaiting_report_selection")
+                      .order("created_at", { ascending: false })
+                      .limit(1)
+                      .maybeSingle();
+
+                    if (reportSelectionConv) {
+                      const choice = parseInt(textBody.trim(), 10);
+                      const reportList: any[] = reportSelectionConv.collected_data?.report_list || [];
+                      if (!isNaN(choice) && choice >= 1 && choice <= reportList.length) {
+                        const chosenReport = reportList[choice - 1];
+                        console.log("User selected report:", chosenReport.id);
+                        await adminClient
+                          .from("voice_transcripts")
+                          .update({ conversation_state: "consumed" })
+                          .eq("id", reportSelectionConv.id);
+                        // Session record for modification input (is_session_record=true keeps it off the dashboard)
+                        await adminClient.from("voice_transcripts").insert({
+                          phone_number: from,
+                          user_id: userId,
+                          transcript: "",
+                          status: "pending",
+                          is_session_record: true,
+                          conversation_state: "awaiting_modification_input",
+                          modification_target_id: chosenReport.id,
+                          flow_action: "modify_report",
+                          filled_data: {},
+                          collected_data: {},
+                          missing_required_fields: [],
+                          current_field_index: 0,
+                        });
+                        // Show the selected report
+                        const { data: targetReport } = await adminClient
+                          .from("voice_transcripts")
+                          .select("*")
+                          .eq("id", chosenReport.id)
+                          .single();
+                        const reportDisplay = targetReport ? buildReportDisplay(targetReport) : "(Report not found)";
+                        await sendWAMessage({
+                          messaging_product: "whatsapp",
+                          recipient_type: "individual",
+                          to: normalizePhoneNumber(from),
+                          type: "text",
+                          text: { body: reportDisplay },
+                        });
+                        await sendWAMessage({
+                          messaging_product: "whatsapp",
+                          recipient_type: "individual",
+                          to: normalizePhoneNumber(from),
+                          type: "text",
+                          text: {
+                            body:
+                              "✏️ *What would you like to modify?*\n\nYou can:\n" +
+                              "• Write changes in text\n" +
+                              "• Send a voice message with corrections\n\n" +
+                              'Example: _"Change the date from 12/12/2022 to 12/12/2023"_',
+                          },
+                        });
+                      } else {
+                        await sendWAMessage({
+                          messaging_product: "whatsapp",
+                          recipient_type: "individual",
+                          to: normalizePhoneNumber(from),
+                          type: "text",
+                          text: {
+                            body: `❌ Invalid choice. Please reply with a number between 1 and ${reportList.length}, or type *menu* to start over.`,
+                          },
+                        });
+                      }
+                      continue;
+                    }
+
+                    const { data: modInputConv } = await adminClient
+                      .from("voice_transcripts")
+                      .select("*")
+                      .eq("phone_number", from)
+                      .eq("conversation_state", "awaiting_modification_input")
+                      .order("created_at", { ascending: false })
+                      .limit(1)
+                      .maybeSingle();
+
+                    if (modInputConv?.modification_target_id) {
+                      console.log("Processing text modification input");
+                      const { data: targetReport } = await adminClient
+                        .from("voice_transcripts")
+                        .select("*")
+                        .eq("id", modInputConv.modification_target_id)
+                        .single();
+
+                      if (targetReport && openaiApiKey) {
+                          const originalText = targetReport.modified_transcript || targetReport.transcript || "";
+                          await sendWAMessage({
+                            messaging_product: "whatsapp",
+                            recipient_type: "individual",
+                            to: normalizePhoneNumber(from),
+                            type: "text",
+                            text: { body: "⏳ Processing your modification..." },
+                          });
+                          const updatedText = await applyModificationWithGPT(originalText, textBody, openaiApiKey);
+
+                          let updatedFilledData = targetReport.filled_data || {};
+                          if (targetReport.template_id) {
+                            const { data: tplForExtract } = await adminClient
+                              .from("user_templates")
+                              .select("fields")
+                              .eq("id", targetReport.template_id)
+                              .maybeSingle();
+                            if (tplForExtract?.fields && (tplForExtract.fields as any[]).length > 0) {
+                              const newExtracted = await extractFieldsWithGPT(updatedText, tplForExtract.fields as any[], openaiApiKey);
+                              if (newExtracted) updatedFilledData = newExtracted;
+                            }
+                          }
+
+                          await adminClient
+                            .from("voice_transcripts")
+                            .update({ modified_transcript: updatedText, filled_data: updatedFilledData })
+                            .eq("id", targetReport.id);
+                          await adminClient
+                            .from("voice_transcripts")
+                            .update({ conversation_state: "awaiting_modification_confirmation" })
+                            .eq("id", modInputConv.id);
+                          await sendModifiedReportTemplate(from, updatedText);
+                      } else {
+                        await sendWAMessage({
+                          messaging_product: "whatsapp",
+                          recipient_type: "individual",
+                          to: normalizePhoneNumber(from),
+                          type: "text",
+                          text: { body: "❌ Could not process modification. Please try again or type *menu*." },
+                        });
+                      }
+                      continue;
+                    }
+
                     const { data: activeTranscript } = await adminClient
                       .from("voice_transcripts")
                       .select("*")
@@ -726,30 +973,18 @@ serve(async (req) => {
                       }
                     }
 
-                    // No active field collection, send default message
+                    // No active field collection – prompt to send voice or menu
                     if (accessToken && phoneNumberId) {
                       try {
-                        const responsePayload = {
+                        await sendWAMessage({
                           messaging_product: "whatsapp",
                           recipient_type: "individual",
                           to: normalizePhoneNumber(from),
                           type: "text",
                           text: {
-                            body: `👋 Hi! I received your message: "${textBody}".\n\nI am currently configured to process voice messages. Please send me a voice note to test transcription! 🎤`,
+                            body: "🎤 Please send a *voice message* to generate your sales report.\n\nType *menu* at any time to see available options.",
                           },
-                        };
-
-                        await fetch(
-                          `https://graph.facebook.com/${apiVersion}/${phoneNumberId}/messages`,
-                          {
-                            method: "POST",
-                            headers: {
-                              Authorization: `Bearer ${accessToken}`,
-                              "Content-Type": "application/json",
-                            },
-                            body: JSON.stringify(responsePayload),
-                          },
-                        );
+                        });
                       } catch (error) {
                         console.error("Error sending text reply:", error);
                       }
@@ -936,6 +1171,70 @@ serve(async (req) => {
                         console.log(
                           `User verified: ${userId}, Manager: ${effectiveManagerId}`,
                         );
+
+                        const { data: voiceModConv } = await adminClient
+                          .from("voice_transcripts")
+                          .select("*")
+                          .eq("phone_number", from)
+                          .eq("conversation_state", "awaiting_modification_input")
+                          .order("created_at", { ascending: false })
+                          .limit(1)
+                          .maybeSingle();
+
+                        if (voiceModConv?.modification_target_id) {
+                          console.log("Voice modification received, applying to report:", voiceModConv.modification_target_id);
+                          const { data: targetReport } = await adminClient
+                            .from("voice_transcripts")
+                            .select("*")
+                            .eq("id", voiceModConv.modification_target_id)
+                            .single();
+
+                          if (targetReport) {
+                            const originalText = targetReport.modified_transcript || targetReport.transcript || "";
+                            await sendWAMessage({
+                              messaging_product: "whatsapp",
+                              recipient_type: "individual",
+                              to: normalizePhoneNumber(from),
+                              type: "text",
+                              text: { body: "⏳ Processing your voice modification..." },
+                            });
+                            const updatedText = await applyModificationWithGPT(originalText, transcript, openaiApiKey);
+
+                            // Re-extract filled_data from the updated transcript so report fields are also updated
+                            let updatedFilledData = targetReport.filled_data || {};
+                            if (targetReport.template_id) {
+                              const { data: tplForExtract } = await adminClient
+                                .from("user_templates")
+                                .select("fields")
+                                .eq("id", targetReport.template_id)
+                                .maybeSingle();
+                              if (tplForExtract?.fields && (tplForExtract.fields as any[]).length > 0) {
+                                const newExtracted = await extractFieldsWithGPT(updatedText, tplForExtract.fields as any[], openaiApiKey);
+                                if (newExtracted) updatedFilledData = newExtracted;
+                              }
+                            }
+
+                            // Store updated transcript AND updated filled_data
+                            await adminClient
+                              .from("voice_transcripts")
+                              .update({ modified_transcript: updatedText, filled_data: updatedFilledData })
+                              .eq("id", targetReport.id);
+                            await adminClient
+                              .from("voice_transcripts")
+                              .update({ conversation_state: "awaiting_modification_confirmation" })
+                              .eq("id", voiceModConv.id);
+                            await sendModifiedReportTemplate(from, updatedText);
+                          } else {
+                            await sendWAMessage({
+                              messaging_product: "whatsapp",
+                              recipient_type: "individual",
+                              to: normalizePhoneNumber(from),
+                              type: "text",
+                              text: { body: "❌ Could not find the original report. Please type *menu* to start over." },
+                            });
+                          }
+                          continue;
+                        }
 
                         // Check if there's an ongoing conversation in collecting_fields state
                         const { data: ongoingConversation } = await adminClient
@@ -1236,6 +1535,18 @@ serve(async (req) => {
                           missingFields.map((f) => f.name),
                         );
 
+                        // Clean up any stale session or modification records BEFORE starting this new one
+                        // to ensure future button clicks (like "Confirm") correctly target this new record
+                        const { error: cleanupError } = await adminClient
+                          .from("voice_transcripts")
+                          .update({ conversation_state: "consumed" })
+                          .eq("phone_number", from)
+                          .eq("is_session_record", true);
+
+                        if (cleanupError) {
+                          console.error("Failed to clean up stale sessions during creation:", cleanupError);
+                        }
+
                         // Store transcript with conversation state
                         let conversationState = "awaiting_confirmation";
                         let currentFieldIndex = 0;
@@ -1259,6 +1570,7 @@ serve(async (req) => {
                               missing_required_fields: missingFields,
                               collected_data: {},
                               current_field_index: currentFieldIndex,
+                              is_session_record: false, // Explicitly false to ensures it shows on dashboard and is found by lookups
                               audio_url: audioUrl,
                               audio_duration: transcriptionResult.duration
                                 ? `${Math.floor(transcriptionResult.duration / 60)}:${String(Math.floor(transcriptionResult.duration % 60)).padStart(2, '0')}`
@@ -1390,29 +1702,308 @@ serve(async (req) => {
                       (message as any).button?.payload ||
                       "";
 
-                    console.log(
-                      `Button clicked: ${buttonText} (ID: ${buttonId})`,
-                    );
+                    console.log(`Button clicked: ${buttonText} (ID: ${buttonId})`);
 
+                    // ── CREATE REPORT (from menu template) ───────────────
+                    if (buttonId === "create_report" || buttonText.includes("create report")) {
+                      await sendWAMessage({
+                        messaging_product: "whatsapp",
+                        recipient_type: "individual",
+                        to: normalizePhoneNumber(from),
+                        type: "text",
+                        text: {
+                          body: "🎤 Please send a *voice message* to create your sales report.",
+                        },
+                      });
+                      continue;
+                    }
+
+                    // ── MODIFY REPORT (from menu template) ───────────────
+                    if (buttonId === "modify_report" || buttonText.includes("modify report")) {
+                      // Fetch recent confirmed reports for this salesperson
+                      const { data: userReports } = await adminClient
+                        .from("voice_transcripts")
+                        .select("id, created_at, filled_data, transcript")
+                        .eq("user_id", userId)
+                        .in("status", ["confirmed"])
+                        .order("created_at", { ascending: false })
+                        .limit(10);
+
+                      if (!userReports || userReports.length === 0) {
+                        await sendWAMessage({
+                          messaging_product: "whatsapp",
+                          recipient_type: "individual",
+                          to: normalizePhoneNumber(from),
+                          type: "text",
+                          text: {
+                            body: "📭 You have no confirmed reports to modify yet.\n\nType *menu* and choose *Create Report* to create your first one.",
+                          },
+                        });
+                        continue;
+                      }
+
+                      // List reports
+                      let listMsg = "✏️ *Recent reports that you can modify:*\n\n";
+                      userReports.forEach((r: any, i: number) => {
+                        const date = new Date(r.created_at).toLocaleDateString();
+                        // Try many common field name variations for client name
+                        const fd = r.filled_data || {};
+                        const clientName =
+                          fd.client_name || fd.Cliente || fd.client ||
+                          fd.customer || fd.Customer || fd.company || fd.Company ||
+                          fd.business || fd.Business || fd.account || fd.Account ||
+                          // Fall back to first non-empty string value in filled_data
+                          Object.values(fd).find((v: any) => typeof v === 'string' && v.trim().length > 0 && v.length < 60) ||
+                          // Or use first field of transcript (first line)
+                          (r.transcript ? r.transcript.split('\n')[0].substring(0, 40) : null) ||
+                          `Report #${i + 1}`;
+                        listMsg += `${i + 1}. ${clientName} – ${date}\n`;
+                      });
+                      listMsg += "\n💬 Respond with the *number* of the report you want to modify (1, 2, 3, etc.)";
+
+                      // Persist awaiting_report_selection state (is_session_record=true keeps it off the dashboard)
+                      await adminClient.from("voice_transcripts").insert({
+                        phone_number: from,
+                        user_id: userId,
+                        transcript: "",
+                        status: "pending",
+                        is_session_record: true,
+                        conversation_state: "awaiting_report_selection",
+                        flow_action: "modify_report",
+                        collected_data: { report_list: userReports.map((r: any) => ({ id: r.id })) },
+                        filled_data: {},
+                        missing_required_fields: [],
+                        current_field_index: 0,
+                      });
+
+                      await sendWAMessage({
+                        messaging_product: "whatsapp",
+                        recipient_type: "individual",
+                        to: normalizePhoneNumber(from),
+                        type: "text",
+                        text: { body: listMsg },
+                      });
+                      continue;
+                    }
+
+                    // ── CONFIRM (modified report) ─────────────────────────
+                    // Intercept ANY confirm-like button: check if there's a pending
+                    // modification awaiting confirmation in the DB — if so, handle it.
+                    // If not, fall through to the standard new-report confirm flow.
+                    if (buttonId === "confirm_modification" ||
+                        buttonId === "Confirm" ||
+                        buttonText.includes("confirm")) {
+                      // Check for modification confirmation state first
+                      const { data: modConfConv } = await adminClient
+                        .from("voice_transcripts")
+                        .select("*")
+                        .eq("phone_number", from)
+                        .eq("conversation_state", "awaiting_modification_confirmation")
+                        .order("created_at", { ascending: false })
+                        .limit(1)
+                        .maybeSingle();
+
+                      if (modConfConv?.modification_target_id) {
+                        const { data: targetReport } = await adminClient
+                          .from("voice_transcripts")
+                          .select("*")
+                          .eq("id", modConfConv.modification_target_id)
+                          .single();
+
+                        if (targetReport) {
+                          // Mark session record as confirmed
+                          await adminClient
+                            .from("voice_transcripts")
+                            .update({ status: "session", conversation_state: "confirmed" })
+                            .eq("id", modConfConv.id);
+
+                          // Mark original target report as confirmed
+                          await adminClient
+                            .from("voice_transcripts")
+                            .update({ status: "confirmed", conversation_state: "confirmed" })
+                            .eq("id", targetReport.id);
+
+                          // Re-fetch the target report to get the absolute latest
+                          // modified_transcript and filled_data saved during the modification step
+                          const { data: freshTargetReport } = await adminClient
+                            .from("voice_transcripts")
+                            .select("*")
+                            .eq("id", targetReport.id)
+                            .single();
+
+                          const latestReport = freshTargetReport || targetReport;
+
+                          // Use modified_transcript for PDF; fall back to original
+                          const finalTranscript = latestReport.modified_transcript || latestReport.transcript || "";
+                          const filledDataMod = latestReport.filled_data || {};
+
+                          // Full-quality PDF (same as new-report flow)
+                          try {
+                            const pdfDocM = await PDFDocument.create();
+                            const pageM = pdfDocM.addPage([612, 792]);
+                            const fontM = await pdfDocM.embedFont(StandardFonts.Helvetica);
+                            const boldFontM = await pdfDocM.embedFont(StandardFonts.HelveticaBold);
+                            const pageWidth = 612;
+                            const pageHeight = 792;
+                            const margin = 50;
+                            const lineHeight = 20;
+                            const sectionSpacing = 30;
+                            let yPositionM = 750;
+
+                            const addTextM = (text: string, x: number, y: number, size: number, fontType: any, maxWidth?: number, color?: any) => {
+                              const drawOpts: any = { x, size, font: fontType };
+                              if (color) drawOpts.color = color;
+                              let proc = text.replace(/\n/g, " ").replace(/\r/g, "").replace(/\t/g, " ");
+                              try { fontType.widthOfTextAtSize(proc, size); } catch { proc = proc.replace(/[^\x20-\x7E\x80-\xFF]/g, ""); }
+                              if (maxWidth) {
+                                const words = proc.split(" ").filter((w: string) => w.length > 0);
+                                let line = ""; let curY = y;
+                                for (const word of words) {
+                                  const test = line + (line ? " " : "") + word;
+                                  try {
+                                    if (fontType.widthOfTextAtSize(test, size) > maxWidth && line) {
+                                      pageM.drawText(line, { ...drawOpts, y: curY }); line = word; curY -= lineHeight;
+                                    } else { line = test; }
+                                  } catch { line += " [...]"; }
+                                }
+                                if (line) { try { pageM.drawText(line, { ...drawOpts, y: curY }); } catch {} curY -= lineHeight; }
+                                return curY;
+                              } else {
+                                try { pageM.drawText(proc, { ...drawOpts, y }); } catch {
+                                  pageM.drawText(proc.replace(/[^\x20-\x7E]/g, "?"), { ...drawOpts, y });
+                                }
+                                return y - lineHeight;
+                              }
+                            };
+
+                            pageM.drawRectangle({ x: 0, y: pageHeight - 100, width: pageWidth, height: 100, color: rgb(0.1, 0.1, 0.1) });
+                            yPositionM = pageHeight - 50;
+                            addTextM("Sales Visit Report (Updated)", margin, yPositionM, 22, boldFontM, undefined, rgb(1, 1, 1));
+                            yPositionM -= 35;
+                            addTextM(`Generated: ${new Date().toLocaleString()}`, margin, yPositionM, 10, fontM, undefined, rgb(0.8, 0.8, 0.8));
+                            yPositionM = pageHeight - 130;
+
+                            // Rep details
+                            yPositionM = addTextM("Sales Representative Details", margin, yPositionM, 14, boldFontM, undefined, rgb(0, 0, 0));
+                            yPositionM -= 15;
+                            const repNameM = userName || "(Name not available)";
+                            // Use profile phone_number or fall back to the WhatsApp 'from' number
+                            const repPhoneM = profile?.phone_number || from || "(Phone not available)";
+                            addTextM("Name:", margin, yPositionM, 11, boldFontM); addTextM(repNameM, margin + 50, yPositionM, 11, fontM);
+                            yPositionM -= 20;
+                            addTextM("Phone:", margin, yPositionM, 11, boldFontM); addTextM(repPhoneM, margin + 50, yPositionM, 11, fontM);
+                            yPositionM -= sectionSpacing;
+
+                            // Template info
+                            const { data: tplM } = await adminClient.from("user_templates").select("name,fields").eq("id", targetReport.template_id).maybeSingle();
+                            const tplName = tplM?.name || "Standard Sales Report";
+                            yPositionM = addTextM(`Template: ${tplName}`, margin, yPositionM, 12, boldFontM);
+                            yPositionM -= sectionSpacing;
+
+                            // Filled data
+                            if (Object.keys(filledDataMod).length > 0) {
+                              yPositionM = addTextM("Report Details", margin, yPositionM, 14, boldFontM);
+                              pageM.drawLine({ start: { x: margin, y: yPositionM + 5 }, end: { x: pageWidth - margin, y: yPositionM + 5 }, thickness: 1, color: rgb(0.8, 0.8, 0.8) });
+                              yPositionM -= 15;
+                              const fieldMap: Record<string, string> = {};
+                              if (tplM?.fields) { for (const f of (tplM.fields as any[])) { if (f.name) fieldMap[f.name] = f.label || f.name; } }
+                              for (const [k, v] of Object.entries(filledDataMod)) {
+                                const lbl = fieldMap[k] || k.charAt(0).toUpperCase() + k.slice(1).replace(/_/g, " ");
+                                const valStr = v !== null && v !== undefined && String(v).trim() !== "" ? String(v) : "N/A";
+                                yPositionM = addTextM(`${lbl}:`, margin, yPositionM, 11, boldFontM);
+                                yPositionM = addTextM(valStr, margin + 20, yPositionM, 10, fontM, pageWidth - 2 * margin - 20);
+                                yPositionM -= 10;
+                              }
+                              yPositionM -= sectionSpacing;
+                            }
+
+                            // Modified transcript
+                            yPositionM = addTextM("Updated Transcript", margin, yPositionM, 14, boldFontM);
+                            pageM.drawLine({ start: { x: margin, y: yPositionM + 5 }, end: { x: pageWidth - margin, y: yPositionM + 5 }, thickness: 1, color: rgb(0.8, 0.8, 0.8) });
+                            yPositionM -= 15;
+                            yPositionM = addTextM(finalTranscript, margin, yPositionM, 10, fontM, pageWidth - 2 * margin);
+
+                            const pdfBytesM = await pdfDocM.save();
+                            const pdfBlobM = new Blob([pdfBytesM], { type: "application/pdf" });
+                            const fdM = new FormData();
+                            fdM.append("file", pdfBlobM, "updated_report.pdf");
+                            fdM.append("messaging_product", "whatsapp");
+                            const upRespM = await fetch(`https://graph.facebook.com/${apiVersion}/${phoneNumberId}/media`, {
+                              method: "POST",
+                              headers: { Authorization: `Bearer ${accessToken}` },
+                              body: fdM,
+                            });
+                            const upResultM = await upRespM.json();
+                            if (upRespM.ok && upResultM.id) {
+                              await sendWAMessage({
+                                messaging_product: "whatsapp",
+                                recipient_type: "individual",
+                                to: normalizePhoneNumber(from),
+                                type: "document",
+                                document: { id: upResultM.id, caption: "✅ Your updated report is ready! 📄", filename: "updated_report.pdf" },
+                              });
+                            } else { throw new Error(JSON.stringify(upResultM)); }
+                          } catch (pdfErrM) {
+                            console.error("PDF generation error for modified report:", pdfErrM);
+                            await sendWAMessage({
+                              messaging_product: "whatsapp",
+                              recipient_type: "individual",
+                              to: normalizePhoneNumber(from),
+                              type: "text",
+                              text: { body: "✅ Report updated! PDF generation failed. Check the portal for your report." },
+                            });
+                          }
+                          continue;
+                        }
+                      }
+                      // fall through to standard confirm handling below
+                    }
+
+                    // ── MODIFY AGAIN (from modified report template) ──────
+                    if (buttonId === "modify_again" || buttonText.includes("modify")) {
+                      // Check for modification confirmation state
+                      const { data: modAgainConv } = await adminClient
+                        .from("voice_transcripts")
+                        .select("*")
+                        .eq("phone_number", from)
+                        .eq("conversation_state", "awaiting_modification_confirmation")
+                        .order("created_at", { ascending: false })
+                        .limit(1)
+                        .maybeSingle();
+
+                      if (modAgainConv) {
+                        // Reset back to awaiting_modification_input
+                        await adminClient
+                          .from("voice_transcripts")
+                          .update({ conversation_state: "awaiting_modification_input" })
+                          .eq("id", modAgainConv.id);
+                        await sendWAMessage({
+                          messaging_product: "whatsapp",
+                          recipient_type: "individual",
+                          to: normalizePhoneNumber(from),
+                          type: "text",
+                          text: {
+                            body:
+                              "✏️ *What would you like to modify?*\n\nYou can:\n" +
+                              "• Write changes in text\n" +
+                              "• Send a voice message with corrections\n\n" +
+                              'Example: _"Change the date from 12/12/2022 to 12/12/2023"_',
+                          },
+                        });
+                        continue;
+                      }
+                    }
+
+                    // ── Standard confirm / retake flow ────────────────────
                     let action: "confirm" | "retake" | null = null;
-                    if (
-                      buttonId === "Confirm" ||
-                      buttonText.includes("confirm")
-                    ) {
+                    if (buttonId === "Confirm" || buttonText.includes("confirm")) {
                       action = "confirm";
-                    } else if (
-                      buttonId === "Retake" ||
-                      buttonText.includes("retake")
-                    ) {
+                    } else if (buttonId === "Retake" || buttonText.includes("retake")) {
                       action = "retake";
                     }
 
                     if (!action) {
-                      console.log(
-                        "Unknown button clicked:",
-                        buttonText,
-                        buttonId,
-                      );
+                      console.log("Unknown button clicked:", buttonText, buttonId);
                       continue;
                     }
 
@@ -1425,27 +2016,34 @@ serve(async (req) => {
 
                     if (action === "confirm") {
                       try {
-                        // Get the awaiting_confirmation transcript
+                        // Get the awaiting_confirmation transcript (exclude session/state records)
+                        // Using a more robust lookup to handle NULLs and format variations
                         const { data: transcriptRecord, error: transcriptError } =
                           await adminClient
                             .from("voice_transcripts")
                             .select("*")
-                            .eq("phone_number", from)
+                            .or(`phone_number.eq."${from}",phone_number.eq."${normalizePhoneNumber(from)}"`)
                             .eq("conversation_state", "awaiting_confirmation")
+                            .or('is_session_record.is.null,is_session_record.eq.false')
                             .order("created_at", { ascending: false })
                             .limit(1)
                             .maybeSingle();
 
+                        let pendingRecord: any = null;
                         if (!transcriptRecord) {
                           // Fallback to pending status for backwards compatibility
-                          const { data: pendingRecord } = await adminClient
+                          // IMPORTANT: exclude session records so we only pick up real transcript records
+                          const { data: pendingData } = await adminClient
                             .from("voice_transcripts")
                             .select("*")
-                            .eq("phone_number", from)
+                            .or(`phone_number.eq."${from}",phone_number.eq."${normalizePhoneNumber(from)}"`)
                             .eq("status", "pending")
+                            .or('is_session_record.is.null,is_session_record.eq.false')
                             .order("created_at", { ascending: false })
                             .limit(1)
                             .maybeSingle();
+
+                          pendingRecord = pendingData;
 
                           if (!pendingRecord) {
                             console.error(
@@ -1475,7 +2073,8 @@ serve(async (req) => {
                           }
                         }
 
-                        const finalRecord = transcriptRecord;
+                        // Use pendingRecord as actual fallback when transcriptRecord is null
+                        const finalRecord = transcriptRecord ?? pendingRecord;
                         let userId = finalRecord.user_id;
 
                         let effectiveManagerId = userId;
@@ -1521,6 +2120,19 @@ serve(async (req) => {
 
                         // Use the merged filled_data
                         const filledData = finalRecord.filled_data || {};
+
+                        // Clean up any stale session records for this phone number
+                        // to prevent them from interfering with future confirmations
+                        await adminClient
+                          .from("voice_transcripts")
+                          .update({ conversation_state: "consumed" })
+                          .eq("phone_number", from)
+                          .eq("is_session_record", true)
+                          .in("conversation_state", [
+                            "awaiting_modification_confirmation",
+                            "awaiting_modification_input",
+                            "awaiting_report_selection",
+                          ]);
 
                         // Update transcript status
                         await adminClient

@@ -189,6 +189,10 @@ serve(async (req) => {
       }
     };
 
+    // Use modified transcript if available (report was updated via WhatsApp modify flow)
+    const transcriptText = (transcript as any).modified_transcript || transcript.transcript || "";
+    const filledDataRaw = transcript.filled_data;
+
     yPosition = addText(
       "Voice Transcript Report",
       margin,
@@ -204,14 +208,17 @@ serve(async (req) => {
         yPosition = addText(`Salesperson: ${profile.full_name}`, margin, yPosition, 12, font);
         yPosition -= 5;
       }
-      if (profile.phone_number) {
-        yPosition = addText(`Phone: ${profile.phone_number}`, margin, yPosition, 12, font);
+      // Use phone_number from profile; fall back to phone_number from transcript row itself
+      const phoneDisplay = profile.phone_number || (transcript as any).phone_number || null;
+      if (phoneDisplay) {
+        yPosition = addText(`Phone: ${phoneDisplay}`, margin, yPosition, 12, font);
         yPosition -= sectionSpacing;
       }
     }
 
+    const isUpdated = !!(transcript as any).modified_transcript;
     const dateStr = new Date(transcript.created_at).toLocaleString();
-    yPosition = addText(`Generated: ${dateStr}`, margin, yPosition, 10, font);
+    yPosition = addText(`Generated: ${dateStr}${isUpdated ? "  [Updated Report]" : ""}`, margin, yPosition, 10, font);
     yPosition -= sectionSpacing;
     if (transcript.user_templates && typeof transcript.user_templates === 'object' && 'name' in transcript.user_templates) {
       const templateName = (transcript.user_templates as any).name;
@@ -225,10 +232,12 @@ serve(async (req) => {
       yPosition -= sectionSpacing;
     }
 
-    yPosition = addText("Transcript:", margin, yPosition, 14, boldFont);
+    // Show updated vs original label
+    const transcriptSectionLabel = isUpdated ? "Updated Transcript:" : "Transcript:";
+    yPosition = addText(transcriptSectionLabel, margin, yPosition, 14, boldFont);
     yPosition -= 10;
     yPosition = addText(
-      transcript.transcript,
+      transcriptText,
       margin,
       yPosition,
       10,
@@ -237,11 +246,11 @@ serve(async (req) => {
     );
     yPosition -= sectionSpacing;
 
-    if (transcript.filled_data && typeof transcript.filled_data === 'object') {
+    if (filledDataRaw && typeof filledDataRaw === 'object') {
       yPosition = addText("Filled Template Data:", margin, yPosition, 14, boldFont);
       yPosition -= 10;
 
-      const filledData = transcript.filled_data as Record<string, any>;
+      const filledData = filledDataRaw as Record<string, any>;
       for (const [key, value] of Object.entries(filledData)) {
         const label = key.charAt(0).toUpperCase() + key.slice(1).replace(/_/g, " ");
         const valueStr = value !== null && value !== undefined ? String(value) : "N/A";

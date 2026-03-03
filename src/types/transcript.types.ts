@@ -3,11 +3,14 @@ export interface VoiceTranscript {
   user_id: string;
   phone_number: string;
   transcript: string;
+  modified_transcript: string | null;
   template_id: string | null;
   filled_data: Record<string, unknown> | null;
   status: "pending" | "confirmed" | "retaken";
+  is_session_record: boolean;
   audio_url: string | null;
   audio_duration: string | null;
+  flow_action: string | null;
   created_at: string;
   updated_at: string;
   user_templates?: {
