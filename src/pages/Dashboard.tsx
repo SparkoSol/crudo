@@ -2,9 +2,10 @@ import { useState, useEffect, useRef } from 'react';
 import { StatsCard } from '@/components/dashboard/StatsCard';
 import { SearchBar } from '@/components/dashboard/SearchBar';
 import { Loading } from '@/components/Loading';
-import { FileText, Calendar, Users, Clock, CheckCircle2, RefreshCw, Download, Loader2, Play, Share } from 'lucide-react';
+import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
+import { FileText, Calendar, Users, Clock, Download, Loader2, Play, Share, Trash2 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
-import { getTranscripts, getManagerTranscripts, downloadPDF } from '@/services/transcriptServices';
+import { getTranscripts, getManagerTranscripts, downloadPDF, deleteTranscript } from '@/services/transcriptServices';
 import { getManagedProfiles } from '@/services/profileServices';
 import { StatsCardSkeleton } from '@/components/dashboard/StatsCardSkeleton';
 import { Card, CardContent } from '@/components/ui/card';
@@ -28,6 +29,8 @@ export default function Dashboard() {
   const [transcripts, setTranscripts] = useState<VoiceTranscript[]>([]);
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
   const [playingId, setPlayingId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<VoiceTranscript | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
   useEffect(() => {
@@ -146,33 +149,56 @@ export default function Dashboard() {
     }
   };
 
+  const handleDeleteReport = async () => {
+    if (!deleteTarget) return;
+    try {
+      setDeletingId(deleteTarget.id);
+      await deleteTranscript(deleteTarget.id);
+      setTranscripts(prev => prev.filter(t => t.id !== deleteTarget.id));
+      setStats(prev => ({ ...prev, totalReports: Math.max(0, prev.totalReports - 1) }));
+      toast.success('Report deleted successfully');
+    } catch (error) {
+      console.error('Failed to delete report:', error);
+      toast.error('Failed to delete report');
+    } finally {
+      setDeletingId(null);
+      setDeleteTarget(null);
+    }
+  };
+
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'confirmed':
         return (
-          <Badge className="bg-green-100 text-green-800 border-green-200">
-            <CheckCircle2 className="h-3 w-3 mr-1" />
+          <Badge className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border bg-emerald-50 text-emerald-700 border-emerald-200 shadow-sm shadow-emerald-100 hover:bg-emerald-100 hover:shadow-emerald-200 hover:scale-[1.04] transition-all duration-200 cursor-default select-none">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
             Confirmed
           </Badge>
         );
       case 'pending':
         return (
-          <Badge className="bg-yellow-100 text-yellow-800 border-yellow-200">
-            <Clock className="h-3 w-3 mr-1" />
+          <Badge className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border bg-amber-50 text-amber-700 border-amber-200 shadow-sm shadow-amber-100 hover:bg-amber-100 hover:shadow-amber-200 hover:scale-[1.04] transition-all duration-200 cursor-default select-none">
+            <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
             Pending
           </Badge>
         );
       case 'retaken':
         return (
-          <Badge className="bg-gray-100 text-gray-800 border-gray-200">
-            <RefreshCw className="h-3 w-3 mr-1" />
+          <Badge className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border bg-slate-100 text-slate-600 border-slate-200 shadow-sm shadow-slate-100 hover:bg-slate-200 hover:shadow-slate-200 hover:scale-[1.04] transition-all duration-200 cursor-default select-none">
+            <span className="w-1.5 h-1.5 rounded-full bg-slate-400" />
             Retaken
           </Badge>
         );
       default:
-        return <Badge>{status}</Badge>;
+        return (
+          <Badge className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border bg-gray-100 text-gray-600 border-gray-200 shadow-sm hover:bg-gray-200 hover:scale-[1.04] transition-all duration-200 cursor-default select-none">
+            {status}
+          </Badge>
+        );
     }
   };
+
+  const isManager = profile?.role === 'manager';
 
   const filteredTranscripts = transcripts.filter((t) => {
     if (!searchQuery) return true;
@@ -268,10 +294,17 @@ export default function Dashboard() {
                   onClick={() => navigate(`/reporte/${transcript.id}`)}
                 >
                   <div className="p-6">
-                    {/* Header */}
                     <div className="flex items-start justify-between gap-4 mb-3">
                       <div className="flex flex-col items-start gap-2.5">
-                        {getStatusBadge(transcript.status)}
+                        <div className="flex items-center gap-2">
+                          {getStatusBadge(transcript.status)}
+                          {transcript.modified_transcript && (
+                            <Badge className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border bg-blue-50 text-blue-700 border-blue-200 shadow-sm shadow-blue-100 hover:bg-blue-100 hover:shadow-blue-200 hover:scale-[1.04] transition-all duration-200 cursor-default select-none">
+                              <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />
+                              Updated
+                            </Badge>
+                          )}
+                        </div>
                         <div>
                           <h3 className="font-bold text-gray-900 text-lg group-hover:text-brand-primary-600 transition-colors">
                             {transcript.user_templates?.name || 'Untitled Template'}
@@ -350,6 +383,25 @@ export default function Dashboard() {
                         >
                           <Share className="h-4 w-4" />
                         </Button>
+                        {isManager && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setDeleteTarget(transcript);
+                            }}
+                            disabled={deletingId === transcript.id}
+                            className="h-8 w-8 text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+                            title="Delete report"
+                          >
+                            {deletingId === transcript.id ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <Trash2 className="h-4 w-4" />
+                            )}
+                          </Button>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -359,6 +411,21 @@ export default function Dashboard() {
           </div>
         )}
       </div>
+
+      {/* Delete Confirmation Dialog */}
+      <ConfirmationDialog
+        open={!!deleteTarget}
+        onOpenChange={(open) => { if (!open) setDeleteTarget(null); }}
+        onConfirm={handleDeleteReport}
+        title="Delete Report"
+        description={`Are you sure you want to permanently delete "${
+          deleteTarget?.user_templates?.name || 'this report'
+        }" by ${deleteTarget?.profiles?.full_name || 'Unknown Salesperson'}? This action cannot be undone and all associated data will be lost.`}
+        confirmText="Delete Report"
+        cancelText="Cancel"
+        variant="destructive"
+        isLoading={!!deletingId}
+      />
     </div>
   );
 }
