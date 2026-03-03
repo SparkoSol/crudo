@@ -139,27 +139,34 @@ export default function ReportDetail() {
         switch (status) {
             case 'confirmed':
                 return (
-                    <Badge className="bg-green-100 text-green-800 border-green-200 px-3 py-1 rounded-full text-xs">
-                        <CheckCircle2 className="h-3.5 w-3.5 mr-1" />
+                    <Badge className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border bg-emerald-50 text-emerald-700 border-emerald-200 shadow-sm shadow-emerald-100 hover:bg-emerald-100 hover:shadow-emerald-200 hover:scale-[1.04] transition-all duration-200 cursor-default select-none">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                        <CheckCircle2 className="h-3.5 w-3.5" />
                         Completed
                     </Badge>
                 );
             case 'pending':
                 return (
-                    <Badge className="bg-yellow-100 text-yellow-800 border-yellow-200 px-3 py-1 rounded-full text-xs">
-                        <Clock className="h-3.5 w-3.5 mr-1" />
+                    <Badge className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border bg-amber-50 text-amber-700 border-amber-200 shadow-sm shadow-amber-100 hover:bg-amber-100 hover:shadow-amber-200 hover:scale-[1.04] transition-all duration-200 cursor-default select-none">
+                        <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
+                        <Clock className="h-3.5 w-3.5" />
                         Pending
                     </Badge>
                 );
             case 'retaken':
                 return (
-                    <Badge className="bg-gray-100 text-gray-800 border-gray-200 px-3 py-1 rounded-full text-xs">
-                        <RefreshCw className="h-3.5 w-3.5 mr-1" />
+                    <Badge className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border bg-slate-100 text-slate-600 border-slate-200 shadow-sm shadow-slate-100 hover:bg-slate-200 hover:shadow-slate-200 hover:scale-[1.04] transition-all duration-200 cursor-default select-none">
+                        <span className="w-1.5 h-1.5 rounded-full bg-slate-400" />
+                        <RefreshCw className="h-3.5 w-3.5" />
                         Retaken
                     </Badge>
                 );
             default:
-                return <Badge className="px-3 py-1 rounded-full text-xs">{status}</Badge>;
+                return (
+                    <Badge className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border bg-gray-100 text-gray-600 border-gray-200 shadow-sm hover:bg-gray-200 hover:scale-[1.04] transition-all duration-200 cursor-default select-none">
+                        {status}
+                    </Badge>
+                );
         }
     };
 
@@ -177,6 +184,7 @@ export default function ReportDetail() {
     const formattedDate = format(new Date(transcript.created_at), "EEEE, MMMM d, yyyy, HH:mm");
     const fields = transcript.user_templates?.fields || [];
     const filledData = transcript.filled_data || {};
+    const isUpdated = !!(transcript.modified_transcript);
 
     return (
         <div className="min-h-screen bg-gray-50/50">
@@ -191,7 +199,15 @@ export default function ReportDetail() {
                         <ArrowLeft className="h-4 w-4" />
                         Back to Dashboard
                     </Button>
-                    {getStatusBadge(transcript.status)}
+                    <div className="flex items-center gap-2">
+                        {isUpdated && (
+                            <Badge className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border bg-blue-50 text-blue-700 border-blue-200 shadow-sm shadow-blue-100 hover:bg-blue-100 hover:shadow-blue-200 hover:scale-[1.04] transition-all duration-200 cursor-default select-none">
+                                <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />
+                                Updated
+                            </Badge>
+                        )}
+                        {getStatusBadge(transcript.status)}
+                    </div>
                 </div>
 
                 {/* Title Area */}
@@ -240,13 +256,35 @@ export default function ReportDetail() {
                             <CardHeader className="bg-gray-50/50 border-b border-gray-100 px-6 py-5">
                                 <CardTitle className="text-lg font-bold text-gray-800 flex items-center gap-2">
                                     <Volume2 className="h-5 w-5 text-gray-500" />
-                                    Audio Transcript
+                                    {isUpdated ? 'Updated Transcript' : 'Audio Transcript'}
+                                    {isUpdated && (
+                                        <Badge className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border bg-blue-50 text-blue-700 border-blue-200 shadow-sm shadow-blue-100 hover:bg-blue-100 hover:shadow-blue-200 hover:scale-[1.04] transition-all duration-200 cursor-default select-none ml-1">
+                                            <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />
+                                            Updated
+                                        </Badge>
+                                    )}
                                 </CardTitle>
                             </CardHeader>
-                            <CardContent className="p-6">
-                                <p className="text-gray-600 text-[15px] leading-relaxed whitespace-pre-wrap">
-                                    {transcript.transcript || 'No transcript available.'}
-                                </p>
+                            <CardContent className="p-6 space-y-4">
+                                {isUpdated ? (
+                                    <>
+                                        <p className="text-gray-600 text-[15px] leading-relaxed whitespace-pre-wrap">
+                                            {transcript.modified_transcript}
+                                        </p>
+                                        <details className="mt-4">
+                                            <summary className="text-xs text-gray-400 cursor-pointer hover:text-gray-600 select-none">
+                                                Show original transcript
+                                            </summary>
+                                            <p className="mt-2 text-gray-400 text-sm leading-relaxed whitespace-pre-wrap border-l-2 border-gray-200 pl-3">
+                                                {transcript.transcript || 'No original transcript.'}
+                                            </p>
+                                        </details>
+                                    </>
+                                ) : (
+                                    <p className="text-gray-600 text-[15px] leading-relaxed whitespace-pre-wrap">
+                                        {transcript.transcript || 'No transcript available.'}
+                                    </p>
+                                )}
                             </CardContent>
                         </Card>
                     </div>
