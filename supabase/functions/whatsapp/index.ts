@@ -265,6 +265,10 @@ function buildConfirmationMessage(
   return message;
 }
 
+// In-memory set to deduplicate WhatsApp webhook deliveries within the same instance.
+// WhatsApp sometimes delivers the same webhook multiple times (retry logic).
+const processedMessageIds = new Set<string>();
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -357,6 +361,18 @@ serve(async (req) => {
                 const messageId = message.id;
                 const timestamp = message.timestamp;
                 const messageType = message.type;
+
+                // Deduplicate: skip if this exact message ID was already handled
+                if (messageId && processedMessageIds.has(messageId)) {
+                  console.log(`Skipping duplicate message ID: ${messageId}`);
+                  continue;
+                }
+                if (messageId) processedMessageIds.add(messageId);
+                // Keep the Set from growing unbounded in long-running instances
+                if (processedMessageIds.size > 1000) {
+                  const first = processedMessageIds.values().next().value;
+                  if (first) processedMessageIds.delete(first);
+                }
 
                 console.log(`MESSAGE RECEIVED from ${from}`);
                 console.log(`Type: ${messageType}`);
@@ -550,16 +566,17 @@ serve(async (req) => {
                     });
                   }
 
-                  async function sendModifiedReportTemplate(to: string, reportText: string): Promise<void> {
+                  async function sendModifiedReportTemplate(to: string, reportText: string, isCreation: boolean = false): Promise<void> {
                     const modTemplateName = Deno.env.get("WHATSAPP_MODIFIED_REPORT_TEMPLATE_NAME") || "sales_modified_report";
+                    const headerText = isCreation ? "✨ *NEW REPORT CREATED*\n\n" : "📝 *MODIFIED REPORT*\n\n";
                     await sendWAMessage({
                       messaging_product: "whatsapp",
                       recipient_type: "individual",
                       to: normalizePhoneNumber(to),
                       type: "text",
-                      text: { body: `📝 *MODIFIED REPORT*\n\n${reportText}` },
+                      text: { body: `${headerText}${reportText}` },
                     });
-                    await sendWAMessage({
+                    await sendWAMessage({   
                       messaging_product: "whatsapp",
                       recipient_type: "individual",
                       to: normalizePhoneNumber(to),
@@ -973,21 +990,11 @@ serve(async (req) => {
                       }
                     }
 
-                    // No active field collection – prompt to send voice or menu
-                    if (accessToken && phoneNumberId) {
-                      try {
-                        await sendWAMessage({
-                          messaging_product: "whatsapp",
-                          recipient_type: "individual",
-                          to: normalizePhoneNumber(from),
-                          type: "text",
-                          text: {
-                            body: "🎤 Please send a *voice message* to generate your sales report.\n\nType *menu* at any time to see available options.",
-                          },
-                        });
-                      } catch (error) {
-                        console.error("Error sending text reply:", error);
-                      }
+                    // No active field collection – send menu
+                    try {
+                      await sendMenuTemplate(from);
+                    } catch (error) {
+                      console.error("Error sending menu:", error);
                     }
                     continue;
                   }
@@ -1003,6 +1010,28 @@ serve(async (req) => {
 
                     if (audioId && openaiApiKey) {
                       try {
+                        // Send immediate feedback — check if we're in a modification or creation flow
+                        {
+                          const { data: _checkMod } = await adminClient
+                            .from("voice_transcripts")
+                            .select("id")
+                            .eq("phone_number", from)
+                            .eq("conversation_state", "awaiting_modification_input")
+                            .limit(1)
+                            .maybeSingle();
+                          await sendWAMessage({
+                            messaging_product: "whatsapp",
+                            recipient_type: "individual",
+                            to: normalizePhoneNumber(from),
+                            type: "text",
+                            text: {
+                              body: _checkMod
+                                ? "⏳ Processing your voice modification..."
+                                : "📝 Received! I am processing your voicemail to create your report...",
+                            },
+                          });
+                        }
+
                         const mediaUrl = `https://graph.facebook.com/${apiVersion}/${audioId}`;
                         const mediaResponse = await fetch(mediaUrl, {
                           headers: {
@@ -1191,13 +1220,6 @@ serve(async (req) => {
 
                           if (targetReport) {
                             const originalText = targetReport.modified_transcript || targetReport.transcript || "";
-                            await sendWAMessage({
-                              messaging_product: "whatsapp",
-                              recipient_type: "individual",
-                              to: normalizePhoneNumber(from),
-                              type: "text",
-                              text: { body: "⏳ Processing your voice modification..." },
-                            });
                             const updatedText = await applyModificationWithGPT(originalText, transcript, openaiApiKey);
 
                             // Re-extract filled_data from the updated transcript so report fields are also updated
@@ -1352,57 +1374,16 @@ serve(async (req) => {
                                 })
                                 .eq("id", ongoingConversation.id);
 
-                              // Send confirmation message
-                              const confirmationMessage = buildConfirmationMessage(
+                              // Mirror the modify flow: send report text then
+                              // the sales_modified_report template (Confirm / Modify buttons)
+                              const reportText = buildConfirmationMessage(
                                 mergedFilledData,
                                 template.fields,
                               );
-
-                              const interactivePayload = {
-                                messaging_product: "whatsapp",
-                                recipient_type: "individual",
-                                to: normalizePhoneNumber(from),
-                                type: "interactive",
-                                interactive: {
-                                  type: "button",
-                                  body: {
-                                    text: confirmationMessage,
-                                  },
-                                  action: {
-                                    buttons: [
-                                      {
-                                        type: "reply",
-                                        reply: {
-                                          id: "Confirm",
-                                          title: "Confirm",
-                                        },
-                                      },
-                                      {
-                                        type: "reply",
-                                        reply: {
-                                          id: "Retake",
-                                          title: "Retake",
-                                        },
-                                      },
-                                    ],
-                                  },
-                                },
-                              };
-
-                              await fetch(
-                                `https://graph.facebook.com/${apiVersion}/${phoneNumberId}/messages`,
-                                {
-                                  method: "POST",
-                                  headers: {
-                                    Authorization: `Bearer ${accessToken}`,
-                                    "Content-Type": "application/json",
-                                  },
-                                  body: JSON.stringify(interactivePayload),
-                                },
-                              );
+                              await sendModifiedReportTemplate(from, reportText, true);
 
                               console.log(
-                                "All fields collected via voice merge, sent confirmation",
+                                "All fields collected via voice merge, sent confirmation via sales_modified_report template",
                               );
                             } else {
                               // Still missing fields, continue collection
@@ -1626,57 +1607,16 @@ serve(async (req) => {
                             firstField.name,
                           );
                         } else {
-                          // Send confirmation message directly
-                          const confirmationMessage = buildConfirmationMessage(
+                          // Mirror the modify flow: send report text then the
+                          // sales_modified_report template (Confirm / Modify buttons)
+                          const reportText = buildConfirmationMessage(
                             filledData,
                             activeTemplate.fields,
                           );
-
-                          const interactivePayload = {
-                            messaging_product: "whatsapp",
-                            recipient_type: "individual",
-                            to: normalizePhoneNumber(from),
-                            type: "interactive",
-                            interactive: {
-                              type: "button",
-                              body: {
-                                text: confirmationMessage,
-                              },
-                              action: {
-                                buttons: [
-                                  {
-                                    type: "reply",
-                                    reply: {
-                                      id: "Confirm",
-                                      title: "Confirm",
-                                    },
-                                  },
-                                  {
-                                    type: "reply",
-                                    reply: {
-                                      id: "Retake",
-                                      title: "Retake",
-                                    },
-                                  },
-                                ],
-                              },
-                            },
-                          };
-
-                          await fetch(
-                            `https://graph.facebook.com/${apiVersion}/${phoneNumberId}/messages`,
-                            {
-                              method: "POST",
-                              headers: {
-                                Authorization: `Bearer ${accessToken}`,
-                                "Content-Type": "application/json",
-                              },
-                              body: JSON.stringify(interactivePayload),
-                            },
-                          );
+                          await sendModifiedReportTemplate(from, reportText, true);
 
                           console.log(
-                            "Sent confirmation message (no missing fields)",
+                            "Sent new-report confirmation via sales_modified_report template",
                           );
                         }
                       } catch (error) {
@@ -1712,7 +1652,10 @@ serve(async (req) => {
                         to: normalizePhoneNumber(from),
                         type: "text",
                         text: {
-                          body: "🎤 Please send a *voice message* to create your sales report.",
+                          body:
+                            "📝 To create a new report, simply send me a voice message telling the details of your commercial visit.\n\n" +
+                            "The system will automatically process the information!\n\n" +
+                            "💡 Type *MENU* at any time to return to the main menu.",
                         },
                       });
                       continue;
@@ -1961,7 +1904,7 @@ serve(async (req) => {
 
                     // ── MODIFY AGAIN (from modified report template) ──────
                     if (buttonId === "modify_again" || buttonText.includes("modify")) {
-                      // Check for modification confirmation state
+                      // Case 1: Modify pressed after a modification — session record already exists
                       const { data: modAgainConv } = await adminClient
                         .from("voice_transcripts")
                         .select("*")
@@ -1977,6 +1920,63 @@ serve(async (req) => {
                           .from("voice_transcripts")
                           .update({ conversation_state: "awaiting_modification_input" })
                           .eq("id", modAgainConv.id);
+                        await sendWAMessage({
+                          messaging_product: "whatsapp",
+                          recipient_type: "individual",
+                          to: normalizePhoneNumber(from),
+                          type: "text",
+                          text: {
+                            body:
+                              "✏️ *What would you like to modify?*\n\nYou can:\n" +
+                              "• Write changes in text\n" +
+                              "• Send a voice message with corrections\n\n" +
+                              'Example: _"Change the date from 12/12/2022 to 12/12/2023"_',
+                          },
+                        });
+                        continue;
+                      }
+
+                      // Case 2: Modify pressed on a freshly-created report
+                      // (awaiting_confirmation state — no modification session exists yet)
+                      const { data: newReportConv } = await adminClient
+                        .from("voice_transcripts")
+                        .select("*")
+                        .eq("phone_number", from)
+                        .eq("conversation_state", "awaiting_confirmation")
+                        .or("is_session_record.is.null,is_session_record.eq.false")
+                        .order("created_at", { ascending: false })
+                        .limit(1)
+                        .maybeSingle();
+
+                      if (newReportConv) {
+                        console.log("Modify pressed on new report, setting up modification session:", newReportConv.id);
+
+                        // Create a session record targeting this new report
+                        // (same pattern as the menu modify flow)
+                        await adminClient.from("voice_transcripts").insert({
+                          phone_number: from,
+                          user_id: userId,
+                          transcript: "",
+                          status: "pending",
+                          is_session_record: true,
+                          conversation_state: "awaiting_modification_input",
+                          modification_target_id: newReportConv.id,
+                          flow_action: "modify_report",
+                          filled_data: {},
+                          collected_data: {},
+                          missing_required_fields: [],
+                          current_field_index: 0,
+                        });
+
+                        // Show the current report so the user knows what they're editing
+                        const reportDisplay = buildReportDisplay(newReportConv);
+                        await sendWAMessage({
+                          messaging_product: "whatsapp",
+                          recipient_type: "individual",
+                          to: normalizePhoneNumber(from),
+                          type: "text",
+                          text: { body: reportDisplay },
+                        });
                         await sendWAMessage({
                           messaging_product: "whatsapp",
                           recipient_type: "individual",
