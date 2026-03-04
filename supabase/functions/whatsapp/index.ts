@@ -758,6 +758,7 @@ serve(async (req) => {
                           const updatedText = await applyModificationWithGPT(originalText, textBody, openaiApiKey);
 
                           let updatedFilledData = targetReport.filled_data || {};
+                          let tplFieldsForDisplay: TemplateField[] = [];
                           if (targetReport.template_id) {
                             const { data: tplForExtract } = await adminClient
                               .from("user_templates")
@@ -765,7 +766,8 @@ serve(async (req) => {
                               .eq("id", targetReport.template_id)
                               .maybeSingle();
                             if (tplForExtract?.fields && (tplForExtract.fields as any[]).length > 0) {
-                              const newExtracted = await extractFieldsWithGPT(updatedText, tplForExtract.fields as any[], openaiApiKey);
+                              tplFieldsForDisplay = tplForExtract.fields as TemplateField[];
+                              const newExtracted = await extractFieldsWithGPT(updatedText, tplFieldsForDisplay, openaiApiKey);
                               if (newExtracted) updatedFilledData = newExtracted;
                             }
                           }
@@ -778,7 +780,11 @@ serve(async (req) => {
                             .from("voice_transcripts")
                             .update({ conversation_state: "awaiting_modification_confirmation" })
                             .eq("id", modInputConv.id);
-                          await sendModifiedReportTemplate(from, updatedText);
+                          // Build a structured preview respecting the template (same as creation flow)
+                          const modPreviewText = tplFieldsForDisplay.length > 0
+                            ? buildConfirmationMessage(updatedFilledData, tplFieldsForDisplay)
+                            : updatedText;
+                          await sendModifiedReportTemplate(from, modPreviewText);
                       } else {
                         await sendWAMessage({
                           messaging_product: "whatsapp",
@@ -1224,6 +1230,7 @@ serve(async (req) => {
 
                             // Re-extract filled_data from the updated transcript so report fields are also updated
                             let updatedFilledData = targetReport.filled_data || {};
+                            let voiceTplFields: TemplateField[] = [];
                             if (targetReport.template_id) {
                               const { data: tplForExtract } = await adminClient
                                 .from("user_templates")
@@ -1231,7 +1238,8 @@ serve(async (req) => {
                                 .eq("id", targetReport.template_id)
                                 .maybeSingle();
                               if (tplForExtract?.fields && (tplForExtract.fields as any[]).length > 0) {
-                                const newExtracted = await extractFieldsWithGPT(updatedText, tplForExtract.fields as any[], openaiApiKey);
+                                voiceTplFields = tplForExtract.fields as TemplateField[];
+                                const newExtracted = await extractFieldsWithGPT(updatedText, voiceTplFields, openaiApiKey);
                                 if (newExtracted) updatedFilledData = newExtracted;
                               }
                             }
@@ -1245,7 +1253,11 @@ serve(async (req) => {
                               .from("voice_transcripts")
                               .update({ conversation_state: "awaiting_modification_confirmation" })
                               .eq("id", voiceModConv.id);
-                            await sendModifiedReportTemplate(from, updatedText);
+                            // Build structured preview respecting the template
+                            const voiceModPreviewText = voiceTplFields.length > 0
+                              ? buildConfirmationMessage(updatedFilledData, voiceTplFields)
+                              : updatedText;
+                            await sendModifiedReportTemplate(from, voiceModPreviewText);
                           } else {
                             await sendWAMessage({
                               messaging_product: "whatsapp",
@@ -1885,6 +1897,9 @@ serve(async (req) => {
                                 type: "document",
                                 document: { id: upResultM.id, caption: "✅ Your updated report is ready! 📄", filename: "updated_report.pdf" },
                               });
+                              
+                              await new Promise((resolve) => setTimeout(resolve, 2000));
+                              await sendMenuTemplate(from);
                             } else { throw new Error(JSON.stringify(upResultM)); }
                           } catch (pdfErrM) {
                             console.error("PDF generation error for modified report:", pdfErrM);
@@ -1895,6 +1910,7 @@ serve(async (req) => {
                               type: "text",
                               text: { body: "✅ Report updated! PDF generation failed. Check the portal for your report." },
                             });
+                            await sendMenuTemplate(from);
                           }
                           continue;
                         }
@@ -2431,6 +2447,11 @@ serve(async (req) => {
                             body: JSON.stringify(docPayload),
                           },
                         );
+
+                        // Wait briefly so WhatsApp delivers the PDF before the menu
+                        await new Promise((resolve) => setTimeout(resolve, 2000));
+                        // Send the menu after the PDF so the user can take further actions
+                        await sendMenuTemplate(from);
 
                         console.log(
                           "Transcript confirmed, PDF generated and sent:",
