@@ -104,3 +104,23 @@ export const unlinkPhoneNumber = async (profileId: string): Promise<void> => {
     throw error;
   }
 };
+
+export const deleteProfile = async (profileId: string): Promise<void> => {
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+
+  if (!session?.user) {
+    throw new Error("No authenticated user");
+  }
+
+  const { error } = await supabase
+    .from("profiles")
+    .delete()
+    .eq("id", profileId)
+    .eq("manager_id", session.user.id);
+
+  if (error) {
+    throw error;
+  }
+};

@@ -121,7 +121,7 @@ serve(async (req) => {
     }
 
     const pdfDoc = await PDFDocument.create();
-    const page = pdfDoc.addPage([612, 792]);
+    let page = pdfDoc.addPage([612, 792]);
     const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
     const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
 
@@ -140,61 +140,83 @@ serve(async (req) => {
       fontType: any,
       maxWidth?: number
     ): number => {
-      if (maxWidth) {
-        const words = text.split(" ");
-        let line = "";
-        let currentY = y;
+      let currentY = y;
+      const cleanText = text || "";
+      const inputLines = cleanText.split(/\r?\n/);
 
-        for (const word of words) {
-          const testLine = line + (line ? " " : "") + word;
-          const width = fontType.widthOfTextAtSize(testLine, size);
+      for (const p of inputLines) {
+        if (!p.trim()) {
+          currentY -= lineHeight;
+          if (currentY < margin) {
+            page = pdfDoc.addPage([pageWidth, pageHeight]);
+            currentY = pageHeight - margin;
+          }
+          continue;
+        }
 
-          if (width > maxWidth && line) {
-            page.drawText(line, {
-              x,
-              y: currentY,
-              size,
-              font: fontType,
-            });
-            line = word;
+        let proc = p.replace(/\t/g, " ");
+        try {
+          fontType.widthOfTextAtSize(proc, size);
+        } catch {
+          proc = proc.replace(/[^\x20-\x7E\x80-\xFF]/g, "");
+        }
+
+        if (maxWidth) {
+          const words = proc.split(" ");
+          let line = "";
+
+          for (const word of words) {
+            const testLine = line + (line ? " " : "") + word;
+            let width = 0;
+            try {
+              width = fontType.widthOfTextAtSize(testLine, size);
+            } catch {
+              width = maxWidth + 1; // force wrap
+            }
+
+            if (width > maxWidth && line) {
+              try { page.drawText(line, { x, y: currentY, size, font: fontType }); } catch {}
+              line = word;
+              currentY -= lineHeight;
+              if (currentY < margin) {
+                page = pdfDoc.addPage([pageWidth, pageHeight]);
+                currentY = pageHeight - margin;
+              }
+            } else {
+              line = testLine;
+            }
+          }
+
+          if (line) {
+            try { page.drawText(line, { x, y: currentY, size, font: fontType }); } catch {}
             currentY -= lineHeight;
             if (currentY < margin) {
-              const newPage = pdfDoc.addPage([pageWidth, pageHeight]);
+              page = pdfDoc.addPage([pageWidth, pageHeight]);
               currentY = pageHeight - margin;
             }
-          } else {
-            line = testLine;
+          }
+        } else {
+          try { page.drawText(proc, { x, y: currentY, size, font: fontType }); } catch {
+            page.drawText(proc.replace(/[^\x20-\x7E]/g, "?"), { x, y: currentY, size, font: fontType });
+          }
+          currentY -= lineHeight;
+          if (currentY < margin) {
+            page = pdfDoc.addPage([pageWidth, pageHeight]);
+            currentY = pageHeight - margin;
           }
         }
-
-        if (line) {
-          page.drawText(line, {
-            x,
-            y: currentY,
-            size,
-            font: fontType,
-          });
-          currentY -= lineHeight;
-        }
-
-        return currentY;
-      } else {
-        page.drawText(text, {
-          x,
-          y,
-          size,
-          font: fontType,
-        });
-        return y - lineHeight;
       }
+      return currentY;
     };
 
     // Use modified transcript if available (report was updated via WhatsApp modify flow)
     const transcriptText = (transcript as any).modified_transcript || transcript.transcript || "";
-    const filledDataRaw = transcript.filled_data;
+    const filledDataRaw = transcript.filled_data || {};
+    const placeVisited = typeof filledDataRaw === 'object' && filledDataRaw !== null ? String((filledDataRaw as any).place_visited || '') : '';
+    const reportTitle = placeVisited ? `${placeVisited} - Report` : "Voice Transcript Report";
 
     yPosition = addText(
-      "Voice Transcript Report",
+      reportTitle,
       margin,
       yPosition,
       20,

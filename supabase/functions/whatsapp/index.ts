@@ -29,6 +29,19 @@ interface UserTemplate {
   fields: TemplateField[];
 }
 
+const PLACE_VISITED_FIELD: TemplateField = {
+  name: "place_visited",
+  label: "Place Visited",
+  type: "text",
+  required: true,
+};
+
+function ensurePlaceVisitedField(fields: TemplateField[]): TemplateField[] {
+  const hasPlaceVisited = fields.some((f) => f.name === "place_visited");
+  if (hasPlaceVisited) return fields;
+  return [PLACE_VISITED_FIELD, ...fields];
+}
+
 function getWhatsAppConfig() {
   return {
     accessToken: Deno.env.get("WHATSAPP_ACCESS_TOKEN"),
@@ -628,7 +641,10 @@ serve(async (req) => {
                     const date = new Date(record.created_at).toLocaleDateString();
                     const transcript = record.modified_transcript || record.transcript || "";
                     const filledData = record.filled_data || {};
-                    let text = `📋 *Report – ${date}*\n\n`;
+                    const placeVisited = filledData.place_visited || "";
+                    let text = placeVisited
+                      ? `📋 *Report – ${placeVisited}* (${date})\n\n`
+                      : `📋 *Report – ${date}*\n\n`;
                     if (Object.keys(filledData).length > 0) {
                       for (const [k, v] of Object.entries(filledData)) {
                         if (v) text += `• *${k}*: ${v}\n`;
@@ -847,6 +863,11 @@ serve(async (req) => {
                             })
                             .eq("id", activeTranscript.id);
                         }
+                      }
+
+                      // Ensure place_visited field is present
+                      if (template) {
+                        template.fields = ensurePlaceVisitedField(template.fields);
                       }
 
                       const missingFields: TemplateField[] =
@@ -1324,6 +1345,9 @@ serve(async (req) => {
                           }
 
                           if (template) {
+                            // Ensure place_visited field is present
+                            template.fields = ensurePlaceVisitedField(template.fields);
+
                             // Merge transcripts
                             const mergedTranscript =
                               `${ongoingConversation.transcript}\n\n[Additional Voice Message]\n${transcript}`;
@@ -1499,6 +1523,9 @@ serve(async (req) => {
                             `Using template: ${activeTemplate.name} (${activeTemplate.id})`,
                           );
                         }
+
+                        // Ensure place_visited is always present (handles templates created before this feature)
+                        activeTemplate.fields = ensurePlaceVisitedField(activeTemplate.fields);
 
                         // Extract fields from transcript using GPT
                         let filledData: Record<string, any> = {};
@@ -1701,9 +1728,10 @@ serve(async (req) => {
                       let listMsg = "✏️ *Recent reports that you can modify:*\n\n";
                       userReports.forEach((r: any, i: number) => {
                         const date = new Date(r.created_at).toLocaleDateString();
-                        // Try many common field name variations for client name
                         const fd = r.filled_data || {};
-                        const clientName =
+                        // Prioritize place_visited as the primary identifier
+                        const reportLabel =
+                          fd.place_visited ||
                           fd.client_name || fd.Cliente || fd.client ||
                           fd.customer || fd.Customer || fd.company || fd.Company ||
                           fd.business || fd.Business || fd.account || fd.Account ||
@@ -1712,7 +1740,7 @@ serve(async (req) => {
                           // Or use first field of transcript (first line)
                           (r.transcript ? r.transcript.split('\n')[0].substring(0, 40) : null) ||
                           `Report #${i + 1}`;
-                        listMsg += `${i + 1}. ${clientName} – ${date}\n`;
+                        listMsg += `${i + 1}. 📍 ${reportLabel} – ${date}\n`;
                       });
                       listMsg += "\n💬 Respond with the *number* of the report you want to modify (1, 2, 3, etc.)";
 
@@ -1833,7 +1861,8 @@ serve(async (req) => {
 
                             pageM.drawRectangle({ x: 0, y: pageHeight - 100, width: pageWidth, height: 100, color: rgb(0.1, 0.1, 0.1) });
                             yPositionM = pageHeight - 50;
-                            addTextM("Sales Visit Report (Updated)", margin, yPositionM, 22, boldFontM, undefined, rgb(1, 1, 1));
+                            const titleStrM = filledDataMod.place_visited ? `${filledDataMod.place_visited} - Report (Updated)` : "Sales Visit Report (Updated)";
+                            addTextM(titleStrM, margin, yPositionM, 22, boldFontM, undefined, rgb(1, 1, 1));
                             yPositionM -= 35;
                             addTextM(`Generated: ${new Date().toLocaleString()}`, margin, yPositionM, 10, fontM, undefined, rgb(0.8, 0.8, 0.8));
                             yPositionM = pageHeight - 130;
@@ -2258,8 +2287,9 @@ serve(async (req) => {
                         });
 
                         yPosition = pageHeight - 50;
+                        const titleStrNew = typeof filledData === 'object' && filledData.place_visited ? `${filledData.place_visited} - Report` : "Sales Visit Report";
                         addText(
-                          "Sales Visit Report",
+                          titleStrNew,
                           margin,
                           yPosition,
                           24,
