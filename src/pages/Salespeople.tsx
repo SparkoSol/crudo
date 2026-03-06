@@ -19,10 +19,12 @@ import {
   Loader2,
   Unlink,
   Pencil,
+  Trash2,
 } from "lucide-react";
 import {
   getManagedProfiles,
   unlinkPhoneNumber,
+  deleteProfile,
 } from "@/services/profileServices";
 import type { Profile } from "@/types/profile.types";
 import toast from "react-hot-toast";
@@ -42,6 +44,8 @@ export default function Salespeople() {
   const [selectedProfileId, setSelectedProfileId] = useState<string | null>(
     null,
   );
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [profileToDelete, setProfileToDelete] = useState<Profile | null>(null);
 
   useEffect(() => {
     loadProfiles();
@@ -86,6 +90,29 @@ export default function Salespeople() {
       setOperatingId(null);
       setSelectedProfileId(null);
       setShowUnlinkConfirm(false);
+    }
+  };
+
+  const handleDeleteClick = (profile: Profile) => {
+    setProfileToDelete(profile);
+    setShowDeleteConfirm(true);
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!profileToDelete) return;
+
+    try {
+      setOperatingId(profileToDelete.id);
+      await deleteProfile(profileToDelete.id);
+      toast.success("Salesperson deleted successfully");
+      setProfiles((prev) => prev.filter((p) => p.id !== profileToDelete.id));
+    } catch (error) {
+      console.error("Failed to delete salesperson:", error);
+      toast.error("Failed to delete salesperson");
+    } finally {
+      setOperatingId(null);
+      setProfileToDelete(null);
+      setShowDeleteConfirm(false);
     }
   };
 
@@ -183,14 +210,31 @@ export default function Salespeople() {
                     </div>
                   </div>
 
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-8 w-8"
-                    onClick={() => handleEditClick(profile)}
-                  >
-                    <Pencil className="h-4 w-4" />
-                  </Button>
+                  <div className="flex items-center gap-1">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 text-gray-500 hover:text-brand-primary-600 hover:bg-brand-primary-50 transition-colors"
+                      onClick={() => handleEditClick(profile)}
+                      title="Edit Salesperson"
+                    >
+                      <Pencil className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+                      onClick={() => handleDeleteClick(profile)}
+                      disabled={operatingId === profile.id}
+                      title="Delete Salesperson"
+                    >
+                      {operatingId === profile.id ? (
+                        <Loader2 className="h-4 w-4 animate-spin text-red-500" />
+                      ) : (
+                        <Trash2 className="h-4 w-4" />
+                      )}
+                    </Button>
+                  </div>
                 </div>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -248,6 +292,17 @@ export default function Salespeople() {
         description="Are you sure you want to unlink this salesperson's phone number? They will need to re-verify their number to use the system."
         confirmText="Unlink"
         cancelText="Cancel"
+        isLoading={!!operatingId}
+      />
+      <ConfirmationDialog
+        open={showDeleteConfirm}
+        onOpenChange={setShowDeleteConfirm}
+        onConfirm={handleDeleteConfirm}
+        title="Delete Salesperson"
+        description={`Are you sure you want to delete ${profileToDelete?.full_name || "this salesperson"}? This action will permanently remove them from your team. This cannot be undone.`}
+        confirmText="Delete"
+        cancelText="Cancel"
+        variant="destructive"
         isLoading={!!operatingId}
       />
       <EditSalespersonDialog

@@ -305,14 +305,26 @@ export default function Dashboard() {
                             </Badge>
                           )}
                         </div>
-                        <div>
-                          <h3 className="font-bold text-gray-900 text-lg group-hover:text-brand-primary-600 transition-colors">
-                            {transcript.user_templates?.name || 'Untitled Template'}
-                          </h3>
-                          <div className="text-sm text-gray-500 font-medium">
-                            by <span className="text-gray-700">{transcript.profiles?.full_name || 'Unknown Salesperson'}</span> • {format(new Date(transcript.created_at), "MMM d, yyyy")}
+                      <div>
+                          {(() => {
+                            const placeVisited = transcript.filled_data ? String((transcript.filled_data as Record<string, string>).place_visited || '') : '';
+                            const templateName = transcript.user_templates?.name || 'Untitled Template';
+                            return (
+                              <>
+                                <h3 className="font-bold text-gray-900 text-xl group-hover:text-brand-primary-600 transition-colors">
+                                  {placeVisited || templateName}
+                                </h3>
+                                <div className="flex items-center gap-1.5 text-sm text-gray-500 font-medium mt-1">
+                                  <FileText className="w-3.5 h-3.5" />
+                                  <span>Template: {templateName}</span>
+                                </div>
+                              </>
+                            );
+                          })()}
+                          <div className="text-sm text-gray-400 font-normal mt-1">
+                            by <span className="text-gray-600 font-medium">{transcript.profiles?.full_name || 'Unknown Salesperson'}</span> • {format(new Date(transcript.created_at), "MMM d, yyyy")}
                           </div>
-                        </div>
+                      </div>
                       </div>
 
 

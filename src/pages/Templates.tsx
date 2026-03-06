@@ -16,7 +16,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { FileText, Plus, Search, Edit, Trash2, Loader2 } from "lucide-react";
+import { FileText, Plus, Search, Edit, Trash2, Loader2, MapPin, Lock } from "lucide-react";
 import {
   getUserTemplatesWithPlan,
   createUserTemplate,
@@ -35,6 +35,13 @@ interface TemplateField {
   required: boolean;
 }
 
+const PLACE_VISITED_FIELD: TemplateField = {
+  name: "place_visited",
+  label: "Place Visited",
+  type: "text",
+  required: true,
+};
+
 export default function Templates() {
   const [templates, setTemplates] = useState<UserTemplate[]>([]);
   const [loading, setLoading] = useState(true);
@@ -45,8 +52,8 @@ export default function Templates() {
   );
   const [planType, setPlanType] = useState<string>("starter");
   const [templateName, setTemplateName] = useState("");
-  const [templateType, setTemplateType] = useState("regular"); // UI only
-  const [description, setDescription] = useState(""); // UI only
+  const [templateType, setTemplateType] = useState("regular");
+  const [description, setDescription] = useState("");
   const [fields, setFields] = useState<TemplateField[]>([]);
   const [isDefault, setIsDefault] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -83,7 +90,10 @@ export default function Templates() {
   const openEditDialog = (template: UserTemplate) => {
     setEditingTemplate(template);
     setTemplateName(template.name);
-    setFields(template.fields as TemplateField[]);
+    const customFields = (template.fields as TemplateField[]).filter(
+      (f) => f.name !== "place_visited"
+    );
+    setFields(customFields);
     setIsDefault(template.is_default);
     setDescription(template.description || "");
     setTemplateType(template.template_type || "regular");
@@ -113,16 +123,13 @@ export default function Templates() {
       return;
     }
 
-    if (fields.length === 0) {
-      toast.error("At least one field is required");
-      return;
-    }
-
     const invalidFields = fields.filter((f) => !f.name.trim());
     if (invalidFields.length > 0) {
       toast.error("All fields must have a name");
       return;
     }
+
+    const allFields = [PLACE_VISITED_FIELD, ...fields.filter(f => f.name !== "place_visited")];
 
     try {
       setSaving(true);
@@ -130,7 +137,7 @@ export default function Templates() {
       if (editingTemplate) {
         await updateUserTemplate(editingTemplate.id, {
           name: templateName,
-          fields,
+          fields: allFields,
           is_default: isDefault,
           description,
           template_type: templateType,
@@ -140,7 +147,7 @@ export default function Templates() {
       } else {
         await createUserTemplate(
           templateName,
-          fields,
+          allFields,
           undefined,
           isDefault,
           description,
@@ -330,6 +337,32 @@ export default function Templates() {
               </div>
 
               <div className="space-y-4">
+                <div className="p-4 border-2 border-brand-primary-200 rounded-xl bg-brand-primary-50/40 space-y-3 relative">
+                  <div className="absolute -top-2.5 left-3 bg-white px-2 flex items-center gap-1">
+                    <MapPin className="h-3.5 w-3.5 text-brand-primary-600" />
+                    <span className="text-xs font-bold text-brand-primary-600 uppercase tracking-wider">System Field — Always Required</span>
+                  </div>
+                  <div className="grid grid-cols-3 gap-3 mt-1">
+                    <Input
+                      value="place_visited"
+                      disabled
+                      className="bg-white/60 cursor-not-allowed"
+                    />
+                    <Input
+                      value="Place Visited"
+                      disabled
+                      className="bg-white/60 cursor-not-allowed"
+                    />
+                    <div className="flex items-center gap-2 h-10 px-3 rounded-md border bg-white/60 text-sm text-gray-500">
+                      <Lock className="h-3.5 w-3.5" />
+                      Text (Required)
+                    </div>
+                  </div>
+                  <p className="text-xs text-gray-500">
+                    The place/location name visited. Used to identify each report in the Dashboard and WhatsApp.
+                  </p>
+                </div>
+
                 {fields.map((field, index) => (
                   <div
                     key={index}
