@@ -3,7 +3,7 @@ import { StatsCard } from '@/components/dashboard/StatsCard';
 import { SearchBar } from '@/components/dashboard/SearchBar';
 import { Loading } from '@/components/Loading';
 import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
-import { FileText, Calendar, Users, Clock, Download, Loader2, Play, Share, Trash2 } from 'lucide-react';
+import { FileText, Calendar, Users, Clock, Download, Loader2, Play, Trash2 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { getTranscripts, getManagerTranscripts, downloadPDF, deleteTranscript } from '@/services/transcriptServices';
 import { getManagedProfiles } from '@/services/profileServices';
@@ -355,6 +355,7 @@ export default function Dashboard() {
                               ? "text-brand-primary-600 bg-brand-primary-50"
                               : "text-gray-400 hover:text-brand-primary-600 hover:bg-brand-primary-50"
                             }`}
+                          title={playingId === transcript.id ? "Pause Recording" : "Play Recording"}
                         >
                           {playingId === transcript.id ? (
                             <div className="flex gap-0.5 items-end h-3">
@@ -377,23 +378,13 @@ export default function Dashboard() {
                           }}
                           disabled={downloadingId === transcript.id || transcript.status !== 'confirmed'}
                           className="h-8 w-8 text-gray-400 hover:text-brand-primary-600 hover:bg-brand-primary-50 transition-colors"
+                          title="Download PDF"
                         >
                           {downloadingId === transcript.id ? (
                             <Loader2 className="h-4 w-4 animate-spin" />
                           ) : (
                             <Download className="h-4 w-4" />
                           )}
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            // Placeholder export action
-                          }}
-                          className="h-8 w-8 text-gray-400 hover:text-brand-primary-600 hover:bg-brand-primary-50 transition-colors"
-                        >
-                          <Share className="h-4 w-4" />
                         </Button>
                         {isManager && (
                           <Button
@@ -405,7 +396,7 @@ export default function Dashboard() {
                             }}
                             disabled={deletingId === transcript.id}
                             className="h-8 w-8 text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors"
-                            title="Delete report"
+                            title="Delete Report"
                           >
                             {deletingId === transcript.id ? (
                               <Loader2 className="h-4 w-4 animate-spin" />

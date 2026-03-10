@@ -1,26 +1,33 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Download, FileText, Clock, CheckCircle2, RefreshCw, Loader2, User } from 'lucide-react';
-import { subscriptionService } from '@/services/subscriptionService';
+import { Download, FileText, Clock, Calendar, RefreshCw, Loader2, Play, Trash2 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
-import { getTranscripts, getManagerTranscripts, downloadPDF } from '@/services/transcriptServices';
+import { getTranscripts, getManagerTranscripts, downloadPDF, deleteTranscript } from '@/services/transcriptServices';
 import type { VoiceTranscript } from '@/types';
 import toast from 'react-hot-toast';
 import { format } from 'date-fns';
+import { useNavigate } from 'react-router-dom';
+import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
+import { Loading } from '@/components/Loading';
 
 export default function VoiceTranscripts() {
-  const { profile } = useAuth();
+  const { profile, isLoading: authLoading } = useAuth();
+  const navigate = useNavigate();
   const [transcripts, setTranscripts] = useState<VoiceTranscript[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [playingId, setPlayingId] = useState<string | null>(null);
+  const [downloadingId, setDownloadingId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<VoiceTranscript | null>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
 
   const loadTranscripts = async () => {
     try {
       setIsLoading(true);
       const data = profile?.role === 'manager' 
-        ? await getManagerTranscripts(profile.id)
+        ? await getManagerTranscripts()
         : await getTranscripts();
       setTranscripts(data);
     } catch (error) {
@@ -32,248 +39,304 @@ export default function VoiceTranscripts() {
   };
 
   useEffect(() => {
-    loadTranscripts();
+    if (profile) {
+      loadTranscripts();
+    }
+    return () => {
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current = null;
+      }
+    };
   }, [profile]);
 
-  const handleDownload = async (transcript: VoiceTranscript) => {
+  const handlePlayAudio = (e: React.MouseEvent, transcript: VoiceTranscript) => {
+    e.stopPropagation();
+    if (!transcript.audio_url) {
+      toast.error('No audio recording available for this report');
+      return;
+    }
+
+    if (playingId === transcript.id) {
+      audioRef.current?.pause();
+      setPlayingId(null);
+      return;
+    }
+
+    if (audioRef.current) {
+      audioRef.current.pause();
+    }
+
+    const newAudio = new Audio(transcript.audio_url);
+    
+    newAudio.onended = () => {
+      setPlayingId(null);
+    };
+
+    newAudio.onerror = () => {
+      console.error('Audio playback failed for URL:', transcript.audio_url);
+      toast.error('Failed to play audio. The recording may be unavailable.');
+      setPlayingId(null);
+    };
+
+    newAudio.play().then(() => {
+      audioRef.current = newAudio;
+      setPlayingId(transcript.id);
+    }).catch((err) => {
+      console.error('Audio play error:', err);
+      toast.error('Failed to play audio. The recording may be unavailable.');
+    });
+  };
+
+  const handleDownloadPDF = async (transcriptId: string) => {
     try {
-      toast.loading('Generating PDF...', { id: 'download' });
-      const blob = await downloadPDF(transcript.id);
-      const url = window.URL.createObjectURL(blob);
+      setDownloadingId(transcriptId);
+      const result = await downloadPDF(transcriptId);
+
+      const byteCharacters = atob(result.pdf);
+      const byteNumbers = new Array(byteCharacters.length);
+      for (let i = 0; i < byteCharacters.length; i++) {
+        byteNumbers[i] = byteCharacters.charCodeAt(i);
+      }
+      const byteArray = new Uint8Array(byteNumbers);
+      const blob = new Blob([byteArray], { type: 'application/pdf' });
+
+      const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.setAttribute('download', `transcript_${transcript.id.slice(0, 8)}.pdf`);
+      link.download = result.filename;
       document.body.appendChild(link);
       link.click();
-      link.remove();
-      toast.success('PDF downloaded!', { id: 'download' });
-    } catch (error: any) {
-      console.error('Download error:', error);
-      toast.error(error.message || 'Failed to download PDF', { id: 'download' });
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+
+      toast.success('PDF downloaded successfully');
+    } catch (error) {
+      console.error('Failed to download PDF:', error);
+      toast.error('Failed to download PDF');
+    } finally {
+      setDownloadingId(null);
+    }
+  };
+
+  const handleDeleteReport = async () => {
+    if (!deleteTarget) return;
+    try {
+      setDeletingId(deleteTarget.id);
+      await deleteTranscript(deleteTarget.id);
+      setTranscripts(prev => prev.filter(t => t.id !== deleteTarget.id));
+      toast.success('Report deleted successfully');
+    } catch (error) {
+      console.error('Failed to delete report:', error);
+      toast.error('Failed to delete report');
+    } finally {
+      setDeletingId(null);
+      setDeleteTarget(null);
     }
   };
 
   const getStatusBadge = (status: string) => {
     switch (status) {
-      case 'completed':
-        return <Badge className="bg-green-100 text-green-700 hover:bg-green-200 border-none">Completed</Badge>;
+      case 'confirmed':
+        return (
+          <Badge className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border bg-emerald-50 text-emerald-700 border-emerald-200 shadow-sm shadow-emerald-100 hover:bg-emerald-100 hover:shadow-emerald-200 hover:scale-[1.04] transition-all duration-200 cursor-default select-none">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+            Confirmed
+          </Badge>
+        );
       case 'pending':
-        return <Badge className="bg-yellow-100 text-yellow-700 hover:bg-yellow-200 border-none">Processing</Badge>;
-      case 'error':
-        return <Badge className="bg-red-100 text-red-700 hover:bg-red-200 border-none">Error</Badge>;
+        return (
+          <Badge className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border bg-amber-50 text-amber-700 border-amber-200 shadow-sm shadow-amber-100 hover:bg-amber-100 hover:shadow-amber-200 hover:scale-[1.04] transition-all duration-200 cursor-default select-none">
+            <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
+            Pending
+          </Badge>
+        );
+      case 'retaken':
+        return (
+          <Badge className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border bg-slate-100 text-slate-600 border-slate-200 shadow-sm shadow-slate-100 hover:bg-slate-200 hover:shadow-slate-200 hover:scale-[1.04] transition-all duration-200 cursor-default select-none">
+            <span className="w-1.5 h-1.5 rounded-full bg-slate-400" />
+            Retaken
+          </Badge>
+        );
       default:
-        return <Badge variant="outline">{status}</Badge>;
+        return (
+          <Badge className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border bg-gray-100 text-gray-600 border-gray-200 shadow-sm hover:bg-gray-200 hover:scale-[1.04] transition-all duration-200 cursor-default select-none">
+            {status}
+          </Badge>
+        );
     }
   };
 
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <Loader2 className="w-8 h-8 text-brand-primary-600 animate-spin" />
-      </div>
-    );
+  const isManager = profile?.role === 'manager';
+
+  if (authLoading || isLoading && transcripts.length === 0) {
+    return <Loading message="Loading transcripts..." fullScreen />;
   }
 
   return (
-    <div className="max-w-5xl mx-auto px-4 py-8">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Voice Transcripts</h1>
-          <p className="text-gray-500">View and manage all your voice report transcripts</p>
+    <div className="p-6 lg:p-8 pt-20 lg:pt-6">
+      <div className="max-w-5xl mx-auto">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900">Voice Transcripts</h1>
+            <p className="text-gray-500 mt-1">View and manage all your voice report transcripts</p>
+          </div>
+          <Button 
+            variant="outline" 
+            onClick={loadTranscripts}
+            className="w-full sm:w-auto"
+            title="Refresh list"
+          >
+            <RefreshCw className={`w-4 h-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
+            Refresh
+          </Button>
         </div>
-        <Button 
-          variant="outline" 
-          onClick={loadTranscripts}
-          className="w-full sm:w-auto"
-        >
-          <RefreshCw className="w-4 h-4 mr-2" />
-          Refresh
-        </Button>
+
+        <div className="flex flex-col gap-6">
+          {transcripts.length === 0 ? (
+            <Card className="border-dashed border-2">
+              <CardContent className="flex flex-col items-center justify-center py-16">
+                <FileText className="h-14 w-14 text-gray-200 mb-4" />
+                <h3 className="text-lg font-semibold text-gray-900">No transcripts found</h3>
+                <p className="text-gray-500 max-w-sm text-center mt-1">
+                  Your recent reports will appear here once they are processed.
+                </p>
+              </CardContent>
+            </Card>
+          ) : (
+            transcripts.map((transcript) => {
+              const placeVisited = transcript.filled_data ? String((transcript.filled_data as Record<string, string>).place_visited || '') : '';
+              const templateName = transcript.user_templates?.name || 'Untitled Template';
+              
+              return (
+                <Card
+                  key={transcript.id}
+                  className="group border border-gray-100 shadow-sm hover:shadow-md transition-all duration-200 bg-white overflow-hidden cursor-pointer"
+                  onClick={() => navigate(`/reporte/${transcript.id}`)}
+                >
+                  <div className="p-6">
+                    <div className="flex items-start justify-between gap-4 mb-3">
+                      <div className="flex flex-col items-start gap-2.5">
+                        <div className="flex items-center gap-2">
+                          {getStatusBadge(transcript.status)}
+                          {transcript.modified_transcript && (
+                            <Badge className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border bg-blue-50 text-blue-700 border-blue-200 shadow-sm shadow-blue-100 hover:bg-blue-100 hover:shadow-blue-200 hover:scale-[1.04] transition-all duration-200 cursor-default select-none">
+                              <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />
+                              Updated
+                            </Badge>
+                          )}
+                        </div>
+                        <div>
+                          <h3 className="font-bold text-gray-900 text-xl group-hover:text-brand-primary-600 transition-colors">
+                            {placeVisited || templateName}
+                          </h3>
+                          <div className="flex items-center gap-1.5 text-sm text-gray-500 font-medium mt-1">
+                            <FileText className="w-3.5 h-3.5" />
+                            <span>Template: {templateName}</span>
+                          </div>
+                          <div className="text-sm text-gray-400 font-normal mt-1">
+                            by <span className="text-gray-600 font-medium">{transcript.profiles?.full_name || 'Unknown Salesperson'}</span> • {format(new Date(transcript.created_at), "MMM d, yyyy")}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="h-px bg-gray-100 w-full mt-3 mb-4" />
+
+                    <div className="flex items-center justify-between text-sm text-gray-500">
+                      <div className="flex items-center gap-4">
+                        <div className="flex items-center gap-1.5">
+                          <Clock className="w-4 h-4" />
+                          <span>{transcript.audio_duration || 'N/A'}</span>
+                        </div>
+                        <div className="flex items-center gap-1.5 sm:flex">
+                          <Calendar className="w-4 h-4" />
+                          <span>{format(new Date(transcript.created_at), "MMM d, yyyy")}</span>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-3">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={(e) => handlePlayAudio(e, transcript)}
+                          className={`h-8 w-8 transition-colors ${playingId === transcript.id
+                              ? "text-brand-primary-600 bg-brand-primary-50"
+                              : "text-gray-400 hover:text-brand-primary-600 hover:bg-brand-primary-50"
+                            }`}
+                          title={playingId === transcript.id ? "Pause Recording" : "Play Recording"}
+                        >
+                          {playingId === transcript.id ? (
+                            <div className="flex gap-0.5 items-end h-3">
+                              <div className="w-0.5 bg-current animate-[bounce_0.6s_infinite] h-full" />
+                              <div className="w-0.5 bg-current animate-[bounce_0.8s_infinite] h-2" />
+                              <div className="w-0.5 bg-current animate-[bounce_0.5s_infinite] h-3" />
+                            </div>
+                          ) : (
+                            <Play className="h-4 w-4" />
+                          )}
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (transcript.status === 'confirmed') {
+                              handleDownloadPDF(transcript.id);
+                            }
+                          }}
+                          disabled={downloadingId === transcript.id || transcript.status !== 'confirmed'}
+                          className="h-8 w-8 text-gray-400 hover:text-brand-primary-600 hover:bg-brand-primary-50 transition-colors"
+                          title="Download PDF"
+                        >
+                          {downloadingId === transcript.id ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <Download className="h-4 w-4" />
+                          )}
+                        </Button>
+                        {isManager && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setDeleteTarget(transcript);
+                            }}
+                            disabled={deletingId === transcript.id}
+                            className="h-8 w-8 text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+                            title="Delete Report"
+                          >
+                            {deletingId === transcript.id ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <Trash2 className="h-4 w-4" />
+                            )}
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </Card>
+              );
+            })
+          )}
+        </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-4">
-        {transcripts.length === 0 ? (
-          <Card className="border-dashed border-2">
-            <CardContent className="flex flex-col items-center justify-center py-12">
-              <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center mb-4">
-                <FileText className="w-6 h-6 text-gray-400" />
-              </div>
-              <h3 className="text-lg font-medium text-gray-900">No transcripts yet</h3>
-              <p className="text-gray-500 max-w-sm text-center mt-1">
-                Once you start recording voice reports via WhatsApp, they will appear here.
-              </p>
-            </CardContent>
-          </Card>
-        ) : (
-          transcripts.map((transcript) => (
-            <TranscriptCard 
-              key={transcript.id} 
-              transcript={transcript} 
-              onDownload={() => handleDownload(transcript)}
-              playingId={playingId}
-              setPlayingId={setPlayingId}
-              showSalesperson={profile?.role === 'manager'}
-            />
-          ))
-        )}
-      </div>
+      <ConfirmationDialog
+        open={!!deleteTarget}
+        onOpenChange={(open) => { if (!open) setDeleteTarget(null); }}
+        onConfirm={handleDeleteReport}
+        title="Delete Report"
+        description={`Are you sure you want to permanently delete "${
+          deleteTarget?.user_templates?.name || 'this report'
+        }" by ${deleteTarget?.profiles?.full_name || 'Unknown Salesperson'}? This action cannot be undone and all associated data will be lost.`}
+        confirmText="Delete Report"
+        cancelText="Cancel"
+        variant="destructive"
+        isLoading={!!deletingId}
+      />
     </div>
-  );
-}
-
-function TranscriptCard({ 
-  transcript, 
-  onDownload, 
-  playingId, 
-  setPlayingId,
-  showSalesperson 
-}: { 
-  transcript: VoiceTranscript; 
-  onDownload: () => void;
-  playingId: string | null;
-  setPlayingId: (id: string | null) => void;
-  showSalesperson?: boolean;
-}) {
-  const isPlaying = playingId === transcript.id;
-
-  const handlePlayPause = () => {
-    if (isPlaying) {
-      setPlayingId(null);
-    } else {
-      setPlayingId(transcript.id);
-    }
-  };
-
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case 'completed':
-        return (
-          <Badge className="bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border-emerald-100/50 flex items-center gap-1.5 px-2.5 py-0.5">
-            <CheckCircle2 className="w-3.5 h-3.5" />
-            <span className="font-semibold">Confirmed</span>
-          </Badge>
-        );
-      case 'pending':
-        return (
-          <Badge className="bg-amber-50 text-amber-700 hover:bg-amber-100 border-amber-100/50 flex items-center gap-1.5 px-2.5 py-0.5">
-            <Clock className="w-3.5 h-3.5 animate-pulse" />
-            <span className="font-semibold">Processing</span>
-          </Badge>
-        );
-      case 'error':
-        return (
-          <Badge className="bg-rose-50 text-rose-700 hover:bg-rose-100 border-rose-100/50 flex items-center gap-1.5 px-2.5 py-0.5">
-            <RefreshCw className="w-3.5 h-3.5" />
-            <span className="font-semibold">Error</span>
-          </Badge>
-        );
-      default:
-        return <Badge variant="outline" className="px-2.5 py-0.5 uppercase text-[10px] tracking-wider font-bold">{status}</Badge>;
-    }
-  };
-
-  return (
-    <Card className="group border border-gray-100 shadow-sm hover:shadow-md transition-all duration-200 bg-white overflow-hidden">
-      <div className="p-4 sm:p-5 flex items-center justify-between gap-4">
-        <div className="min-w-0 flex-1 flex flex-col gap-1">
-          {(() => {
-            const placeVisited = transcript.filled_data ? String((transcript.filled_data as Record<string, string>).place_visited || '') : '';
-            const templateName = transcript.user_templates?.name || 'Untitled Template';
-            return (
-              <>
-                <div className="flex items-center gap-2 flex-wrap">
-                  <h3 className="font-bold text-gray-900 truncate text-base">
-                    {placeVisited || templateName}
-                  </h3>
-                  {getStatusBadge(transcript.status)}
-                </div>
-
-                <div className="flex items-center gap-1.5 text-xs text-gray-500 font-medium mt-0.5">
-                  <FileText className="w-3.5 h-3.5" />
-                  <span>Template: {templateName}</span>
-                </div>
-              </>
-            );
-          })()}
-
-          <div className="flex flex-col gap-0.5">
-            {showSalesperson && (
-              <p className="text-sm font-medium text-gray-600 truncate">
-                {transcript.profiles?.full_name || 'Unknown Salesperson'}
-              </p>
-            )}
-            <p className="text-[11px] text-gray-400 font-medium uppercase tracking-wider">
-              {format(new Date(transcript.created_at), "MMM d, yyyy • h:mm a")}
-            </p>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={onDownload}
-            className="h-9 w-9 text-gray-400 hover:text-brand-primary-600 hover:bg-brand-primary-50 transition-colors"
-            title="Download PDF"
-          >
-            <Download className="h-5 w-5" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            asChild
-            className="h-9 w-9 text-gray-400 hover:text-brand-primary-600 hover:bg-brand-primary-50 transition-colors"
-            title="View Details"
-          >
-            <a href={`/reports/${transcript.id}`}>
-              <FileText className="h-5 w-5" />
-            </a>
-          </Button>
-        </div>
-      </div>
-      
-      {/* Audio Playback Indicator (Subtle) */}
-      {transcript.audio_url && (
-        <div className="px-4 py-2 bg-gray-50/50 border-t border-gray-50 flex items-center gap-3">
-          <div className="flex items-center gap-2 text-xs font-medium text-gray-500">
-            <Clock className="w-3.5 h-3.5" />
-            <span>00:04:00</span>
-          </div>
-          <div className="flex items-center gap-2 text-xs font-medium text-gray-500">
-            <CalendarDays className="w-3.5 h-3.5" />
-            <span>{format(new Date(transcript.created_at), "MMM d, yyyy")}</span>
-          </div>
-        </div>
-      )}
-    </Card>
-  );
-}
-
-// Helper icons that were missing in the component
-function CalendarDays(props: any) {
-  return (
-    <svg
-      {...props}
-      xmlns="http://www.w3.org/2000/svg"
-      width="24"
-      height="24"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <rect width="18" height="18" x="3" y="4" rx="2" ry="2" />
-      <line x1="16" x2="16" y1="2" y2="6" />
-      <line x1="8" x2="8" y1="2" y2="6" />
-      <line x1="3" x2="21" y1="10" y2="10" />
-      <path d="M8 14h.01" />
-      <path d="M12 14h.01" />
-      <path d="M16 14h.01" />
-      <path d="M8 18h.01" />
-      <path d="M12 18h.01" />
-      <path d="M16 18h.01" />
-    </svg>
   );
 }
