@@ -26,246 +26,339 @@ export default function ReportDetail() {
     const { id } = useParams<{ id: string }>();
     const navigate = useNavigate();
     const [transcript, setTranscript] = useState<VoiceTranscript | null>(null);
-    const [isLoading, setIsLoading] = useState(true);
-    const audioRef = useRef<HTMLAudioElement | null>(null);
+    const [loading, setLoading] = useState(true);
+    const [downloading, setDownloading] = useState(false);
     const [isPlaying, setIsPlaying] = useState(false);
+    const audioRef = useRef<HTMLAudioElement | null>(null);
 
     useEffect(() => {
-        const loadTranscript = async () => {
-            if (!id) return;
+        return () => {
+            if (audioRef.current) {
+                audioRef.current.pause();
+                audioRef.current = null;
+            }
+        };
+    }, []);
+
+    useEffect(() => {
+        const fetchTranscript = async () => {
             try {
-                setIsLoading(true);
+                if (!id) return;
+                setLoading(true);
                 const data = await getTranscript(id);
-                setTranscript(data);
+                if (data) {
+                    setTranscript(data);
+                } else {
+                    toast.error('Report not found');
+                    navigate('/');
+                }
             } catch (error) {
-                console.error('Error loading transcript:', error);
+                console.error('Error fetching transcript:', error);
                 toast.error('Failed to load report details');
-                navigate('/dashboard');
             } finally {
-                setIsLoading(false);
+                setLoading(false);
             }
         };
 
-        loadTranscript();
+        fetchTranscript();
     }, [id, navigate]);
 
-    const handleDownload = async () => {
+    const handlePlayAudio = () => {
+        if (!transcript?.audio_url) {
+            toast.error('No audio recording available for this report');
+            return;
+        }
+
+        if (isPlaying) {
+            audioRef.current?.pause();
+            setIsPlaying(false);
+            return;
+        }
+
+        if (audioRef.current) {
+            audioRef.current.play().then(() => {
+                setIsPlaying(true);
+            }).catch((err) => {
+                console.error('Audio play error:', err);
+                toast.error('Failed to play audio. The recording may be unavailable.');
+            });
+        } else {
+            const newAudio = new Audio(transcript.audio_url);
+            
+            newAudio.onended = () => setIsPlaying(false);
+            
+            newAudio.onerror = () => {
+                console.error('Audio playback failed for URL:', transcript.audio_url);
+                toast.error('Failed to play audio. The recording may be unavailable.');
+                setIsPlaying(false);
+            };
+
+            newAudio.play().then(() => {
+                audioRef.current = newAudio;
+                setIsPlaying(true);
+            }).catch((err) => {
+                console.error('Audio play error:', err);
+                toast.error('Failed to play audio. The recording may be unavailable.');
+            });
+        }
+    };
+
+    const handleDownloadPDF = async () => {
         if (!transcript) return;
         try {
-            toast.loading('Generating PDF...', { id: 'download' });
-            const blob = await downloadPDF(transcript.id);
-            const url = window.URL.createObjectURL(blob);
+            setDownloading(true);
+            const result = await downloadPDF(transcript.id);
+
+            const byteCharacters = atob(result.pdf);
+            const byteNumbers = new Array(byteCharacters.length);
+            for (let i = 0; i < byteCharacters.length; i++) {
+                byteNumbers[i] = byteCharacters.charCodeAt(i);
+            }
+            const byteArray = new Uint8Array(byteNumbers);
+            const blob = new Blob([byteArray], { type: 'application/pdf' });
+
+            const url = URL.createObjectURL(blob);
             const link = document.createElement('a');
             link.href = url;
-            link.setAttribute('download', `report_${transcript.id.slice(0, 8)}.pdf`);
+            link.download = result.filename;
             document.body.appendChild(link);
             link.click();
-            link.remove();
-            toast.success('PDF downloaded!', { id: 'download' });
-        } catch (error: any) {
-            console.error('Download error:', error);
-            toast.error(error.message || 'Failed to download PDF', { id: 'download' });
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+
+            toast.success('PDF downloaded successfully');
+        } catch (error) {
+            console.error('Failed to download PDF:', error);
+            toast.error('Failed to download PDF');
+        } finally {
+            setDownloading(false);
         }
     };
 
-    const togglePlay = () => {
-        if (audioRef.current) {
-            if (isPlaying) {
-                audioRef.current.pause();
-            } else {
-                audioRef.current.play();
-            }
-            setIsPlaying(!isPlaying);
+    const getStatusBadge = (status: string) => {
+        switch (status) {
+            case 'confirmed':
+                return (
+                    <Badge className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border bg-emerald-50 text-emerald-700 border-emerald-200 shadow-sm shadow-emerald-100 hover:bg-emerald-100 hover:shadow-emerald-200 hover:scale-[1.04] transition-all duration-200 cursor-default select-none">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                        <CheckCircle2 className="h-3.5 w-3.5" />
+                        Completed
+                    </Badge>
+                );
+            case 'pending':
+                return (
+                    <Badge className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border bg-amber-50 text-amber-700 border-amber-200 shadow-sm shadow-amber-100 hover:bg-amber-100 hover:shadow-amber-200 hover:scale-[1.04] transition-all duration-200 cursor-default select-none">
+                        <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
+                        <Clock className="h-3.5 w-3.5" />
+                        Pending
+                    </Badge>
+                );
+            case 'retaken':
+                return (
+                    <Badge className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border bg-slate-100 text-slate-600 border-slate-200 shadow-sm shadow-slate-100 hover:bg-slate-200 hover:shadow-slate-200 hover:scale-[1.04] transition-all duration-200 cursor-default select-none">
+                        <span className="w-1.5 h-1.5 rounded-full bg-slate-400" />
+                        <RefreshCw className="h-3.5 w-3.5" />
+                        Retaken
+                    </Badge>
+                );
+            default:
+                return (
+                    <Badge className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border bg-gray-100 text-gray-600 border-gray-200 shadow-sm hover:bg-gray-200 hover:scale-[1.04] transition-all duration-200 cursor-default select-none">
+                        {status}
+                    </Badge>
+                );
         }
     };
 
-    if (isLoading) return <Loading />;
-    if (!transcript) return null;
+    if (loading) {
+        return <Loading message="Loading report details..." fullScreen />;
+    }
+
+    if (!transcript) {
+        return null; // Should redirect in useEffect
+    }
 
     const title = transcript.user_templates?.name || 'Untitled Template';
-    const authorName = transcript.profiles?.full_name || 'Unknown';
-    const formattedDate = format(new Date(transcript.created_at), 'MMMM d, yyyy');
-    const filledData = (transcript.filled_data as Record<string, any>) || {};
+    const authorName = transcript.profiles?.full_name || 'Unknown Salesperson';
+    const phoneNumber = transcript.profiles?.phone_number || 'N/A';
+    const formattedDate = format(new Date(transcript.created_at), "EEEE, MMMM d, yyyy, HH:mm");
+    const fields = transcript.user_templates?.fields || [];
+    const filledData = transcript.filled_data || {};
+    const isUpdated = !!(transcript.modified_transcript);
 
     return (
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 bg-gray-50/30 min-h-screen">
-            {/* Navigation & Actions */}
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-10">
-                <Button 
-                    variant="ghost" 
-                    onClick={() => navigate(-1)}
-                    className="w-fit -ml-2 text-gray-500 hover:text-brand-primary-600 hover:bg-brand-primary-50 transition-all duration-200"
-                >
-                    <ArrowLeft className="w-5 h-5 mr-2" />
-                    Back to Dashboard
-                </Button>
-                
-                <div className="flex items-center gap-3">
-                    <Button 
-                        variant="outline" 
-                        onClick={handleDownload}
-                        className="bg-white border-gray-200 shadow-sm hover:border-brand-primary-200 hover:bg-brand-primary-50 hover:text-brand-primary-700 transition-all duration-200"
+        <div className="min-h-screen bg-gray-50/50">
+            <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8 md:py-12">
+                {/* Header Navigation */}
+                <div className="flex items-center justify-between mb-8">
+                    <Button
+                        variant="ghost"
+                        onClick={() => navigate(-1)}
+                        className="text-gray-600 hover:text-gray-900 hover:bg-gray-100 -ml-2 gap-2"
                     >
-                        <Download className="w-4 h-4 mr-2" />
-                        Export PDF
+                        <ArrowLeft className="h-4 w-4" />
+                        Back to Dashboard
                     </Button>
-                    <Badge className={`
-                        px-4 py-1.5 rounded-full border-none shadow-sm flex items-center gap-2 text-sm font-semibold tracking-wide
-                        ${transcript.status === 'completed' ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'}
-                    `}>
-                        <div className={`w-2 h-2 rounded-full ${transcript.status === 'completed' ? 'bg-emerald-500' : 'bg-amber-500'} animate-pulse`} />
-                        {transcript.status === 'completed' ? 'Confirmed' : 'Processing'}
-                    </Badge>
-                </div>
-            </div>
-
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
-                {/* Main Content */}
-                <div className="lg:col-span-2 space-y-10">
-                    <Card className="border-0 shadow-xl shadow-gray-200/50 bg-white overflow-hidden rounded-2xl">
-                        <CardHeader className="p-8 sm:p-10 border-b border-gray-50 bg-white relative">
-                            <div className="absolute top-0 left-0 w-2 h-full bg-brand-primary-600" />
-                            <div className="space-y-4">
-                                {(() => {
-                                    const placeVisited = filledData.place_visited ? String(filledData.place_visited) : '';
-                                    return (
-                                        <>
-                                            <h1 className="text-3xl md:text-4xl lg:text-5xl font-extrabold text-gray-900 tracking-tight">
-                                                {placeVisited || title}
-                                            </h1>
-                                            <div className="flex items-center gap-2.5 text-gray-500 font-semibold bg-gray-50 w-fit px-4 py-1.5 rounded-lg border border-gray-100">
-                                                <FileText className="w-5 h-5 text-brand-primary-500" />
-                                                <span className="text-sm uppercase tracking-wider">Template: {title}</span>
-                                            </div>
-                                        </>
-                                    );
-                                })()}
-                                <div className="flex flex-wrap items-center gap-4 text-gray-400 text-sm font-medium">
-                                    <div className="flex items-center gap-1.5">
-                                        <User className="w-4 h-4 text-gray-300" />
-                                        <span>Reported by <span className="text-gray-700 font-bold">{authorName}</span></span>
-                                    </div>
-                                    <div className="flex items-center gap-1.5">
-                                        <CalendarDays className="w-4 h-4 text-gray-300" />
-                                        <span>{formattedDate}</span>
-                                    </div>
-                                </div>
-                            </div>
-                        </CardHeader>
-                        
-                        <CardContent className="p-8 sm:p-10 space-y-12">
-                            {/* Detailed Fields Section */}
-                            <section>
-                                <h2 className="text-xl font-bold text-gray-900 mb-8 flex items-center gap-3">
-                                    <div className="w-1.5 h-6 bg-brand-primary-600 rounded-full" />
-                                    Report Details
-                                </h2>
-                                <div className="grid grid-cols-1 gap-8">
-                                    {Object.entries(filledData).map(([key, value]) => {
-                                        if (key === 'place_visited') return null;
-                                        return (
-                                            <div key={key} className="group hover:bg-gray-50/50 p-4 -m-4 rounded-xl transition-colors duration-200">
-                                                <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2 group-hover:text-brand-primary-500 transition-colors">
-                                                    {key.split('_').join(' ')}
-                                                </p>
-                                                <div className="text-gray-700 leading-relaxed font-medium text-lg border-l-2 border-gray-100 pl-4">
-                                                    {String(value) || <span className="text-gray-300 italic">No information provided</span>}
-                                                </div>
-                                            </div>
-                                        );
-                                    })}
-                                </div>
-                            </section>
-
-                            {/* Voice Transcript Section */}
-                            <section className="bg-blue-50/30 rounded-2xl p-8 border border-blue-50/50">
-                                <h2 className="text-xl font-bold text-blue-900 mb-6 flex items-center gap-3">
-                                    <Volume2 className="w-6 h-6 text-blue-600" />
-                                    Voice Recording Transcript
-                                </h2>
-                                <div className="bg-white rounded-xl p-6 shadow-sm border border-blue-100/50 italic text-gray-600 leading-loose text-lg font-medium relative">
-                                    <div className="absolute top-4 right-4 text-blue-100 transform translate-x-2 -translate-y-2">
-                                        <svg width="40" height="40" viewBox="0 0 24 24" fill="currentColor"><path d="M14.017 21L14.017 18C14.017 16.8954 14.9124 16 16.017 16H19.017C19.5693 16 20.017 15.5523 20.017 15V9C20.017 8.44772 19.5693 8 19.017 8H16.017C14.9124 8 14.017 7.10457 14.017 6V4L18.017 4C19.1216 4 20.017 4.89543 20.017 6V15C20.017 17.2091 18.2261 19 16.017 19H14.017V21ZM5.017 21L5.017 18C5.017 16.8954 5.91243 16 7.017 16H10.017C10.5693 16 11.017 15.5523 11.017 15V9C11.017 8.44772 10.5693 8 10.017 8H7.017C5.91243 8 5.017 7.10457 5.017 6V4L9.017 4C10.1216 4 11.017 4.89543 11.017 6V15C11.017 17.2091 9.2261 19 7.017 19H5.017V21Z"/></svg>
-                                    </div>
-                                    {transcript.modified_transcript || transcript.transcript || 'No transcript available'}
-                                </div>
-                            </section>
-                        </CardContent>
-                    </Card>
+                    <div className="flex items-center gap-2">
+                        {isUpdated && (
+                            <Badge className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border bg-blue-50 text-blue-700 border-blue-200 shadow-sm shadow-blue-100 hover:bg-blue-100 hover:shadow-blue-200 hover:scale-[1.04] transition-all duration-200 cursor-default select-none">
+                                <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />
+                                Updated
+                            </Badge>
+                        )}
+                        {getStatusBadge(transcript.status)}
+                    </div>
                 </div>
 
-                {/* Sidebar Info */}
-                <div className="space-y-8">
-                    {/* Audio Player Card */}
-                    {transcript.audio_url && (
-                        <Card className="border-0 shadow-lg shadow-gray-200/50 bg-white overflow-hidden rounded-2xl">
-                             <CardHeader className="p-6 bg-brand-primary-600 text-white">
-                                <CardTitle className="text-lg flex items-center gap-2">
-                                    <Volume2 className="w-5 h-5 shrink-0" />
-                                    Original Recording
+                {/* Title Area */}
+                <div className="mb-10">
+                    <h1 className="text-3xl md:text-4xl font-bold text-gray-900 mb-3 tracking-tight">
+                        {title}
+                    </h1>
+                    <p className="text-gray-500 text-sm md:text-base flex items-center gap-2">
+                        Report created by <span className="font-semibold text-gray-700">{authorName}</span> on {formattedDate}
+                    </p>
+                </div>
+
+                {/* Content Layout */}
+                <div className="flex flex-col lg:flex-row gap-8 items-start">
+                    {/* Main Content Column */}
+                    <div className="w-full lg:flex-1 space-y-8">
+                        {/* Report Data Card */}
+                        <Card className="border-gray-200 shadow-sm overflow-hidden bg-white">
+                            <CardHeader className="bg-gray-50/50 border-b border-gray-100 px-6 py-5">
+                                <CardTitle className="text-lg font-bold text-gray-800 flex items-center gap-2">
+                                    <FileText className="h-5 w-5 text-gray-500" />
+                                    Report Data
                                 </CardTitle>
                             </CardHeader>
                             <CardContent className="p-6">
-                                <audio 
-                                    ref={audioRef} 
-                                    src={transcript.audio_url} 
-                                    onEnded={() => setIsPlaying(false)}
-                                    className="hidden" 
-                                />
-                                <div className="flex flex-col items-center gap-4">
-                                    <Button 
-                                        size="lg" 
-                                        onClick={togglePlay}
-                                        className="w-20 h-20 rounded-full bg-brand-primary-50 text-brand-primary-600 hover:bg-brand-primary-100 hover:scale-105 active:scale-95 transition-all shadow-inner border-4 border-white"
-                                    >
-                                        <Play className={`w-8 h-8 ${isPlaying ? 'animate-pulse' : ''}`} />
-                                    </Button>
-                                    <div className="text-center">
-                                        <p className="font-bold text-gray-900">{isPlaying ? 'Playing Audio' : 'Play Recording'}</p>
-                                        <p className="text-xs text-gray-400 font-medium">Standard MP3 Audio</p>
-                                    </div>
+                                <div className="space-y-8">
+                                    {fields.map((field) => (
+                                        <div key={field.name}>
+                                            <h3 className="text-sm font-semibold text-gray-700 mb-2 uppercase tracking-wide">
+                                                {field.label}
+                                            </h3>
+                                            <p className="text-gray-600 text-[15px] leading-relaxed whitespace-pre-wrap">
+                                                {String(filledData[field.name] || 'N/A')}
+                                            </p>
+                                        </div>
+                                    ))}
+                                    {fields.length === 0 && (
+                                        <p className="text-gray-500 italic">No fields defined for this template.</p>
+                                    )}
                                 </div>
                             </CardContent>
                         </Card>
-                    )}
 
-                    {/* Meta Info Card */}
-                    <Card className="border-0 shadow-lg shadow-gray-200/50 bg-white rounded-2xl overflow-hidden">
-                        <CardHeader className="p-6 border-b border-gray-50">
-                            <CardTitle className="text-lg text-gray-900">System Logs</CardTitle>
-                        </CardHeader>
-                        <CardContent className="p-6 space-y-6">
-                            <div className="flex items-start gap-4">
-                                <div className="w-10 h-10 rounded-xl bg-violet-100 flex items-center justify-center shrink-0">
-                                    <Clock className="w-5 h-5 text-violet-600" />
-                                </div>
-                                <div>
-                                    <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Time Created</p>
-                                    <p className="text-sm font-bold text-gray-700">{format(new Date(transcript.created_at), 'h:mm a')}</p>
-                                </div>
-                            </div>
+                        {/* Audio Transcript Card */}
+                        <Card className="border-gray-200 shadow-sm overflow-hidden bg-white">
+                            <CardHeader className="bg-gray-50/50 border-b border-gray-100 px-6 py-5">
+                                <CardTitle className="text-lg font-bold text-gray-800 flex items-center gap-2">
+                                    <Volume2 className="h-5 w-5 text-gray-500" />
+                                    {isUpdated ? 'Updated Transcript' : 'Audio Transcript'}
+                                    {isUpdated && (
+                                        <Badge className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border bg-blue-50 text-blue-700 border-blue-200 shadow-sm shadow-blue-100 hover:bg-blue-100 hover:shadow-blue-200 hover:scale-[1.04] transition-all duration-200 cursor-default select-none ml-1">
+                                            <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />
+                                            Updated
+                                        </Badge>
+                                    )}
+                                </CardTitle>
+                            </CardHeader>
+                            <CardContent className="p-6 space-y-4">
+                                {isUpdated ? (
+                                    <>
+                                        <p className="text-gray-600 text-[15px] leading-relaxed whitespace-pre-wrap">
+                                            {transcript.modified_transcript}
+                                        </p>
+                                        <details className="mt-4">
+                                            <summary className="text-xs text-gray-400 cursor-pointer hover:text-gray-600 select-none">
+                                                Show original transcript
+                                            </summary>
+                                            <p className="mt-2 text-gray-400 text-sm leading-relaxed whitespace-pre-wrap border-l-2 border-gray-200 pl-3">
+                                                {transcript.transcript || 'No original transcript.'}
+                                            </p>
+                                        </details>
+                                    </>
+                                ) : (
+                                    <p className="text-gray-600 text-[15px] leading-relaxed whitespace-pre-wrap">
+                                        {transcript.transcript || 'No transcript available.'}
+                                    </p>
+                                )}
+                            </CardContent>
+                        </Card>
+                    </div>
 
-                            <div className="flex items-start gap-4">
-                                <div className="w-10 h-10 rounded-xl bg-emerald-100 flex items-center justify-center shrink-0">
-                                    <Phone className="w-5 h-5 text-emerald-600" />
+                    {/* Sidebar Column */}
+                    <div className="w-full lg:w-80 flex-shrink-0 space-y-6">
+                        {/* Information Card */}
+                        <Card className="border-gray-200 shadow-sm bg-white">
+                            <CardHeader className="px-6 py-5 pb-2">
+                                <CardTitle className="text-[17px] font-bold text-gray-800">
+                                    Information
+                                </CardTitle>
+                            </CardHeader>
+                            <CardContent className="p-6 pt-3 space-y-5">
+                                <div className="flex items-start gap-3">
+                                    <CalendarDays className="h-4 w-4 text-gray-400 mt-0.5" />
+                                    <span className="text-sm text-gray-600">
+                                        {formattedDate}
+                                    </span>
                                 </div>
-                                <div>
-                                    <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Source Phone</p>
-                                    <p className="text-sm font-bold text-gray-700">{transcript.phone_number}</p>
+                                <div className="flex items-center gap-3">
+                                    <Clock className="h-4 w-4 text-gray-400" />
+                                    <span className="text-sm text-gray-600">
+                                        {transcript.audio_duration || 'N/A'}
+                                    </span>
                                 </div>
-                            </div>
+                                <div className="flex items-center gap-3">
+                                    <User className="h-4 w-4 text-gray-400" />
+                                    <span className="text-sm text-gray-600 font-medium">
+                                        {authorName}
+                                    </span>
+                                </div>
+                                <div className="flex items-center gap-3">
+                                    <Phone className="h-4 w-4 text-gray-400" />
+                                    <span className="text-sm text-gray-600">
+                                        {phoneNumber}
+                                    </span>
+                                </div>
+                            </CardContent>
+                        </Card>
 
-                            <div className="flex items-start gap-4 pt-4 border-t border-gray-50">
-                                <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center shrink-0 border-2 border-white shadow-sm overflow-hidden">
-                                     <User className="w-5 h-5 text-gray-400" />
-                                </div>
-                                <div>
-                                    <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Assigned Manager</p>
-                                    <p className="text-sm font-bold text-gray-700">{profile?.manager_profiles?.full_name || 'N/A'}</p>
-                                </div>
-                            </div>
-                        </CardContent>
-                    </Card>
+                        {/* Actions Card */}
+                        <Card className="border-gray-200 shadow-sm bg-white">
+                            <CardHeader className="px-6 py-5 pb-2">
+                                <CardTitle className="text-[17px] font-bold text-gray-800">
+                                    Actions
+                                </CardTitle>
+                            </CardHeader>
+                            <CardContent className="p-6 pt-3 space-y-3">
+                                <Button
+                                    variant="outline"
+                                    className="w-full justify-start gap-2 h-11 text-gray-700 font-medium border-gray-200 hover:bg-gray-50"
+                                    onClick={handleDownloadPDF}
+                                    disabled={downloading}
+                                >
+                                    <Download className="h-4 w-4 text-gray-500" />
+                                    {downloading ? 'Downloading...' : 'Download Report'}
+                                </Button>
+                                <Button
+                                    variant="outline"
+                                    className={`w-full justify-start gap-2 h-11 font-medium border-gray-200 ${isPlaying ? 'bg-brand-primary-50 text-brand-primary-700 border-brand-primary-200' : 'text-gray-700 hover:bg-gray-50'
+                                        }`}
+                                    onClick={handlePlayAudio}
+                                >
+                                    {isPlaying ? (
+                                        <Volume2 className="h-4 w-4 animate-pulse" />
+                                    ) : (
+                                        <Play className="h-4 w-4 text-gray-500" />
+                                    )}
+                                    {isPlaying ? 'Pause Audio' : 'Play Audio'}
+                                </Button>
+                            </CardContent>
+                        </Card>
+                    </div>
                 </div>
             </div>
         </div>
