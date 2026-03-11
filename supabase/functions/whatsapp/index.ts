@@ -1772,7 +1772,8 @@ serve(async (req) => {
                     // If not, fall through to the standard new-report confirm flow.
                     if (buttonId === "confirm_modification" ||
                         buttonId === "Confirm" ||
-                        buttonText.includes("confirm")) {
+                        buttonText.includes("confirm") ||
+                        buttonText.includes("confirmar")) {
                       // Check for modification confirmation state first
                       const { data: modConfConv } = await adminClient
                         .from("voice_transcripts")
@@ -1945,7 +1946,7 @@ serve(async (req) => {
                     }
 
                     // ── MODIFY AGAIN (from modified report template) ──────
-                    if (buttonId === "modify_again" || buttonText.includes("modify")) {
+                    if (buttonId === "modify_again" || buttonText.includes("modify") || buttonText.includes("modificar")) {
                       // Case 1: Modify pressed after a modification — session record already exists
                       const { data: modAgainConv } = await adminClient
                         .from("voice_transcripts")
@@ -2038,7 +2039,7 @@ serve(async (req) => {
 
                     // ── Standard confirm / retake flow ────────────────────
                     let action: "confirm" | "retake" | null = null;
-                    if (buttonId === "Confirm" || buttonText.includes("confirm")) {
+                    if (buttonId === "Confirm" || buttonText.includes("confirm") || buttonText.includes("confirmar")) {
                       action = "confirm";
                     } else if (buttonId === "Retake" || buttonText.includes("retake")) {
                       action = "retake";
