@@ -1688,7 +1688,7 @@ serve(async (req) => {
                     console.log(`Button clicked: ${buttonText} (ID: ${buttonId})`);
 
                     // ── CREATE REPORT (from menu template) ───────────────
-                    if (buttonId === "create_report" || buttonText.includes("create report")) {
+                    if (buttonId === "create_report" || buttonText.includes("create report") || buttonText.includes("crear informe")) {
                       await sendWAMessage({
                         messaging_product: "whatsapp",
                         recipient_type: "individual",
@@ -1705,7 +1705,7 @@ serve(async (req) => {
                     }
 
                     // ── MODIFY REPORT (from menu template) ───────────────
-                    if (buttonId === "modify_report" || buttonText.includes("modify report")) {
+                    if (buttonId === "modify_report" || buttonText.includes("modify report") || buttonText.includes("modificar informe")) {
                       // Fetch recent confirmed reports for this salesperson
                       const { data: userReports } = await adminClient
                         .from("voice_transcripts")
