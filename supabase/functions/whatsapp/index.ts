@@ -785,7 +785,7 @@ serve(async (req) => {
                               .eq("id", targetReport.template_id)
                               .maybeSingle();
                             if (tplForExtract?.fields && (tplForExtract.fields as any[]).length > 0) {
-                              tplFieldsForDisplay = tplForExtract.fields as TemplateField[];
+                              tplFieldsForDisplay = ensurePlaceVisitedField(tplForExtract.fields as TemplateField[]);
                               const newExtracted = await extractFieldsWithGPT(updatedText, tplFieldsForDisplay, openaiApiKey);
                               if (newExtracted) updatedFilledData = newExtracted;
                             }
@@ -1263,7 +1263,7 @@ serve(async (req) => {
                                 .eq("id", targetReport.template_id)
                                 .maybeSingle();
                               if (tplForExtract?.fields && (tplForExtract.fields as any[]).length > 0) {
-                                voiceTplFields = tplForExtract.fields as TemplateField[];
+                                voiceTplFields = ensurePlaceVisitedField(tplForExtract.fields as TemplateField[]);
                                 const newExtracted = await extractFieldsWithGPT(updatedText, voiceTplFields, openaiApiKey);
                                 if (newExtracted) updatedFilledData = newExtracted;
                               }
@@ -1698,7 +1698,7 @@ serve(async (req) => {
                           body:
                             "📝 Para crear un nuevo informe, simplemente envíame un mensaje de voz contando los detalles de tu visita comercial.\n\n" +
                             "¡El sistema procesará la información automáticamente!\n\n" +
-                            "💡 Escribe *MENU* en cualquier momento para volver al menú principal.",
+                            "💡 Escribe *MENÚ* en cualquier momento para volver al menú principal.",
                         },
                       });
                       continue;
