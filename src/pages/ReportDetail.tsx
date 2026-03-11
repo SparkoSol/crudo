@@ -21,6 +21,7 @@ import { getTranscript, downloadPDF } from '@/services/transcriptServices';
 import type { VoiceTranscript } from '@/types';
 import toast from 'react-hot-toast';
 import { format } from 'date-fns';
+import { es } from 'date-fns/locale';
 
 export default function ReportDetail() {
     const { id } = useParams<{ id: string }>();
@@ -49,12 +50,12 @@ export default function ReportDetail() {
                 if (data) {
                     setTranscript(data);
                 } else {
-                    toast.error('Report not found');
+                    toast.error('Informe no encontrado');
                     navigate('/');
                 }
             } catch (error) {
                 console.error('Error fetching transcript:', error);
-                toast.error('Failed to load report details');
+                toast.error('Error al cargar los detalles del informe');
             } finally {
                 setLoading(false);
             }
@@ -65,7 +66,7 @@ export default function ReportDetail() {
 
     const handlePlayAudio = () => {
         if (!transcript?.audio_url) {
-            toast.error('No audio recording available for this report');
+            toast.error('No hay grabación de audio disponible para este informe');
             return;
         }
 
@@ -80,7 +81,7 @@ export default function ReportDetail() {
                 setIsPlaying(true);
             }).catch((err) => {
                 console.error('Audio play error:', err);
-                toast.error('Failed to play audio. The recording may be unavailable.');
+                toast.error('Error al reproducir el audio. La grabación puede no estar disponible.');
             });
         } else {
             const newAudio = new Audio(transcript.audio_url);
@@ -89,7 +90,7 @@ export default function ReportDetail() {
             
             newAudio.onerror = () => {
                 console.error('Audio playback failed for URL:', transcript.audio_url);
-                toast.error('Failed to play audio. The recording may be unavailable.');
+                toast.error('Error al reproducir el audio. La grabación puede no estar disponible.');
                 setIsPlaying(false);
             };
 
@@ -98,7 +99,7 @@ export default function ReportDetail() {
                 setIsPlaying(true);
             }).catch((err) => {
                 console.error('Audio play error:', err);
-                toast.error('Failed to play audio. The recording may be unavailable.');
+                toast.error('Error al reproducir el audio. La grabación puede no estar disponible.');
             });
         }
     };
@@ -126,10 +127,10 @@ export default function ReportDetail() {
             document.body.removeChild(link);
             URL.revokeObjectURL(url);
 
-            toast.success('PDF downloaded successfully');
+            toast.success('PDF descargado con éxito');
         } catch (error) {
             console.error('Failed to download PDF:', error);
-            toast.error('Failed to download PDF');
+            toast.error('Error al descargar el PDF');
         } finally {
             setDownloading(false);
         }
@@ -142,7 +143,7 @@ export default function ReportDetail() {
                     <Badge className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border bg-emerald-50 text-emerald-700 border-emerald-200 shadow-sm shadow-emerald-100 hover:bg-emerald-100 hover:shadow-emerald-200 hover:scale-[1.04] transition-all duration-200 cursor-default select-none">
                         <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
                         <CheckCircle2 className="h-3.5 w-3.5" />
-                        Completed
+                        Completado
                     </Badge>
                 );
             case 'pending':
@@ -150,7 +151,7 @@ export default function ReportDetail() {
                     <Badge className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border bg-amber-50 text-amber-700 border-amber-200 shadow-sm shadow-amber-100 hover:bg-amber-100 hover:shadow-amber-200 hover:scale-[1.04] transition-all duration-200 cursor-default select-none">
                         <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
                         <Clock className="h-3.5 w-3.5" />
-                        Pending
+                        Pendiente
                     </Badge>
                 );
             case 'retaken':
@@ -158,7 +159,7 @@ export default function ReportDetail() {
                     <Badge className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border bg-slate-100 text-slate-600 border-slate-200 shadow-sm shadow-slate-100 hover:bg-slate-200 hover:shadow-slate-200 hover:scale-[1.04] transition-all duration-200 cursor-default select-none">
                         <span className="w-1.5 h-1.5 rounded-full bg-slate-400" />
                         <RefreshCw className="h-3.5 w-3.5" />
-                        Retaken
+                        Repetido
                     </Badge>
                 );
             default:
@@ -171,17 +172,17 @@ export default function ReportDetail() {
     };
 
     if (loading) {
-        return <Loading message="Loading report details..." fullScreen />;
+        return <Loading message="Cargando detalles del informe..." fullScreen />;
     }
 
     if (!transcript) {
         return null; // Should redirect in useEffect
     }
 
-    const title = transcript.user_templates?.name || 'Untitled Template';
-    const authorName = transcript.profiles?.full_name || 'Unknown Salesperson';
+    const title = transcript.user_templates?.name || 'Plantilla sin título';
+    const authorName = transcript.profiles?.full_name || 'Vendedor Desconocido';
     const phoneNumber = transcript.profiles?.phone_number || 'N/A';
-    const formattedDate = format(new Date(transcript.created_at), "EEEE, MMMM d, yyyy, HH:mm");
+    const formattedDate = format(new Date(transcript.created_at), "EEEE, d 'de' MMMM 'de' yyyy, HH:mm", { locale: es });
     const fields = transcript.user_templates?.fields || [];
     const filledData = transcript.filled_data || {};
     const isUpdated = !!(transcript.modified_transcript);
@@ -197,13 +198,13 @@ export default function ReportDetail() {
                         className="text-gray-600 hover:text-gray-900 hover:bg-gray-100 -ml-2 gap-2"
                     >
                         <ArrowLeft className="h-4 w-4" />
-                        Back to Dashboard
+                        Volver al Panel
                     </Button>
                     <div className="flex items-center gap-2">
                         {isUpdated && (
                             <Badge className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border bg-blue-50 text-blue-700 border-blue-200 shadow-sm shadow-blue-100 hover:bg-blue-100 hover:shadow-blue-200 hover:scale-[1.04] transition-all duration-200 cursor-default select-none">
                                 <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />
-                                Updated
+                                Actualizado
                             </Badge>
                         )}
                         {getStatusBadge(transcript.status)}
@@ -216,7 +217,7 @@ export default function ReportDetail() {
                         {title}
                     </h1>
                     <p className="text-gray-500 text-sm md:text-base flex items-center gap-2">
-                        Report created by <span className="font-semibold text-gray-700">{authorName}</span> on {formattedDate}
+                        Informe creado por <span className="font-semibold text-gray-700">{authorName}</span> el {formattedDate}
                     </p>
                 </div>
 
@@ -229,7 +230,7 @@ export default function ReportDetail() {
                             <CardHeader className="bg-gray-50/50 border-b border-gray-100 px-6 py-5">
                                 <CardTitle className="text-lg font-bold text-gray-800 flex items-center gap-2">
                                     <FileText className="h-5 w-5 text-gray-500" />
-                                    Report Data
+                                    Datos del Informe
                                 </CardTitle>
                             </CardHeader>
                             <CardContent className="p-6">
@@ -245,7 +246,7 @@ export default function ReportDetail() {
                                         </div>
                                     ))}
                                     {fields.length === 0 && (
-                                        <p className="text-gray-500 italic">No fields defined for this template.</p>
+                                        <p className="text-gray-500 italic">No hay campos definidos para esta plantilla.</p>
                                     )}
                                 </div>
                             </CardContent>
@@ -256,11 +257,11 @@ export default function ReportDetail() {
                             <CardHeader className="bg-gray-50/50 border-b border-gray-100 px-6 py-5">
                                 <CardTitle className="text-lg font-bold text-gray-800 flex items-center gap-2">
                                     <Volume2 className="h-5 w-5 text-gray-500" />
-                                    {isUpdated ? 'Updated Transcript' : 'Audio Transcript'}
+                                    {isUpdated ? 'Transcripción Actualizada' : 'Transcripción de Audio'}
                                     {isUpdated && (
                                         <Badge className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border bg-blue-50 text-blue-700 border-blue-200 shadow-sm shadow-blue-100 hover:bg-blue-100 hover:shadow-blue-200 hover:scale-[1.04] transition-all duration-200 cursor-default select-none ml-1">
                                             <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />
-                                            Updated
+                                            Actualizado
                                         </Badge>
                                     )}
                                 </CardTitle>
@@ -273,16 +274,16 @@ export default function ReportDetail() {
                                         </p>
                                         <details className="mt-4">
                                             <summary className="text-xs text-gray-400 cursor-pointer hover:text-gray-600 select-none">
-                                                Show original transcript
+                                                Mostrar transcripción original
                                             </summary>
                                             <p className="mt-2 text-gray-400 text-sm leading-relaxed whitespace-pre-wrap border-l-2 border-gray-200 pl-3">
-                                                {transcript.transcript || 'No original transcript.'}
+                                                {transcript.transcript || 'No hay transcripción original.'}
                                             </p>
                                         </details>
                                     </>
                                 ) : (
                                     <p className="text-gray-600 text-[15px] leading-relaxed whitespace-pre-wrap">
-                                        {transcript.transcript || 'No transcript available.'}
+                                        {transcript.transcript || 'No hay transcripción disponible.'}
                                     </p>
                                 )}
                             </CardContent>
@@ -295,7 +296,7 @@ export default function ReportDetail() {
                         <Card className="border-gray-200 shadow-sm bg-white">
                             <CardHeader className="px-6 py-5 pb-2">
                                 <CardTitle className="text-[17px] font-bold text-gray-800">
-                                    Information
+                                    Información
                                 </CardTitle>
                             </CardHeader>
                             <CardContent className="p-6 pt-3 space-y-5">
@@ -330,7 +331,7 @@ export default function ReportDetail() {
                         <Card className="border-gray-200 shadow-sm bg-white">
                             <CardHeader className="px-6 py-5 pb-2">
                                 <CardTitle className="text-[17px] font-bold text-gray-800">
-                                    Actions
+                                    Acciones
                                 </CardTitle>
                             </CardHeader>
                             <CardContent className="p-6 pt-3 space-y-3">
@@ -341,7 +342,7 @@ export default function ReportDetail() {
                                     disabled={downloading}
                                 >
                                     <Download className="h-4 w-4 text-gray-500" />
-                                    {downloading ? 'Downloading...' : 'Download Report'}
+                                    {downloading ? 'Descargando...' : 'Descargar Informe'}
                                 </Button>
                                 <Button
                                     variant="outline"
@@ -354,7 +355,7 @@ export default function ReportDetail() {
                                     ) : (
                                         <Play className="h-4 w-4 text-gray-500" />
                                     )}
-                                    {isPlaying ? 'Pause Audio' : 'Play Audio'}
+                                    {isPlaying ? 'Pausar Audio' : 'Reproducir Audio'}
                                 </Button>
                             </CardContent>
                         </Card>

@@ -76,7 +76,7 @@ export function SubscriptionSettings({ initialSubscription, initialDetails, init
         setCancelLoading(true);
         try {
             await subscriptionService.cancelSubscription();
-            toast.success("Subscription canceled successfully");
+            toast.success("Suscripción cancelada con éxito");
             if (subscription) {
                 setSubscription({ ...subscription, status: 'canceled' });
             }
@@ -85,7 +85,7 @@ export function SubscriptionSettings({ initialSubscription, initialDetails, init
             navigate('/subscription');
         } catch (err: any) {
             console.error(err);
-            toast.error(err.message || "Failed to cancel subscription");
+            toast.error(err.message || "Error al cancelar la suscripción");
         } finally {
             setCancelLoading(false);
         }
@@ -107,15 +107,15 @@ export function SubscriptionSettings({ initialSubscription, initialDetails, init
                             <Zap className="h-5 w-5 text-gray-500" />
                         </div>
                         <div>
-                            <CardTitle className="text-xl">Subscription</CardTitle>
-                            <CardDescription>You are currently on the Free plan.</CardDescription>
+                            <CardTitle className="text-xl">Suscripción</CardTitle>
+                            <CardDescription>Actualmente estás en el plan Gratuito.</CardDescription>
                         </div>
                     </div>
                 </CardHeader>
                 <CardContent>
-                    <p className="text-gray-600 mb-4">Upgrade to a plan to unlock premium features and usage credits.</p>
+                    <p className="text-gray-600 mb-4">Mejora a un plan para desbloquear funciones premium y créditos de uso.</p>
                     <Button onClick={() => navigate('/subscription')} className="bg-brand-primary-600 hover:bg-brand-primary-700">
-                        View Plans
+                        Ver Planes
                     </Button>
                 </CardContent>
             </Card>
@@ -131,13 +131,16 @@ export function SubscriptionSettings({ initialSubscription, initialDetails, init
                             <Zap className="h-5 w-5 text-brand-primary-600" />
                         </div>
                         <div>
-                            <CardTitle className="text-xl">Subscription & Billing</CardTitle>
-                            <CardDescription>Manage your current plan and usage</CardDescription>
+                            <CardTitle className="text-xl">Suscripción y Facturación</CardTitle>
+                            <CardDescription>Gestiona tu plan actual y uso</CardDescription>
                         </div>
                     </div>
                     <div className={`px-2.5 py-0.5 rounded-full text-xs font-bold uppercase tracking-wide border ${subscription.status === 'active' ? 'bg-green-50 text-green-700 border-green-200' : 'bg-yellow-50 text-yellow-700 border-yellow-200'
                         }`}>
-                        {subscription.status}
+                        {subscription.status === 'active' ? 'Activa' : 
+                         subscription.status === 'past_due' ? 'Pago Pendiente' : 
+                         subscription.status === 'canceled' ? 'Cancelada' : 
+                         subscription.status}
                     </div>
                 </div>
             </CardHeader>
@@ -145,7 +148,7 @@ export function SubscriptionSettings({ initialSubscription, initialDetails, init
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="p-4 bg-gray-50 rounded-xl border border-gray-100 flex flex-col justify-between">
                         <div>
-                            <p className="text-xs font-medium text-gray-500 mb-1 uppercase tracking-wider">Current Plan</p>
+                            <p className="text-xs font-medium text-gray-500 mb-1 uppercase tracking-wider">Plan Actual</p>
                             <p className="text-lg font-bold text-gray-900 capitalize flex items-center gap-2">
                                 {TIER_LABELS[subscription.plan_type] || subscription.plan_type}
                                 {subscription.billing_period && (
@@ -161,9 +164,9 @@ export function SubscriptionSettings({ initialSubscription, initialDetails, init
                         </div>
                         {details.next_billing_date && (
                             <div className="mt-4 pt-4 border-t border-gray-200">
-                                <p className="text-xs text-gray-500 mb-1">Next Billing Date</p>
+                                <p className="text-xs text-gray-500 mb-1">Próxima Fecha de Facturación</p>
                                 <p className="text-sm font-medium text-gray-900">
-                                    {new Date(details.next_billing_date).toLocaleDateString(undefined, {
+                                    {new Date(details.next_billing_date).toLocaleDateString('es-ES', {
                                         year: 'numeric',
                                         month: 'long',
                                         day: 'numeric'
@@ -174,28 +177,28 @@ export function SubscriptionSettings({ initialSubscription, initialDetails, init
                     </div>
                     <div className="p-4 bg-gray-50 rounded-xl border border-gray-100 flex flex-col justify-between">
                         <div>
-                            <p className="text-xs font-medium text-gray-500 mb-1 uppercase tracking-wider">Credits</p>
+                            <p className="text-xs font-medium text-gray-500 mb-1 uppercase tracking-wider">Créditos</p>
                             <div className="flex items-end gap-2">
                                 <p className="text-2xl font-bold text-gray-900">
                                     {batches.reduce((sum, b) => sum + b.credits_remaining, 0) || (wallet?.total_credits ?? 0)}
                                 </p>
-                                <p className="text-sm font-normal text-gray-500 mb-1">available</p>
+                                <p className="text-sm font-normal text-gray-500 mb-1">disponibles</p>
                                 <CreditCard className="h-5 w-5 text-orange-500 mb-1 ml-auto" />
                             </div>
                             <div className="flex items-center gap-3 mt-2">
                                 <span className="text-xs text-gray-500">
-                                    {wallet ? wallet.used_credits_this_month : details.usage_credits} used this month
+                                    {wallet ? wallet.used_credits_this_month : details.usage_credits} usados este mes
                                 </span>
                                 {batches.filter(b => b.source === 'rollover').reduce((sum, b) => sum + b.credits_remaining, 0) > 0 && (
                                     <span className="text-xs text-blue-600 font-medium">
-                                        {batches.filter(b => b.source === 'rollover').reduce((sum, b) => sum + b.credits_remaining, 0)} rollover
+                                        {batches.filter(b => b.source === 'rollover').reduce((sum, b) => sum + b.credits_remaining, 0)} acumulados
                                     </span>
                                 )}
                             </div>
                         </div>
                         <div className="flex items-center gap-2 mt-3">
                             <p className="text-xs text-gray-500 flex-1">
-                                Your oldest credits are used first. Unused credits carry over to the next month (up to 100% of your last purchase).
+                                Tus créditos más antiguos se usan primero. Los créditos no utilizados se acumulan para el mes siguiente (hasta el 100% de tu última compra).
                             </p>
                             <Button
                                 variant="outline"
@@ -204,7 +207,7 @@ export function SubscriptionSettings({ initialSubscription, initialDetails, init
                                 className="flex-shrink-0 gap-1.5 text-xs text-green-700 border-green-200 hover:bg-green-50 hover:border-green-300"
                             >
                                 <ShoppingCart className="h-3 w-3" />
-                                Buy Credits
+                                Comprar Créditos
                             </Button>
                         </div>
                     </div>
@@ -213,13 +216,13 @@ export function SubscriptionSettings({ initialSubscription, initialDetails, init
                 {subscription.status === 'past_due' && (
                     <div className="flex items-center gap-2 p-3 bg-red-50 text-red-700 rounded-lg text-sm border border-red-100">
                         <AlertTriangle className="h-4 w-4" />
-                        <span>There is an issue with your payment method. Please update it.</span>
+                        <span>Hay un problema con tu método de pago. Por favor, actúalo.</span>
                     </div>
                 )}
             </CardContent>
             <CardFooter className="pt-4 border-t border-gray-100 flex justify-between bg-gray-50/50">
                 <p className="text-xs text-gray-500">
-                    To upgrade or change your plan, visit the <a href="/subscription" className="text-brand-primary-600 hover:underline">Subscription page</a>.
+                    Para mejorar o cambiar tu plan, visita la <a href="/subscription" className="text-brand-primary-600 hover:underline">página de Suscripción</a>.
                 </p>
                 {subscription.status !== 'canceled' && (
                     <Button
@@ -229,7 +232,7 @@ export function SubscriptionSettings({ initialSubscription, initialDetails, init
                         className="gap-2 bg-red-50 text-red-600 hover:bg-red-100 border border-red-200"
                     >
                         {cancelLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <AlertTriangle className="h-4 w-4" />}
-                        Cancel Plan
+                        Cancelar Plan
                     </Button>
                 )}
             </CardFooter>
@@ -238,10 +241,10 @@ export function SubscriptionSettings({ initialSubscription, initialDetails, init
                 open={showCancelDialog}
                 onOpenChange={setShowCancelDialog}
                 onConfirm={executeCancellation}
-                title="Cancel Subscription"
-                description="If you cancel, you'll lose access to the platform and any remaining credits. Any credits you've already used this month will be charged. This can't be undone."
-                confirmText="Yes, cancel everything"
-                cancelText="Keep my plan"
+                title="Cancelar Suscripción"
+                description="Si cancelas, perderás el acceso a la plataforma y todos los créditos restantes. Se cobrarán los créditos que ya hayas usado este mes. Esta acción no se puede deshacer."
+                confirmText="Sí, cancelar todo"
+                cancelText="Mantener mi plan"
                 variant="destructive"
                 isLoading={cancelLoading}
             />

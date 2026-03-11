@@ -45,11 +45,11 @@ export function ChangePassword() {
       setIsSavingPassword(true);
       await updatePassword(pendingPassword);
       resetPassword();
-      toast.success('Password updated successfully');
+      toast.success('Contraseña actualizada con éxito');
       setPendingPassword(null);
     } catch (error: unknown) {
       console.error('Error updating password:', error);
-      const errorMessage = error instanceof Error ? error.message : 'Failed to update password';
+      const errorMessage = error instanceof Error ? error.message : 'Error al actualizar la contraseña';
       toast.error(errorMessage);
     } finally {
       setIsSavingPassword(false);
@@ -64,9 +64,9 @@ export function ChangePassword() {
             <Lock className="h-5 w-5 text-amber-600" />
           </div>
           <div>
-            <CardTitle className="text-xl">Change Password</CardTitle>
+            <CardTitle className="text-xl">Cambiar Contraseña</CardTitle>
             <CardDescription className="mt-1">
-              Update your password to keep your account secure
+              Actualiza tu contraseña para mantener tu cuenta segura
             </CardDescription>
           </div>
         </div>
@@ -75,7 +75,7 @@ export function ChangePassword() {
         <form onSubmit={handleSubmitPassword(onPasswordSubmit)} className="space-y-6">
           <div className="space-y-2">
             <Label htmlFor="currentPassword" className="text-sm font-medium">
-              Current Password
+              Contraseña Actual
             </Label>
             <div className="relative">
               <Lock className="absolute left-3 top-3 h-5 w-5 text-gray-400" />
@@ -84,7 +84,7 @@ export function ChangePassword() {
                 type={showCurrentPassword ? 'text' : 'password'}
                 {...registerPassword('currentPassword')}
                 className="pl-10 pr-10 h-11"
-                placeholder="Enter your current password"
+                placeholder="Introduce tu contraseña actual"
               />
               <button
                 type="button"
@@ -108,7 +108,7 @@ export function ChangePassword() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="space-y-2">
               <Label htmlFor="newPassword" className="text-sm font-medium">
-                New Password
+                Nueva Contraseña
               </Label>
               <div className="relative">
                 <Lock className="absolute left-3 top-3 h-5 w-5 text-gray-400" />
@@ -117,7 +117,7 @@ export function ChangePassword() {
                   type={showNewPassword ? 'text' : 'password'}
                   {...registerPassword('newPassword')}
                   className="pl-10 pr-10 h-11"
-                  placeholder="Enter new password"
+                  placeholder="Introduce la nueva contraseña"
                 />
                 <button
                   type="button"
@@ -137,13 +137,13 @@ export function ChangePassword() {
                 </p>
               )}
               <p className="text-xs text-gray-500 mt-1">
-                Must be at least 8 characters long
+                Debe tener al menos 8 caracteres
               </p>
             </div>
 
             <div className="space-y-2">
               <Label htmlFor="confirmPassword" className="text-sm font-medium">
-                Confirm New Password
+                Confirmar Nueva Contraseña
               </Label>
               <div className="relative">
                 <Lock className="absolute left-3 top-3 h-5 w-5 text-gray-400" />
@@ -152,7 +152,7 @@ export function ChangePassword() {
                   type={showConfirmPassword ? 'text' : 'password'}
                   {...registerPassword('confirmPassword')}
                   className="pl-10 pr-10 h-11"
-                  placeholder="Confirm new password"
+                  placeholder="Confirma la nueva contraseña"
                 />
                 <button
                   type="button"
@@ -183,12 +183,12 @@ export function ChangePassword() {
               {isSavingPassword ? (
                 <>
                   <Loader2 className="h-4 w-4 animate-spin" />
-                  Updating...
+                  Actualizando...
                 </>
               ) : (
                 <>
                   <Lock className="h-4 w-4" />
-                  Update Password
+                  Actualizar Contraseña
                 </>
               )}
             </Button>
@@ -199,10 +199,10 @@ export function ChangePassword() {
           open={showConfirmDialog}
           onOpenChange={setShowConfirmDialog}
           onConfirm={handleConfirmPasswordUpdate}
-          title="Confirm Password Change"
-          description="Are you sure you want to change your password? You will need to use your new password to log in next time."
-          confirmText="Update Password"
-          cancelText="Cancel"
+          title="Confirmar Cambio de Contraseña"
+          description="¿Estás seguro de que quieres cambiar tu contraseña? Deberás usar tu nueva contraseña para iniciar sesión la próxima vez."
+          confirmText="Actualizar Contraseña"
+          cancelText="Cancelar"
           variant="default"
           isLoading={isSavingPassword}
         />

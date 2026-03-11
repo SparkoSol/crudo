@@ -6,29 +6,29 @@ export const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
         name: 'Starter',
         price: 79,
         annualPrice: 790,
-        description: 'For small teams that want to start recording visits without friction.',
+        description: 'Para equipos pequeños que quieren empezar a registrar visitas sin fricciones.',
         features: [
-            '1 company',
-            '1 ERP integration',
-            'Up to 3 report templates',
-            'WhatsApp Business + AI bot',
-            'Visits dashboard',
-            'Report history',
+            '1 empresa',
+            '1 integración ERP',
+            'Hasta 3 plantillas de informes',
+            'WhatsApp Business + bot de IA',
+            'Panel de visitas',
+            'Historial de informes',
         ],
     },
     {
         id: 'professional',
-        name: 'Professional',
+        name: 'Profesional',
         price: 199,
         annualPrice: 1990,
-        description: 'For active sales teams that need visibility and control.',
+        description: 'Para equipos de ventas activos que necesitan visibilidad y control.',
         highlighted: true,
         features: [
-            'Everything in Starter, plus:',
-            'Unlimited templates',
-            'Multiple teams and managers',
-            'Basic visit analytics',
-            'Advanced exports',
+            'Todo lo de Starter, más:',
+            'Plantillas ilimitadas',
+            'Múltiples equipos y gerentes',
+            'Analítica básica de visitas',
+            'Exportaciones avanzadas',
             'Webhooks / API',
         ],
     },
@@ -37,13 +37,13 @@ export const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
         name: 'Enterprise',
         price: 399,
         annualPrice: 3990,
-        description: 'For companies that integrate iNotus as a critical part of their operation.',
+        description: 'Para empresas que integran iNotus como parte crítica de su operación.',
         features: [
-            'Everything in Professional, plus:',
-            'Advanced ERP integration',
-            'Roles and permissions',
-            'SLA and priority support',
-            'Assisted onboarding',
+            'Todo lo de Profesional, más:',
+            'Integración avanzada de ERP',
+            'Roles y permisos',
+            'SLA y soporte prioritario',
+            'Onboarding asistido',
         ],
     },
 ];
@@ -54,30 +54,30 @@ export const ANNUAL_SAVINGS_PERCENT = Math.round(
 
 export const CREDIT_INFO: CreditInfo = {
     pricingTiers: [
-        { range: 'Up to 1,000', pricePerCredit: '€0.40' },
-        { range: '1,000 – 5,000', pricePerCredit: '€0.30', highlighted: true },
-        { range: '5,000 – 20,000', pricePerCredit: '€0.22' },
-        { range: 'Enterprise', pricePerCredit: 'From €0.15' },
+        { range: 'Hasta 1,000', pricePerCredit: '0,40 €' },
+        { range: '1,000 – 5,000', pricePerCredit: '0,30 €', highlighted: true },
+        { range: '5,000 – 20,000', pricePerCredit: '0,22 €' },
+        { range: 'Enterprise', pricePerCredit: 'Desde 0,15 €' },
     ],
-    typicalUsagePerReport: '2–3 credits',
+    typicalUsagePerReport: '2–3 créditos',
     rolloverRules: [
-        'Unused credits automatically carry over to the next month',
-        'You can carry over up to 100% of your last month\'s purchased credits',
-        'Your oldest credits are always used first',
+        'Los créditos no utilizados se acumulan automáticamente para el mes siguiente',
+        'Puedes acumular hasta el 100% de los créditos comprados el mes pasado',
+        'Tus créditos más antiguos siempre se utilizan primero',
     ],
 };
 
 export const TIER_LABELS: Record<string, string> = {
     starter: 'Starter',
-    professional: 'Professional',
+    professional: 'Profesional',
     enterprise: 'Enterprise',
-    monthly: 'Legacy Monthly',
-    annual: 'Legacy Annual',
+    monthly: 'Mensual Antiguo',
+    annual: 'Anual Antiguo',
 };
 
 export const BILLING_PERIOD_LABELS: Record<BillingPeriod, string> = {
-    monthly: 'Monthly',
-    annual: 'Annual',
+    monthly: 'Mensual',
+    annual: 'Anual',
 };
 
 export const CREDIT_PACKAGES: CreditPackage[] = [
@@ -91,7 +91,7 @@ export const CREDIT_PACKAGES: CreditPackage[] = [
     },
     {
         id: 'pack_100',
-        name: 'Basic',
+        name: 'Básico',
         credits: 100,
         price: 36,
         pricePerCredit: 0.36,
@@ -107,7 +107,7 @@ export const CREDIT_PACKAGES: CreditPackage[] = [
     },
     {
         id: 'pack_1000',
-        name: 'Growth',
+        name: 'Crecimiento',
         credits: 1000,
         price: 300,
         pricePerCredit: 0.30,
@@ -116,7 +116,7 @@ export const CREDIT_PACKAGES: CreditPackage[] = [
     },
     {
         id: 'pack_3000',
-        name: 'Business',
+        name: 'Negocios',
         credits: 3000,
         price: 750,
         pricePerCredit: 0.25,
@@ -124,7 +124,7 @@ export const CREDIT_PACKAGES: CreditPackage[] = [
     },
     {
         id: 'pack_5000',
-        name: 'Scale',
+        name: 'Escala',
         credits: 5000,
         price: 1100,
         pricePerCredit: 0.22,

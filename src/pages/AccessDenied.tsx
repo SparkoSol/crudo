@@ -52,29 +52,29 @@ export default function AccessDenied() {
                     <div className="mx-auto bg-red-100 p-3 rounded-full w-fit mb-4">
                         <ShieldAlert className="w-8 h-8 text-red-600" />
                     </div>
-                    <CardTitle className="text-xl font-bold text-gray-900">Access Denied</CardTitle>
+                    <CardTitle className="text-xl font-bold text-gray-900">Acceso Denegado</CardTitle>
                 </CardHeader>
                 <CardContent className="text-center space-y-4">
                     <p className="text-gray-600">
-                        Your company ran out of credits or does not have an active subscription.
+                        Tu empresa se quedó sin créditos o no tiene una suscripción activa.
                     </p>
-                    {!isLoadingManager && managerEmail && (
-                        <p className="text-sm text-gray-700 bg-blue-50 p-3 rounded-lg border border-blue-100">
-                            Please contact your manager at{' '}
-                            <a href={`mailto:${managerEmail}`} className="font-semibold text-blue-600 hover:underline">
-                                {managerEmail}
-                            </a>
-                            {' '}for further assistance regarding your platform access.
-                        </p>
-                    )}
-                    {!isLoadingManager && !managerEmail && (
-                        <p className="text-sm text-gray-500 bg-gray-50 p-3 rounded-lg border border-gray-100">
-                            Please contact your manager for further assistance regarding your platform access.
-                        </p>
-                    )}
+                     {!isLoadingManager && managerEmail && (
+                         <p className="text-sm text-gray-700 bg-blue-50 p-3 rounded-lg border border-blue-100">
+                             Por favor, contacta con tu responsable en{' '}
+                             <a href={`mailto:${managerEmail}`} className="font-semibold text-blue-600 hover:underline">
+                                 {managerEmail}
+                             </a>
+                             {' '}para obtener más ayuda sobre tu acceso a la plataforma.
+                         </p>
+                     )}
+                     {!isLoadingManager && !managerEmail && (
+                         <p className="text-sm text-gray-500 bg-gray-50 p-3 rounded-lg border border-gray-100">
+                             Por favor, contacta con tu responsable para obtener más ayuda sobre tu acceso a la plataforma.
+                         </p>
+                     )}
                     {isLoadingManager && (
                         <p className="text-sm text-gray-500 bg-gray-50 p-3 rounded-lg border border-gray-100">
-                            Loading manager information...
+                            Cargando información del responsable...
                         </p>
                     )}
                 </CardContent>
@@ -85,7 +85,7 @@ export default function AccessDenied() {
                         className="flex items-center gap-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100"
                     >
                         <LogOut className="w-4 h-4" />
-                        Sign Out
+                        Cerrar sesión
                     </Button>
                 </CardFooter>
             </Card>

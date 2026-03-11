@@ -23,10 +23,10 @@ export default function NotFound() {
             </div>
           </div>
           <h1 className="text-4xl font-black text-gray-900 mt-6 tracking-tight">
-            Lost your way?
+            ¿Te has perdido?
           </h1>
           <p className="text-lg text-gray-500 mt-3 max-w-sm mx-auto font-medium">
-            The page you're looking for vanished into another dimension. Let's get you back.
+            La página que buscas ha desaparecido en otra dimensión. Vamos a traerte de vuelta.
           </p>
         </div>
 
@@ -40,7 +40,7 @@ export default function NotFound() {
               >
                 <Link to="/">
                   <Home className="mr-2.5 h-6 w-6 transition-transform group-hover:-translate-y-0.5" />
-                  Back Home
+                  Volver al Inicio
                 </Link>
               </Button>
               <Button
@@ -49,7 +49,7 @@ export default function NotFound() {
                 className="h-16 text-lg font-bold border-2 border-gray-100 hover:border-brand-primary-200 hover:bg-brand-primary-50/30 text-gray-600 hover:text-brand-primary-700 rounded-2xl transition-all hover:scale-[1.03] active:scale-[0.98] group"
               >
                 <ArrowLeft className="mr-2.5 h-6 w-6 transition-transform group-hover:-translate-x-1" />
-                Go Back
+                Regresar
               </Button>
             </div>
 

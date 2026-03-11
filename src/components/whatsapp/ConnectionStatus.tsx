@@ -11,12 +11,12 @@ export function ConnectionStatus({ status, lastTestResult }: ConnectionStatusPro
             <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center gap-2">
                     <Globe className="h-4 w-4 text-gray-500" />
-                    <span className="text-sm font-medium text-gray-700">Connection Status</span>
+                    <span className="text-sm font-medium text-gray-700">Estado de la Conexión</span>
                 </div>
                 {status === 'success' && (
                     <div className="flex items-center gap-1 text-green-600">
                         <CheckCircle2 className="h-4 w-4" />
-                        <span className="text-xs font-medium">Connected</span>
+                        <span className="text-xs font-medium">Conectado</span>
                     </div>
                 )}
                 {status === 'error' && (
@@ -28,7 +28,7 @@ export function ConnectionStatus({ status, lastTestResult }: ConnectionStatusPro
                 {status === 'idle' && (
                     <div className="flex items-center gap-1 text-gray-400">
                         <div className="h-2 w-2 rounded-full bg-gray-400"></div>
-                        <span className="text-xs font-medium">Ready</span>
+                        <span className="text-xs font-medium">Listo</span>
                     </div>
                 )}
             </div>

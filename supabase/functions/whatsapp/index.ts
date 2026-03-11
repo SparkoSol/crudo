@@ -124,27 +124,27 @@ async function extractFieldsWithGPT(
       )
       .join("\n");
 
-    const systemPrompt = `You are a helpful assistant that extracts structured data from voice transcripts. 
-Given a transcript and a list of template fields, extract the relevant information and fill in the template fields.
-Return ONLY a valid JSON object with field names as keys and extracted values as values.
+    const systemPrompt = `Eres un asistente útil que extrae datos estructurados de transcripciones de voz.
+Dado un texto de transcripción y una lista de campos de plantilla, extrae la información relevante y completa los campos de la plantilla.
+Devuelve ÚNICAMENTE un objeto JSON válido con los nombres de los campos como claves y los valores extraídos como valores.
 
-IMPORTANT: For fields marked as "required":
-- If the information is clearly present in the transcript, extract it accurately
-- If the information is NOT in the transcript or unclear, return null for that field
+IMPORTANTE para campos marcados como "required" (obligatorio):
+- Si la información está claramente presente en la transcripción, extráela con precisión.
+- Si la información NO está en la transcripción o no está clara, devuelve null para ese campo.
 
-For fields marked as "optional":
-- Extract the value if present
-- Return null if not present or unclear
+Para campos marcados como "optional" (opcional):
+- Extrae el valor si está presente.
+- Devuelve null si no está presente o no está claro.
 
-Be accurate and only extract information that is clearly stated in the transcript.`;
+Sé preciso y solo extrae información que esté claramente expresada en la transcripción.`;
 
-    const userPrompt = `Transcript:
+    const userPrompt = `Transcripción:
 ${transcript}
 
-Template Fields:
+Campos de la Plantilla:
 ${fieldsDescription}
 
-Extract and fill all template fields from the transcript. Return a JSON object with field names as keys.`;
+Extrae y completa todos los campos de la plantilla a partir de la transcripción. Devuelve un objeto JSON con los nombres de los campos como claves.`;
 
     const gptResponse = await fetch(OPENAI_API_URL, {
       method: "POST",
@@ -216,8 +216,8 @@ function identifyMissingRequiredFields(
 
 // Helper function to build field collection message
 function buildFieldPromptMessage(field: TemplateField): string {
-  const label = field.label || (field as any).title || field.name || (field as any).key || "this field";
-  return `I need some more information. Please provide: ${label}`;
+  const label = field.label || (field as any).title || field.name || (field as any).key || "este campo";
+  return `Necesito un poco más de información. Por favor, proporciona: ${label}`;
 }
 
 // Helper function to check if response is valid (not empty/unclear)
@@ -254,7 +254,7 @@ function buildConfirmationMessage(
   filledData: Record<string, any>,
   templateFields: TemplateField[],
 ): string {
-  let message = "Perfect! I've collected all the information. Here's your report:\n\n";
+  let message = "¡Perfecto! He recopilado toda la información. Aquí está tu informe:\n\n";
 
   for (const field of templateFields) {
     const name = field.name || (field as any).key || (field as any).id || "";
@@ -268,13 +268,13 @@ function buildConfirmationMessage(
 
     const displayValue = value !== null && value !== undefined && value !== ""
       ? String(value)
-      : "(not provided)";
+      : "(no proporcionado)";
 
-    const label = field.label || (field as any).title || name || "Field";
+    const label = field.label || (field as any).title || name || "Campo";
     message += `${label}: ${displayValue}\n`;
   }
 
-  message += "\nIs this correct?";
+  message += "\n¿Es correcto?";
   return message;
 }
 
@@ -459,7 +459,7 @@ serve(async (req) => {
                         to: normalizePhoneNumber(from),
                         type: "text",
                         text: {
-                          body: "This phone number is not registered in our system. Please ask your manager to invite you or add your number in the portal.",
+                          body: "Este número de teléfono no está registrado en nuestro sistema. Por favor, pide a tu gerente que te invite o añade tu número en el portal.",
                         },
                       };
                       try {
@@ -525,7 +525,7 @@ serve(async (req) => {
                         to: normalizePhoneNumber(from),
                         type: "text",
                         text: {
-                          body: "The subscription for your manager's account is inactive or expired. Please renew the subscription to continue identifying transcripts.",
+                          body: "La suscripción de la cuenta de tu gerente está inactiva o ha caducado. Por favor, renueva la suscripción para continuar identificando transcripciones.",
                         },
                       };
                       try {
@@ -581,7 +581,7 @@ serve(async (req) => {
 
                   async function sendModifiedReportTemplate(to: string, reportText: string, isCreation: boolean = false): Promise<void> {
                     const modTemplateName = Deno.env.get("WHATSAPP_MODIFIED_REPORT_TEMPLATE_NAME") || "sales_modified_report";
-                    const headerText = isCreation ? "✨ *NEW REPORT CREATED*\n\n" : "📝 *MODIFIED REPORT*\n\n";
+                    const headerText = isCreation ? "✨ *NUEVO INFORME CREADO*\n\n" : "📝 *INFORME MODIFICADO*\n\n";
                     await sendWAMessage({
                       messaging_product: "whatsapp",
                       recipient_type: "individual",
@@ -618,15 +618,15 @@ serve(async (req) => {
                           {
                             role: "system",
                             content:
-                              "You are an assistant that updates sales visit reports based on modification requests. " +
-                              "Return ONLY the updated report text, preserving the original formatting and structure as much as possible.",
+                              "Eres un asistente que actualiza informes de visitas de ventas basándose en solicitudes de modificación. " +
+                              "Devuelve ÚNICAMENTE el texto del informe actualizado, preservando el formato y la estructura original tanto como sea posible.",
                           },
                           {
                             role: "user",
                             content:
-                              `Original report transcript:\n${originalTranscript}\n\n` +
-                              `Modification request: ${modificationRequest}\n\n` +
-                              "Apply the modification and return the updated report text only.",
+                              `Transcripción del informe original:\n${originalTranscript}\n\n` +
+                              `Solicitud de modificación: ${modificationRequest}\n\n` +
+                              "Aplica la modificación y devuelve únicamente el texto del informe actualizado.",
                           },
                         ],
                         temperature: 0.3,
@@ -643,8 +643,8 @@ serve(async (req) => {
                     const filledData = record.filled_data || {};
                     const placeVisited = filledData.place_visited || "";
                     let text = placeVisited
-                      ? `📋 *Report – ${placeVisited}* (${date})\n\n`
-                      : `📋 *Report – ${date}*\n\n`;
+                      ? `📋 *Informe – ${placeVisited}* (${date})\n\n`
+                      : `📋 *Informe – ${date}*\n\n`;
                     if (Object.keys(filledData).length > 0) {
                       for (const [k, v] of Object.entries(filledData)) {
                         if (v) text += `• *${k}*: ${v}\n`;
@@ -710,27 +710,30 @@ serve(async (req) => {
                           .select("*")
                           .eq("id", chosenReport.id)
                           .single();
-                        const reportDisplay = targetReport ? buildReportDisplay(targetReport) : "(Report not found)";
-                        await sendWAMessage({
-                          messaging_product: "whatsapp",
-                          recipient_type: "individual",
-                          to: normalizePhoneNumber(from),
-                          type: "text",
-                          text: { body: reportDisplay },
-                        });
-                        await sendWAMessage({
-                          messaging_product: "whatsapp",
-                          recipient_type: "individual",
-                          to: normalizePhoneNumber(from),
-                          type: "text",
-                          text: {
-                            body:
-                              "✏️ *What would you like to modify?*\n\nYou can:\n" +
-                              "• Write changes in text\n" +
-                              "• Send a voice message with corrections\n\n" +
-                              'Example: _"Change the date from 12/12/2022 to 12/12/2023"_',
-                          },
-                        });
+
+                        if (targetReport) {
+                          const reportDisplay = buildReportDisplay(targetReport);
+                          await sendWAMessage({
+                            messaging_product: "whatsapp",
+                            recipient_type: "individual",
+                            to: normalizePhoneNumber(from),
+                            type: "text",
+                            text: { body: reportDisplay },
+                          });
+                        }
+                      await sendWAMessage({
+                        messaging_product: "whatsapp",
+                        recipient_type: "individual",
+                        to: normalizePhoneNumber(from),
+                        type: "text",
+                        text: {
+                          body:
+                            "✏️ *¿Qué te gustaría modificar?*\n\nPuedes:\n" +
+                            "• Escribir los cambios en texto\n" +
+                            "• Enviar un mensaje de voz con las correcciones\n\n" +
+                            'Ejemplo: _"Cambia la fecha del 12/12/2022 al 12/12/2023"_',
+                        },
+                      });
                       } else {
                         await sendWAMessage({
                           messaging_product: "whatsapp",
@@ -738,7 +741,7 @@ serve(async (req) => {
                           to: normalizePhoneNumber(from),
                           type: "text",
                           text: {
-                            body: `❌ Invalid choice. Please reply with a number between 1 and ${reportList.length}, or type *menu* to start over.`,
+                            body: `❌ Opción inválida. Por favor responde con un número entre 1 y ${reportList.length}, o escribe *menu* para empezar de nuevo.`,
                           },
                         });
                       }
@@ -769,7 +772,7 @@ serve(async (req) => {
                             recipient_type: "individual",
                             to: normalizePhoneNumber(from),
                             type: "text",
-                            text: { body: "⏳ Processing your modification..." },
+                            text: { body: "⏳ Procesando tu modificación..." },
                           });
                           const updatedText = await applyModificationWithGPT(originalText, textBody, openaiApiKey);
 
@@ -807,7 +810,7 @@ serve(async (req) => {
                           recipient_type: "individual",
                           to: normalizePhoneNumber(from),
                           type: "text",
-                          text: { body: "❌ Could not process modification. Please try again or type *menu*." },
+                          text: { body: "❌ No se pudo procesar la modificación. Por favor, inténtalo de nuevo o escribe *menu*." },
                         });
                       }
                       continue;
@@ -888,7 +891,7 @@ serve(async (req) => {
                             to: normalizePhoneNumber(from),
                             type: "text",
                             text: {
-                              body: `I didn't catch that. Please provide ${label} again.`,
+                              body: `No he entendido eso. Por favor, proporciona ${label} de nuevo.`,
                             },
                           };
                           await fetch(
@@ -931,7 +934,7 @@ serve(async (req) => {
                             to: normalizePhoneNumber(from),
                             type: "text",
                             text: {
-                              body: `Thank you! ${nextPrompt}`,
+                              body: `¡Gracias! ${nextPrompt}`,
                             },
                           };
                           await fetch(
@@ -982,14 +985,14 @@ serve(async (req) => {
                                     type: "reply",
                                     reply: {
                                       id: "Confirm",
-                                      title: "Confirm",
+                                      title: "Confirmar",
                                     },
                                   },
                                   {
                                     type: "reply",
                                     reply: {
                                       id: "Retake",
-                                      title: "Retake",
+                                      title: "Repetir",
                                     },
                                   },
                                 ],
@@ -1053,8 +1056,8 @@ serve(async (req) => {
                             type: "text",
                             text: {
                               body: _checkMod
-                                ? "⏳ Processing your voice modification..."
-                                : "📝 Received! I am processing your voicemail to create your report...",
+                                ? "⏳ Procesando tu modificación de voz..."
+                                : "📝 ¡Recibido! Estoy procesando tu mensaje de voz para crear tu informe...",
                             },
                           });
                         }
@@ -1123,7 +1126,8 @@ serve(async (req) => {
                           `audio.${fileExtension}`,
                         );
                         formData.append("model", "whisper-1");
-                        formData.append("prompt", "Professional English transcription of a sales visit report. Maintain business terminology and professional tone.");
+                        formData.append("prompt", "Transcripción profesional en español de un informe de visita de ventas. Mantén la terminología empresarial y un tono profesional.");
+                        formData.append("language", "es");
                         formData.append("response_format", "verbose_json");
 
                         const whisperResponse = await fetch(
@@ -1200,7 +1204,7 @@ serve(async (req) => {
                             "Empty transcript received from Whisper API",
                           );
                           transcript =
-                            "Sorry, I couldn't transcribe the audio. Please try again.";
+                            "Lo siento, no pude transcribir el audio. Por favor, inténtalo de nuevo.";
                         }
 
                         console.log("Transcription result:", transcript);
@@ -1285,7 +1289,7 @@ serve(async (req) => {
                               recipient_type: "individual",
                               to: normalizePhoneNumber(from),
                               type: "text",
-                              text: { body: "❌ Could not find the original report. Please type *menu* to start over." },
+                              text: { body: "❌ No se pudo encontrar el informe original. Por favor, escribe *menu* para empezar de nuevo." },
                             });
                           }
                           continue;
@@ -1453,7 +1457,7 @@ serve(async (req) => {
                                 to: normalizePhoneNumber(from),
                                 type: "text",
                                 text: {
-                                  body: `✓ Additional voice message received!\n\n${promptMessage}`,
+                                  body: `✓ ¡Mensaje de voz adicional recibido!\n\n${promptMessage}`,
                                 },
                               };
 
@@ -1625,7 +1629,7 @@ serve(async (req) => {
                             to: normalizePhoneNumber(from),
                             type: "text",
                             text: {
-                              body: `✓ Transcript received!\n\n${promptMessage}`,
+                              body: `✓ ¡Transcripción recibida!\n\n${promptMessage}`,
                             },
                           };
 
@@ -1692,9 +1696,9 @@ serve(async (req) => {
                         type: "text",
                         text: {
                           body:
-                            "📝 To create a new report, simply send me a voice message telling the details of your commercial visit.\n\n" +
-                            "The system will automatically process the information!\n\n" +
-                            "💡 Type *MENU* at any time to return to the main menu.",
+                            "📝 Para crear un nuevo informe, simplemente envíame un mensaje de voz contando los detalles de tu visita comercial.\n\n" +
+                            "¡El sistema procesará la información automáticamente!\n\n" +
+                            "💡 Escribe *MENU* en cualquier momento para volver al menú principal.",
                         },
                       });
                       continue;
@@ -1718,31 +1722,24 @@ serve(async (req) => {
                           to: normalizePhoneNumber(from),
                           type: "text",
                           text: {
-                            body: "📭 You have no confirmed reports to modify yet.\n\nType *menu* and choose *Create Report* to create your first one.",
+                            body: "📭 Aún no tienes informes confirmados para modificar.\n\nEscribe *menu* y elige *Crear Informe* para crear el primero.",
                           },
                         });
                         continue;
                       }
 
                       // List reports
-                      let listMsg = "✏️ *Recent reports that you can modify:*\n\n";
-                      userReports.forEach((r: any, i: number) => {
-                        const date = new Date(r.created_at).toLocaleDateString();
-                        const fd = r.filled_data || {};
-                        // Prioritize place_visited as the primary identifier
-                        const reportLabel =
-                          fd.place_visited ||
-                          fd.client_name || fd.Cliente || fd.client ||
-                          fd.customer || fd.Customer || fd.company || fd.Company ||
-                          fd.business || fd.Business || fd.account || fd.Account ||
-                          // Fall back to first non-empty string value in filled_data
-                          Object.values(fd).find((v: any) => typeof v === 'string' && v.trim().length > 0 && v.length < 60) ||
-                          // Or use first field of transcript (first line)
-                          (r.transcript ? r.transcript.split('\n')[0].substring(0, 40) : null) ||
-                          `Report #${i + 1}`;
-                        listMsg += `${i + 1}. 📍 ${reportLabel} – ${date}\n`;
+                      let listMsg = "Aquí están tus informes recientes:\n\n";
+                      userReports.forEach((report:any, index:number) => {
+                        const date = new Date(report.created_at).toLocaleDateString("es-ES", {
+                          year: "numeric",
+                          month: "short",
+                          day: "numeric",
+                        });
+                        const placeVisited = report.filled_data?.place_visited || "Sin lugar";
+                        listMsg += `${index + 1}. ${placeVisited} (${date})\n`;
                       });
-                      listMsg += "\n💬 Respond with the *number* of the report you want to modify (1, 2, 3, etc.)";
+                      listMsg += "\n💬 Responde con el *número* del informe que deseas modificar (1, 2, 3, etc.)";
 
                       // Persist awaiting_report_selection state (is_session_record=true keeps it off the dashboard)
                       await adminClient.from("voice_transcripts").insert({
@@ -1861,32 +1858,32 @@ serve(async (req) => {
 
                             pageM.drawRectangle({ x: 0, y: pageHeight - 100, width: pageWidth, height: 100, color: rgb(0.1, 0.1, 0.1) });
                             yPositionM = pageHeight - 50;
-                            const titleStrM = filledDataMod.place_visited ? `${filledDataMod.place_visited} - Report (Updated)` : "Sales Visit Report (Updated)";
+                            const titleStrM = filledDataMod.place_visited ? `${filledDataMod.place_visited} - Informe (Actualizado)` : "Informe de Visita de Ventas (Actualizado)";
                             addTextM(titleStrM, margin, yPositionM, 22, boldFontM, undefined, rgb(1, 1, 1));
                             yPositionM -= 35;
-                            addTextM(`Generated: ${new Date().toLocaleString()}`, margin, yPositionM, 10, fontM, undefined, rgb(0.8, 0.8, 0.8));
+                            addTextM(`Generado: ${new Date().toLocaleString()}`, margin, yPositionM, 10, fontM, undefined, rgb(0.8, 0.8, 0.8));
                             yPositionM = pageHeight - 130;
 
                             // Rep details
-                            yPositionM = addTextM("Sales Representative Details", margin, yPositionM, 14, boldFontM, undefined, rgb(0, 0, 0));
+                            yPositionM = addTextM("Detalles del Representante de Ventas", margin, yPositionM, 14, boldFontM, undefined, rgb(0, 0, 0));
                             yPositionM -= 15;
-                            const repNameM = userName || "(Name not available)";
+                            const repNameM = userName || "(Nombre no disponible)";
                             // Use profile phone_number or fall back to the WhatsApp 'from' number
-                            const repPhoneM = profile?.phone_number || from || "(Phone not available)";
-                            addTextM("Name:", margin, yPositionM, 11, boldFontM); addTextM(repNameM, margin + 50, yPositionM, 11, fontM);
+                            const repPhoneM = profile?.phone_number || from || "(Teléfono no disponible)";
+                            addTextM("Nombre:", margin, yPositionM, 11, boldFontM); addTextM(repNameM, margin + 50, yPositionM, 11, fontM);
                             yPositionM -= 20;
-                            addTextM("Phone:", margin, yPositionM, 11, boldFontM); addTextM(repPhoneM, margin + 50, yPositionM, 11, fontM);
+                            addTextM("Teléfono:", margin, yPositionM, 11, boldFontM); addTextM(repPhoneM, margin + 50, yPositionM, 11, fontM);
                             yPositionM -= sectionSpacing;
 
                             // Template info
                             const { data: tplM } = await adminClient.from("user_templates").select("name,fields").eq("id", targetReport.template_id).maybeSingle();
                             const tplName = tplM?.name || "Standard Sales Report";
-                            yPositionM = addTextM(`Template: ${tplName}`, margin, yPositionM, 12, boldFontM);
+                            yPositionM = addTextM(`Plantilla: ${tplName}`, margin, yPositionM, 12, boldFontM);
                             yPositionM -= sectionSpacing;
 
                             // Filled data
                             if (Object.keys(filledDataMod).length > 0) {
-                              yPositionM = addTextM("Report Details", margin, yPositionM, 14, boldFontM);
+                              yPositionM = addTextM("Detalles del Informe", margin, yPositionM, 14, boldFontM);
                               pageM.drawLine({ start: { x: margin, y: yPositionM + 5 }, end: { x: pageWidth - margin, y: yPositionM + 5 }, thickness: 1, color: rgb(0.8, 0.8, 0.8) });
                               yPositionM -= 15;
                               const fieldMap: Record<string, string> = {};
@@ -1902,7 +1899,7 @@ serve(async (req) => {
                             }
 
                             // Modified transcript
-                            yPositionM = addTextM("Updated Transcript", margin, yPositionM, 14, boldFontM);
+                            yPositionM = addTextM("Transcripción Actualizada", margin, yPositionM, 14, boldFontM);
                             pageM.drawLine({ start: { x: margin, y: yPositionM + 5 }, end: { x: pageWidth - margin, y: yPositionM + 5 }, thickness: 1, color: rgb(0.8, 0.8, 0.8) });
                             yPositionM -= 15;
                             yPositionM = addTextM(finalTranscript, margin, yPositionM, 10, fontM, pageWidth - 2 * margin);
@@ -1924,7 +1921,7 @@ serve(async (req) => {
                                 recipient_type: "individual",
                                 to: normalizePhoneNumber(from),
                                 type: "document",
-                                document: { id: upResultM.id, caption: "✅ Your updated report is ready! 📄", filename: "updated_report.pdf" },
+                                document: { id: upResultM.id, caption: "✅ ¡Tu informe actualizado está listo! 📄", filename: "informe_actualizado.pdf" },
                               });
                               
                               await new Promise((resolve) => setTimeout(resolve, 2000));
@@ -2100,7 +2097,7 @@ serve(async (req) => {
                               to: normalizePhoneNumber(from),
                               type: "text",
                               text: {
-                                body: "Sorry, I couldn't find your transcript. Please send a new voice message.",
+                                body: "Lo siento, no pude encontrar tu transcripción. Por favor, envía un nuevo mensaje de voz.",
                               },
                             };
                             await fetch(
@@ -2287,7 +2284,7 @@ serve(async (req) => {
                         });
 
                         yPosition = pageHeight - 50;
-                        const titleStrNew = typeof filledData === 'object' && filledData.place_visited ? `${filledData.place_visited} - Report` : "Sales Visit Report";
+                        const titleStrNew = typeof filledData === 'object' && filledData.place_visited ? `${filledData.place_visited} - Informe` : "Informe de Visita de Ventas";
                         addText(
                           titleStrNew,
                           margin,
@@ -2300,7 +2297,7 @@ serve(async (req) => {
                         yPosition -= 35;
                         const dateStr = new Date().toLocaleString();
                         addText(
-                          `Generated: ${dateStr}`,
+                          `Generado: ${dateStr}`,
                           margin,
                           yPosition,
                           10,
@@ -2312,7 +2309,7 @@ serve(async (req) => {
                         yPosition = pageHeight - 130;
 
                         yPosition = addText(
-                          "Sales Representative Details",
+                          "Detalles del Representante de Ventas",
                           margin,
                           yPosition,
                           14,
@@ -2322,19 +2319,19 @@ serve(async (req) => {
                         );
                         yPosition -= 15;
 
-                        const repName = userName || "(Name not available)";
+                        const repName = userName || "(Nombre no disponible)";
                         const repPhone =
-                          profile?.phone_number || "(Phone not available)";
+                          profile?.phone_number || "(Teléfono no disponible)";
 
-                        addText("Name:", margin, yPosition, 11, boldFont);
+                        addText("Nombre:", margin, yPosition, 11, boldFont);
                         addText(repName, margin + 50, yPosition, 11, font);
                         yPosition -= 20;
-                        addText("Phone:", margin, yPosition, 11, boldFont);
+                        addText("Teléfono:", margin, yPosition, 11, boldFont);
                         addText(repPhone, margin + 50, yPosition, 11, font);
                         yPosition -= sectionSpacing;
 
                         yPosition = addText(
-                          `Template Used: ${activeTemplate.name}`,
+                          `Plantilla Utilizada: ${activeTemplate.name}`,
                           margin,
                           yPosition,
                           12,
@@ -2345,7 +2342,7 @@ serve(async (req) => {
                         // Add filled data section
                         if (filledData && Object.keys(filledData).length > 0) {
                           yPosition = addText(
-                            "Report Details",
+                            "Detalles del Informe",
                             margin,
                             yPosition,
                             14,
@@ -2364,7 +2361,7 @@ serve(async (req) => {
                           if (activeTemplate.fields) {
                             for (const field of activeTemplate.fields) {
                               const name = field.name || (field as any).key || (field as any).id || "";
-                              const label = field.label || (field as any).title || name || "Field";
+                              const label = field.label || (field as any).title || name || "Campo";
                               if (name) fieldLabelMap[name] = label;
                             }
                           }
@@ -2400,7 +2397,7 @@ serve(async (req) => {
                         }
 
                         yPosition = addText(
-                          "Transcript",
+                          "Transcripción",
                           margin,
                           yPosition,
                           14,

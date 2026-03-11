@@ -8,7 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Loader2, LogOut, User as UserIcon, Mail, UserCircle } from 'lucide-react';
 
 export default function Home() {
-  const { user, setUser } = useAuth();
+  const { user } = useAuth();
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const navigate = useNavigate();
 
@@ -18,14 +18,12 @@ export default function Home() {
     setIsLoggingOut(true);
     try {
       await signOut();
-      setUser(null);
-      toast.success('Logged out successfully');
+      toast.success('Sesión cerrada con éxito');
       setTimeout(() => {
         navigate('/auth/login', { replace: true });
       }, 100);
     } catch {
-      setUser(null);
-      toast.error('Logout failed');
+      toast.error('Error al cerrar sesión');
       setTimeout(() => {
         navigate('/auth/login', { replace: true });
       }, 100);
@@ -41,11 +39,11 @@ export default function Home() {
           <div className="space-y-1">
             <div className="flex items-center gap-2">
               <h1 className="text-4xl font-bold tracking-tight bg-gradient-to-r from-foreground to-foreground/70 bg-clip-text">
-                Welcome Home
+                Bienvenido a Casa
               </h1>
             </div>
             <p className="text-muted-foreground">
-              Manage your account and explore the platform
+              Gestiona tu cuenta y explora la plataforma
             </p>
           </div>
           <Button
@@ -57,12 +55,12 @@ export default function Home() {
             {isLoggingOut ? (
               <>
                 <Loader2 className="h-4 w-4 animate-spin" />
-                Logging out...
+                Cerrando sesión...
               </>
             ) : (
               <>
                 <LogOut className="h-4 w-4" />
-                Logout
+                Cerrar sesión
               </>
             )}
           </Button>
@@ -76,8 +74,8 @@ export default function Home() {
                   <UserIcon className="h-6 w-6 text-primary" />
                 </div>
                 <div>
-                  <CardTitle>User Information</CardTitle>
-                  <CardDescription>Your account details</CardDescription>
+                  <CardTitle>Información del Usuario</CardTitle>
+                  <CardDescription>Detalles de tu cuenta</CardDescription>
                 </div>
               </div>
             </CardHeader>
@@ -85,7 +83,7 @@ export default function Home() {
               <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/50">
                 <Mail className="h-5 w-5 text-muted-foreground" />
                 <div>
-                  <p className="text-sm font-medium">Email</p>
+                  <p className="text-sm font-medium">Correo Electrónico</p>
                   <p className="text-sm text-muted-foreground">{displayUser.email}</p>
                 </div>
               </div>
@@ -93,7 +91,7 @@ export default function Home() {
                 <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/50">
                   <UserIcon className="h-5 w-5 text-muted-foreground" />
                   <div>
-                    <p className="text-sm font-medium">Name</p>
+                    <p className="text-sm font-medium">Nombre</p>
                     <p className="text-sm text-muted-foreground">{displayUser.name}</p>
                   </div>
                 </div>
@@ -102,7 +100,7 @@ export default function Home() {
                 <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/50">
                   <UserCircle className="h-5 w-5 text-muted-foreground" />
                   <div>
-                    <p className="text-sm font-medium">Role</p>
+                    <p className="text-sm font-medium">Rol</p>
                     <p className="text-sm text-muted-foreground">{displayUser.role}</p>
                   </div>
                 </div>

@@ -9,24 +9,24 @@ import { TestMessageForm } from './TestMessageForm';
 
 export function WhatsAppIntegration() {
     const [testPhoneNumber, setTestPhoneNumber] = useState('');
-    const [messageBody, setMessageBody] = useState('Hello! This is a test message from your WhatsApp Business integration.');
+    const [messageBody, setMessageBody] = useState('¡Hola! Este es un mensaje de prueba de tu integración de WhatsApp Business.');
     const [isTesting, setIsTesting] = useState(false);
     const [connectionStatus, setConnectionStatus] = useState<'idle' | 'success' | 'error'>('idle');
     const [lastTestResult, setLastTestResult] = useState<string | null>(null);
 
     const handleSendMessage = async () => {
         if (!testPhoneNumber) {
-            toast.error('Please enter a phone number');
+            toast.error('Por favor, introduce un número de teléfono');
             return;
         }
 
         if (!testPhoneNumber.match(/^\+[1-9]\d{1,14}$/)) {
-            toast.error('Invalid phone number format. Use format (e.g., +2376209233)');
+            toast.error('Formato de número de teléfono inválido. Usa el formato (ejemplo, +2376209233)');
             return;
         }
 
         if (!messageBody.trim()) {
-            toast.error('Please enter a message');
+            toast.error('Por favor, introduce un mensaje');
             return;
         }
 
@@ -46,16 +46,16 @@ export function WhatsAppIntegration() {
 
             if (result.success) {
                 setConnectionStatus('success');
-                setLastTestResult(`Message sent successfully! Message ID: ${result.messageId || 'N/A'}`);
-                toast.success('Message sent successfully!');
+                setLastTestResult(`¡Mensaje enviado con éxito! ID del Mensaje: ${result.messageId || 'N/A'}`);
+                toast.success('¡Mensaje enviado con éxito!');
             } else {
                 setConnectionStatus('error');
-                setLastTestResult('Failed to send message');
-                toast.error('Failed to send message');
+                setLastTestResult('Error al enviar el mensaje');
+                toast.error('Error al enviar el mensaje');
             }
         } catch (error: unknown) {
             setConnectionStatus('error');
-            const errorMessage = error instanceof Error ? error.message : 'Failed to send message';
+            const errorMessage = error instanceof Error ? error.message : 'Error al enviar el mensaje';
             setLastTestResult(errorMessage);
             toast.error(errorMessage);
         } finally {
@@ -71,9 +71,9 @@ export function WhatsAppIntegration() {
                         <MessageSquare className="h-5 w-5 text-green-600" />
                     </div>
                     <div>
-                        <CardTitle className="text-xl">WhatsApp Integration</CardTitle>
+                        <CardTitle className="text-xl">Integración de WhatsApp</CardTitle>
                         <CardDescription className="mt-1">
-                            Test and manage your WhatsApp Business API integration
+                            Prueba y gestiona tu integración de la API de WhatsApp Business
                         </CardDescription>
                     </div>
                 </div>

@@ -89,19 +89,19 @@ export function EditSalespersonDialog({
 
   const validate = () => {
     if (!form.full_name.trim()) {
-      toast.error("Full name is required");
+      toast.error("El nombre completo es obligatorio");
       return false;
     }
 
     const phoneRegex = /^\+[1-9]\d{1,14}$/;
 
     if (form.phone_number && !phoneRegex.test(form.phone_number)) {
-      toast.error("Invalid phone number format");
+      toast.error("Formato de número de teléfono no válido");
       return false;
     }
 
     if (!form.template_id) {
-      toast.error("Please select a template");
+      toast.error("Por favor, selecciona una plantilla");
       return false;
     }
 
@@ -127,12 +127,12 @@ export function EditSalespersonDialog({
 
       if (error) throw error;
 
-      toast.success("Salesperson updated successfully");
+      toast.success("Vendedor actualizado con éxito");
       onUpdated();
       onClose();
     } catch (err) {
       console.error(err);
-      toast.error("Failed to update salesperson");
+      toast.error("Error al actualizar el vendedor");
     } finally {
       setLoading(false);
     }
@@ -149,12 +149,12 @@ export function EditSalespersonDialog({
     >
       <DialogContent className="w-[95vw] sm:max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Edit Salesperson</DialogTitle>
+          <DialogTitle>Editar Vendedor</DialogTitle>
         </DialogHeader>
 
         <div className="space-y-4 mt-4">
           <div>
-            <label className="text-sm font-medium">Full Name</label>
+            <label className="text-sm font-medium">Nombre Completo</label>
             <Input
               value={form.full_name}
               disabled={!isManager}
@@ -163,12 +163,12 @@ export function EditSalespersonDialog({
           </div>
 
           <div>
-            <label className="text-sm font-medium">Email</label>
+            <label className="text-sm font-medium">Correo Electrónico</label>
             <Input value={form.email} disabled />
           </div>
 
           <div>
-            <label className="text-sm font-medium">Phone Number</label>
+            <label className="text-sm font-medium">Número de Teléfono</label>
             <Input
               disabled={!isManager}
               value={form.phone_number}
@@ -179,7 +179,7 @@ export function EditSalespersonDialog({
           </div>
 
           <div>
-            <label className="text-sm font-medium">Status</label>
+            <label className="text-sm font-medium">Estado</label>
             <Select
               disabled={!isManager}
               value={form.status}
@@ -191,14 +191,14 @@ export function EditSalespersonDialog({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="active">Active</SelectItem>
-                <SelectItem value="inactive">Inactive</SelectItem>
+                <SelectItem value="active">Activo</SelectItem>
+                <SelectItem value="inactive">Inactivo</SelectItem>
               </SelectContent>
             </Select>
           </div>
 
           <div>
-            <label className="text-sm font-medium">Select Template</label>
+            <label className="text-sm font-medium">Seleccionar Plantilla</label>
             <Select
               disabled={!isManager}
               value={form.template_id}
@@ -207,7 +207,7 @@ export function EditSalespersonDialog({
               }
             >
               <SelectTrigger>
-                <SelectValue placeholder="Select template" />
+                <SelectValue placeholder="Seleccionar plantilla" />
               </SelectTrigger>
               <SelectContent>
                 {templates.map((template) => (
@@ -222,11 +222,11 @@ export function EditSalespersonDialog({
 
         <DialogFooter className="mt-6">
           <Button variant="outline" onClick={onClose}>
-            Cancel
+            Cancelar
           </Button>
           {isManager && (
             <Button onClick={handleSave} disabled={loading}>
-              {loading ? "Saving..." : "Save"}
+              {loading ? "Guardando..." : "Guardar"}
             </Button>
           )}
         </DialogFooter>

@@ -47,11 +47,15 @@ export const Sidebar = () => {
     setIsLoggingOut(true);
     try {
       await signOut();
-      toast.success("Logged out successfully");
-      navigate("/auth/login", { replace: true });
+      toast.success("Sesión cerrada con éxito");
+      setTimeout(() => {
+        navigate("/auth/login", { replace: true });
+      }, 100);
     } catch {
-      toast.error("Logout failed");
-      navigate("/auth/login", { replace: true });
+      toast.error("Error al cerrar sesión");
+      setTimeout(() => {
+        navigate("/auth/login", { replace: true });
+      }, 100);
     } finally {
       setIsLoggingOut(false);
     }
@@ -65,7 +69,7 @@ export const Sidebar = () => {
           size="icon"
           onClick={() => setIsMobileOpen(!isMobileOpen)}
           className="bg-white shadow-md hover:bg-gray-50 border border-gray-200 h-11 w-11 rounded-lg transition-all duration-200"
-          aria-label={isMobileOpen ? "Close menu" : "Open menu"}
+          aria-label={isMobileOpen ? "Cerrar menú" : "Abrir menú"}
         >
           <Menu className="h-5 w-5 text-gray-700" strokeWidth={2} />
         </Button>
@@ -91,9 +95,9 @@ export const Sidebar = () => {
               variant="ghost"
               size="icon"
               onClick={() => setIsMobileOpen(false)}
-              className="lg:hidden absolute top-4 right-4 h-8 w-8 text-gray-600 hover:text-gray-900 hover:bg-white/50"
-              aria-label="Close menu"
-            >
+               className="lg:hidden absolute top-4 right-4 h-8 w-8 text-gray-600 hover:text-gray-900 hover:bg-white/50"
+               aria-label="Cerrar menú"
+             >
               <X className="h-5 w-5" strokeWidth={2.5} />
             </Button>
             <Link
@@ -107,11 +111,11 @@ export const Sidebar = () => {
                 className="w-10 h-10 rounded-lg object-contain"
               />
               <div>
-                <h1 className="text-xl font-semibold text-gray-900">
-                  iNotus
-                </h1>
-                <p className="text-xs text-gray-500">Sales Reports</p>
-              </div>
+                 <h1 className="text-xl font-semibold text-gray-900">
+                   iNotus
+                 </h1>
+                 <p className="text-xs text-gray-500">Informes de Ventas</p>
+               </div>
             </Link>
           </div>
 
@@ -169,13 +173,13 @@ export const Sidebar = () => {
             )}
             <Button
               variant="ghost"
-              onClick={handleLogout}
-              disabled={isLoggingOut}
-              className="w-full justify-start gap-3 text-gray-700 hover:bg-red-50 hover:text-red-600"
-            >
-              <LogOut className="h-4 w-4" />
-              {isLoggingOut ? "Logging out..." : "Logout"}
-            </Button>
+               onClick={handleLogout}
+               disabled={isLoggingOut}
+               className="w-full justify-start gap-3 text-gray-700 hover:bg-red-50 hover:text-red-600"
+             >
+               <LogOut className="h-4 w-4" />
+               {isLoggingOut ? "Cerrando sesión..." : "Cerrar sesión"}
+             </Button>
           </div>
         </div>
       </aside>
