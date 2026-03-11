@@ -46,7 +46,7 @@ export default function ResetPassword() {
           const hashType = hashParams.get("type");
           if (hashType && hashType !== "recovery") {
             if (mounted) {
-              toast.error("Invalid reset link. Please request a new one.");
+              toast.error("Enlace de restablecimiento no válido. Por favor, solicita uno nuevo.");
               navigate("/auth/forgot-password", { replace: true });
             }
             return;
@@ -91,7 +91,7 @@ export default function ResetPassword() {
 
           if (!finalSession && mounted) {
             toast.error(
-              "Invalid or expired reset link. Please request a new one."
+              "Enlace de restablecimiento no válido o caducado. Por favor, solicita uno nuevo."
             );
             navigate("/auth/forgot-password", { replace: true });
             return;
@@ -122,7 +122,7 @@ export default function ResetPassword() {
       } catch (error) {
         console.error("Session validation error:", error);
         if (mounted) {
-          toast.error("Failed to validate reset link. Please try again.");
+          toast.error("Error al validar el enlace de restablecimiento. Por favor, inténtalo de nuevo.");
           navigate("/auth/forgot-password", { replace: true });
         }
       }
@@ -150,7 +150,7 @@ export default function ResetPassword() {
       window.history.replaceState(null, "", window.location.pathname);
 
       setIsSuccess(true);
-      toast.success("Password reset successfully! Redirecting to login...");
+      toast.success("¡Contraseña restablecida con éxito! Redirigiendo al inicio de sesión...");
 
       setTimeout(() => {
         navigate("/auth/login?from=reset", { replace: true });
@@ -160,7 +160,7 @@ export default function ResetPassword() {
       const errorMessage =
         error instanceof Error
           ? error.message
-          : "Failed to reset password. Please try again.";
+          : "Error al restablecer la contraseña. Por favor, inténtalo de nuevo.";
       toast.error(errorMessage);
     } finally {
       setIsSubmitting(false);
@@ -175,7 +175,7 @@ export default function ResetPassword() {
             <Loader2 className="h-8 w-8 animate-spin text-brand-primary-600" />
           </div>
           <p className="text-center text-gray-600 mt-4">
-            Validating reset link...
+            Validando enlace de restablecimiento...
           </p>
         </Card>
       </div>
@@ -191,7 +191,7 @@ export default function ResetPassword() {
             className="flex items-center gap-2 text-sm text-gray-600 hover:text-brand-primary-600 mb-6"
           >
             <ArrowLeft size={18} />
-            Back to Login
+            Volver al Inicio de Sesión
           </Link>
 
           <div className="flex items-center gap-3 mb-8">
@@ -204,9 +204,9 @@ export default function ResetPassword() {
           </div>
 
           <h1 className="sm:text-3xl text-2xl font-bold text-gray-900 mb-2">
-            Reset your password
+            Restablece tu contraseña
           </h1>
-          <p className="text-gray-500 mb-8">Enter your new password below</p>
+          <p className="text-gray-500 mb-8">Introduce tu nueva contraseña a continuación</p>
 
           {isSuccess ? (
             <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-6">
@@ -214,10 +214,10 @@ export default function ResetPassword() {
                 <CheckCircle2 className="h-5 w-5 text-green-600 mt-0.5 flex-shrink-0" />
                 <div className="text-sm text-green-800">
                   <p className="font-medium mb-1">
-                    Password reset successfully!
+                    ¡Contraseña restablecida con éxito!
                   </p>
                   <p className="text-green-700">
-                    Your password has been updated. Redirecting to login...
+                    Tu contraseña ha sido actualizada. Redirigiendo al inicio de sesión...
                   </p>
                 </div>
               </div>
@@ -230,7 +230,7 @@ export default function ResetPassword() {
                 render={({ field, fieldState }) => (
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                      New Password
+                      Nueva Contraseña
                     </label>
                     <div className="relative">
                       <Lock className="absolute left-3 top-3.5 h-5 w-5 text-gray-400" />
@@ -257,7 +257,7 @@ export default function ResetPassword() {
                 render={({ field, fieldState }) => (
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Confirm Password
+                      Confirmar Contraseña
                     </label>
                     <div className="relative">
                       <Lock className="absolute left-3 top-3.5 h-5 w-5 text-gray-400" />
@@ -287,10 +287,10 @@ export default function ResetPassword() {
                 {isSubmitting ? (
                   <>
                     <Loader2 className="h-4 w-4 animate-spin mr-2 inline" />
-                    Resetting password...
+                    Restableciendo contraseña...
                   </>
                 ) : (
-                  "Reset Password"
+                  "Restablecer Contraseña"
                 )}
               </Button>
             </form>
@@ -298,20 +298,20 @@ export default function ResetPassword() {
 
           <CardFooter className="flex justify-center items-center mt-3 px-0">
             <p className="text-center text-gray-600 text-sm">
-              Remember your password?{" "}
+              ¿Recuerdas tu contraseña?{" "}
               <Link
                 to="/auth/login"
                 className="text-brand-primary-600 font-medium hover:underline"
               >
-                Sign in
+                Iniciar sesión
               </Link>
             </p>
           </CardFooter>
         </div>
 
         <AuthImageSection
-          title="Secure your account with a strong password"
-          description="Choose a password that's unique and hard to guess to keep your account safe."
+          title="Asegura tu cuenta con una contraseña fuerte"
+          description="Elige una contraseña que sea única y difícil de adivinar para mantener tu cuenta segura."
         />
       </Card>
     </div>

@@ -27,6 +27,7 @@ import type { UserTemplate } from "@/types";
 import { Badge } from "@/components/ui/badge";
 import toast from "react-hot-toast";
 import { format } from "date-fns";
+import { es } from 'date-fns/locale';
 
 interface TemplateField {
   name: string;
@@ -37,7 +38,7 @@ interface TemplateField {
 
 const PLACE_VISITED_FIELD: TemplateField = {
   name: "place_visited",
-  label: "Place Visited",
+  label: "Lugar Visitado",
   type: "text",
   required: true,
 };
@@ -71,7 +72,7 @@ export default function Templates() {
       setTemplates(templates);
       setPlanType(planType);
     } catch (error) {
-      toast.error("Failed to load templates");
+      toast.error("Error al cargar las plantillas");
     } finally {
       setLoading(false);
     }
@@ -119,13 +120,13 @@ export default function Templates() {
 
   const handleSave = async () => {
     if (!templateName.trim()) {
-      toast.error("Template name is required");
+      toast.error("Se requiere el nombre de la plantilla");
       return;
     }
 
     const invalidFields = fields.filter((f) => !f.name.trim());
     if (invalidFields.length > 0) {
-      toast.error("All fields must have a name");
+      toast.error("Todos los campos deben tener un nombre");
       return;
     }
 
@@ -143,7 +144,7 @@ export default function Templates() {
           template_type: templateType,
         });
 
-        toast.success("Template updated successfully");
+        toast.success("Plantilla actualizada con éxito");
       } else {
         await createUserTemplate(
           templateName,
@@ -153,27 +154,27 @@ export default function Templates() {
           description,
           templateType,
         );
-        toast.success("Template created successfully");
+        toast.success("Plantilla creada con éxito");
       }
 
       setIsDialogOpen(false);
       loadTemplates();
     } catch {
-      toast.error("Failed to save template");
+      toast.error("Error al guardar la plantilla");
     } finally {
       setSaving(false);
     }
   };
 
   const handleDelete = async (templateId: string) => {
-    if (!confirm("Are you sure you want to delete this template?")) return;
+    if (!confirm("¿Estás seguro de que quieres eliminar esta plantilla?")) return;
 
     try {
       await deleteUserTemplate(templateId);
-      toast.success("Template deleted successfully");
+      toast.success("Plantilla eliminada con éxito");
       loadTemplates();
     } catch {
-      toast.error("Failed to delete template");
+      toast.error("Error al eliminar la plantilla");
     }
   };
 
@@ -186,8 +187,8 @@ export default function Templates() {
       {/* HEADER */}
       <div className="mb-8 flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">Templates</h1>
-          <p className="text-gray-600">Create and manage report templates</p>
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">Plantillas</h1>
+          <p className="text-gray-600">Crea y gestiona plantillas de informes</p>
         </div>
         <Button
           onClick={openCreateDialog}
@@ -195,7 +196,7 @@ export default function Templates() {
           disabled={planType === "starter" && templates.length >= 3}
         >
           <Plus className="h-4 w-4" />
-          Create Template
+          Crear Plantilla
         </Button>
       </div>
 
@@ -209,11 +210,10 @@ export default function Templates() {
             <CardContent className="p-12 text-center">
               <FileText className="h-12 w-12 text-gray-400 mx-auto mb-4" />
               <h3 className="text-lg font-semibold text-gray-900 mb-2">
-                No templates created yet
+                Aún no se han creado plantillas
               </h3>
               <p className="text-gray-600 mb-6">
-                Create your first template to start generating structured
-                reports
+                Crea tu primera plantilla para empezar a generar informes estructurados
               </p>
             </CardContent>
           </Card>
@@ -224,7 +224,7 @@ export default function Templates() {
               <Search className="absolute left-3 top-3 h-5 w-5 text-gray-400" />
               <Input
                 type="text"
-                placeholder="Search templates..."
+                placeholder="Buscar plantillas..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="pl-10 h-11"
@@ -233,9 +233,9 @@ export default function Templates() {
 
             {/* STATS */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-              <StatCard title="Total Templates" value={templates.length} />
+              <StatCard title="Total de Plantillas" value={templates.length} />
               <StatCard
-                title="Total Fields"
+                title="Total de Campos"
                 value={templates.reduce((sum, t) => sum + t.fields.length, 0)}
               />
             </div>
@@ -251,7 +251,7 @@ export default function Templates() {
               <div className="flex justify-between">
                 <div>
                   <CardTitle>{template.name}</CardTitle>
-                  {template.is_default && <Badge>Default</Badge>}
+                  {template.is_default && <Badge>Predeterminada</Badge>}
                 </div>
                 <div className="flex gap-2">
                   <Button
@@ -272,7 +272,7 @@ export default function Templates() {
                 </div>
               </div>
               <CardDescription>
-                Created {format(new Date(template.created_at), "PP")}
+                Creada el {format(new Date(template.created_at), "PP", { locale: es })}
               </CardDescription>
             </CardHeader>
           </Card>
@@ -284,10 +284,10 @@ export default function Templates() {
         <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>
-              {editingTemplate ? "Edit Template" : "Create New Template"}
+              {editingTemplate ? "Editar Plantilla" : "Crear Nueva Plantilla"}
             </DialogTitle>
             <DialogDescription>
-              Create and manage report templates
+              Crea y gestiona plantillas de informes
             </DialogDescription>
           </DialogHeader>
 
@@ -295,7 +295,7 @@ export default function Templates() {
             {/* NAME + TYPE */}
             <div className="grid grid-cols-2 gap-4 ">
               <div>
-                <Label>Template Name</Label>
+                <Label>Nombre de la Plantilla</Label>
                 <Input
                   value={templateName}
                   onChange={(e) => setTemplateName(e.target.value)}
@@ -304,20 +304,20 @@ export default function Templates() {
               </div>
 
               <div>
-                <Label>Template Type</Label>
+                <Label>Tipo de Plantilla</Label>
                 <select
                   value={templateType}
                   onChange={(e) => setTemplateType(e.target.value)}
                   className=" w-full h-10 px-3 rounded-md border  mt-3"
                 >
-                  <option value="regular">Regular Template</option>
+                  <option value="regular">Plantilla Regular</option>
                 </select>
               </div>
             </div>
 
             {/* DESCRIPTION */}
             <div>
-              <Label>Description</Label>
+              <Label>Descripción</Label>
               <textarea
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
@@ -329,10 +329,10 @@ export default function Templates() {
             {/* FIELDS */}
             <div>
               <div className="flex justify-between mb-3">
-                <Label className="text-lg font-semibold">Template Fields</Label>
+                <Label className="text-lg font-semibold">Campos de la Plantilla</Label>
                 <Button size="sm" variant="outline" onClick={addField}>
                   <Plus className="h-4 w-4 mr-1" />
-                  Add Field
+                  Añadir Campo
                 </Button>
               </div>
 
@@ -340,7 +340,7 @@ export default function Templates() {
                 <div className="p-4 border-2 border-brand-primary-200 rounded-xl bg-brand-primary-50/40 space-y-3 relative">
                   <div className="absolute -top-2.5 left-3 bg-white px-2 flex items-center gap-1">
                     <MapPin className="h-3.5 w-3.5 text-brand-primary-600" />
-                    <span className="text-xs font-bold text-brand-primary-600 uppercase tracking-wider">System Field — Always Required</span>
+                    <span className="text-xs font-bold text-brand-primary-600 uppercase tracking-wider">Campo del Sistema — Siempre Obligatorio</span>
                   </div>
                   <div className="grid grid-cols-3 gap-3 mt-1">
                     <Input
@@ -349,17 +349,17 @@ export default function Templates() {
                       className="bg-white/60 cursor-not-allowed"
                     />
                     <Input
-                      value="Place Visited"
+                      value="Lugar Visitado"
                       disabled
                       className="bg-white/60 cursor-not-allowed"
                     />
                     <div className="flex items-center gap-2 h-10 px-3 rounded-md border bg-white/60 text-sm text-gray-500">
                       <Lock className="h-3.5 w-3.5" />
-                      Text (Required)
+                      Texto (Obligatorio)
                     </div>
                   </div>
                   <p className="text-xs text-gray-500">
-                    The place/location name visited. Used to identify each report in the Dashboard and WhatsApp.
+                    El nombre del lugar/ubicación visitado. Se usa para identificar cada informe en el Panel y WhatsApp.
                   </p>
                 </div>
 
@@ -370,14 +370,14 @@ export default function Templates() {
                   >
                     <div className="grid grid-cols-3 gap-3">
                       <Input
-                        placeholder="Field Key"
+                        placeholder="ID del Campo"
                         value={field.name}
                         onChange={(e) =>
                           updateField(index, { name: e.target.value })
                         }
                       />
                       <Input
-                        placeholder="Field Label"
+                        placeholder="Etiqueta del Campo"
                         value={field.label}
                         onChange={(e) =>
                           updateField(index, { label: e.target.value })
@@ -390,11 +390,11 @@ export default function Templates() {
                         }
                         className="h-10 px-3 rounded-md border"
                       >
-                        <option value="text">Text</option>
-                        <option value="number">Number</option>
-                        <option value="date">Date</option>
-                        <option value="email">Email</option>
-                        <option value="phone">Phone</option>
+                        <option value="text">Texto</option>
+                        <option value="number">Número</option>
+                        <option value="date">Fecha</option>
+                        <option value="email">Correo</option>
+                        <option value="phone">Teléfono</option>
                       </select>
                     </div>
 
@@ -407,7 +407,7 @@ export default function Templates() {
                             updateField(index, { required: e.target.checked })
                           }
                         />
-                        Required
+                        Obligatorio
                       </label>
 
                       <Button
@@ -427,7 +427,7 @@ export default function Templates() {
             {/* FOOTER */}
             <div className="flex justify-end gap-3 pt-6 border-t">
               <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
-                Cancel
+                Cancelar
               </Button>
               <Button
                 onClick={handleSave}
@@ -437,10 +437,10 @@ export default function Templates() {
                 {saving ? (
                   <>
                     <Loader2 className="h-4 w-4 mr-2 animate-spin " />
-                    Saving...
+                    Guardando...
                   </>
                 ) : (
-                  "Save Template"
+                  "Guardar Plantilla"
                 )}
               </Button>
             </div>

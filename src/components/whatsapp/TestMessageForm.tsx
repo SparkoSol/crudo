@@ -26,7 +26,7 @@ export function TestMessageForm({
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="space-y-2">
                     <Label htmlFor="test_phone" className="text-sm font-medium">
-                        Test Phone Number
+                        Número de Teléfono de Prueba
                     </Label>
                     <div className="relative">
                         <Phone className="absolute left-3 top-3 h-5 w-5 text-gray-400" />
@@ -41,20 +41,20 @@ export function TestMessageForm({
                         />
                     </div>
                     <p className="text-xs text-gray-500">
-                        Enter a phone number in format (e.g., +2376209233) to test the integration
+                        Introduce un número de teléfono en formato (ejemplo, +2376209233) para probar la integración
                     </p>
                 </div>
 
                 <div className="space-y-2">
                     <Label htmlFor="message_body" className="text-sm font-medium">
-                        Message Body
+                        Cuerpo del Mensaje
                     </Label>
                     <Textarea
                         id="message_body"
                         value={messageBody}
                         onChange={(e) => setMessageBody(e.target.value)}
                         className="h-24 resize-none"
-                        placeholder="Type your test message here..."
+                        placeholder="Escribe tu mensaje de prueba aquí..."
                         disabled={isTesting}
                     />
                 </div>
@@ -70,12 +70,12 @@ export function TestMessageForm({
                     {isTesting ? (
                         <>
                             <Loader2 className="h-4 w-4 animate-spin" />
-                            Sending...
+                            Enviando...
                         </>
                     ) : (
                         <>
                             <Send className="h-4 w-4" />
-                            Send Test Message
+                            Enviar Mensaje de Prueba
                         </>
                     )}
                 </Button>

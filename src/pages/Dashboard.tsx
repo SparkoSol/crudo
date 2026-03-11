@@ -83,7 +83,7 @@ export default function Dashboard() {
   const handlePlayAudio = (e: React.MouseEvent, transcript: VoiceTranscript) => {
     e.stopPropagation();
     if (!transcript.audio_url) {
-      toast.error('No audio recording available for this report');
+      toast.error('No hay grabación de audio disponible para este informe');
       return;
     }
 
@@ -105,7 +105,7 @@ export default function Dashboard() {
 
     newAudio.onerror = () => {
       console.error('Audio playback failed for URL:', transcript.audio_url);
-      toast.error('Failed to play audio. The recording may be unavailable.');
+      toast.error('Error al reproducir el audio. La grabación puede no estar disponible.');
       setPlayingId(null);
     };
 
@@ -114,7 +114,7 @@ export default function Dashboard() {
       setPlayingId(transcript.id);
     }).catch((err) => {
       console.error('Audio play error:', err);
-      toast.error('Failed to play audio. The recording may be unavailable.');
+      toast.error('Error al reproducir el audio. La grabación puede no estar disponible.');
     });
   };
 
@@ -140,10 +140,10 @@ export default function Dashboard() {
       document.body.removeChild(link);
       URL.revokeObjectURL(url);
 
-      toast.success('PDF downloaded successfully');
+      toast.success('PDF descargado con éxito');
     } catch (error) {
-      console.error('Failed to download PDF:', error);
-      toast.error('Failed to download PDF');
+      console.error('Error loading transcripts:', error);
+      toast.error('Error al cargar las transcripciones');
     } finally {
       setDownloadingId(null);
     }
@@ -155,11 +155,10 @@ export default function Dashboard() {
       setDeletingId(deleteTarget.id);
       await deleteTranscript(deleteTarget.id);
       setTranscripts(prev => prev.filter(t => t.id !== deleteTarget.id));
-      setStats(prev => ({ ...prev, totalReports: Math.max(0, prev.totalReports - 1) }));
-      toast.success('Report deleted successfully');
+      toast.success('Informe eliminado con éxito');
     } catch (error) {
       console.error('Failed to delete report:', error);
-      toast.error('Failed to delete report');
+      toast.error('Error al eliminar el informe');
     } finally {
       setDeletingId(null);
       setDeleteTarget(null);
@@ -172,21 +171,21 @@ export default function Dashboard() {
         return (
           <Badge className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border bg-emerald-50 text-emerald-700 border-emerald-200 shadow-sm shadow-emerald-100 hover:bg-emerald-100 hover:shadow-emerald-200 hover:scale-[1.04] transition-all duration-200 cursor-default select-none">
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-            Confirmed
+            Confirmado
           </Badge>
         );
       case 'pending':
         return (
           <Badge className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border bg-amber-50 text-amber-700 border-amber-200 shadow-sm shadow-amber-100 hover:bg-amber-100 hover:shadow-amber-200 hover:scale-[1.04] transition-all duration-200 cursor-default select-none">
             <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
-            Pending
+            Pendiente
           </Badge>
         );
       case 'retaken':
         return (
           <Badge className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border bg-slate-100 text-slate-600 border-slate-200 shadow-sm shadow-slate-100 hover:bg-slate-200 hover:shadow-slate-200 hover:scale-[1.04] transition-all duration-200 cursor-default select-none">
             <span className="w-1.5 h-1.5 rounded-full bg-slate-400" />
-            Retaken
+            Repetido
           </Badge>
         );
       default:
@@ -211,24 +210,24 @@ export default function Dashboard() {
   });
 
   if (authLoading) {
-    return <Loading message="Loading dashboard..." fullScreen />;
+    return <Loading message="Cargando panel..." fullScreen />;
   }
 
   return (
     <div className="p-6 lg:p-8 pt-20 lg:pt-6">
       <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900 mb-2">Home</h1>
+        <h1 className="text-3xl font-bold text-gray-900 mb-2">Inicio</h1>
         <p className="text-gray-600">
-          Manage and review field reports from your sales team
+          Gestiona y revisa los informes de campo de tu equipo de ventas
         </p>
       </div>
 
       <div className="mb-6 flex flex-col md:flex-row gap-4 items-start md:items-center justify-between">
-        <h2 className="text-2xl font-bold text-gray-900">Dashboard Metrics</h2>
+        <h2 className="text-2xl font-bold text-gray-900">Métricas del Panel</h2>
         <SearchBar
           value={searchQuery}
           onChange={setSearchQuery}
-          placeholder="Search stats or reports..."
+          placeholder="Buscar estadísticas o informes..."
         />
       </div>
 
@@ -242,20 +241,20 @@ export default function Dashboard() {
         ) : (
           <>
             <StatsCard
-              title="Total Reports"
+              title="Informes Totales"
               value={stats.totalReports.toString()}
               icon={FileText}
               iconColor="text-brand-primary-600"
             />
             <StatsCard
-              title="This Week"
+              title="Esta Semana"
               value={stats.thisWeekReports.toString()}
               icon={Calendar}
               iconColor="text-green-600"
             />
             {profile?.role === 'manager' && (
               <StatsCard
-                title="Active Salespeople"
+                title="Vendedores Activos"
                 value={stats.activeSalespeople.toString()}
                 icon={Users}
                 iconColor="text-purple-600"
@@ -267,7 +266,7 @@ export default function Dashboard() {
 
       <div className="mt-8">
         <div className="mb-6 flex flex-col md:flex-row gap-4 items-start md:items-center justify-between">
-          <h2 className="text-2xl font-bold text-gray-900">Recent Reports</h2>
+          <h2 className="text-2xl font-bold text-gray-900">Informes Recientes</h2>
         </div>
 
         {isLoadingStats ? (
@@ -278,9 +277,9 @@ export default function Dashboard() {
           <Card className="border-gray-200 shadow-sm">
             <CardContent className="p-12 text-center">
               <FileText className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-              <h3 className="text-lg font-semibold text-gray-900 mb-2">No reports found</h3>
+              <h3 className="text-lg font-semibold text-gray-900 mb-2">No se encontraron informes</h3>
               <p className="text-gray-600">
-                {searchQuery ? "Try adjusting your search" : "Your recent reports will appear here"}
+                {searchQuery ? "Intenta ajustar tu búsqueda" : "Tus informes recientes aparecerán aquí"}
               </p>
             </CardContent>
           </Card>
@@ -301,7 +300,7 @@ export default function Dashboard() {
                           {transcript.modified_transcript && (
                             <Badge className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border bg-blue-50 text-blue-700 border-blue-200 shadow-sm shadow-blue-100 hover:bg-blue-100 hover:shadow-blue-200 hover:scale-[1.04] transition-all duration-200 cursor-default select-none">
                               <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />
-                              Updated
+                              Actualizado
                             </Badge>
                           )}
                         </div>
@@ -316,13 +315,13 @@ export default function Dashboard() {
                                 </h3>
                                 <div className="flex items-center gap-1.5 text-sm text-gray-500 font-medium mt-1">
                                   <FileText className="w-3.5 h-3.5" />
-                                  <span>Template: {templateName}</span>
+                                  <span>Plantilla: {templateName}</span>
                                 </div>
                               </>
                             );
                           })()}
                           <div className="text-sm text-gray-400 font-normal mt-1">
-                            by <span className="text-gray-600 font-medium">{transcript.profiles?.full_name || 'Unknown Salesperson'}</span> • {format(new Date(transcript.created_at), "MMM d, yyyy")}
+                            por <span className="text-gray-600 font-medium">{transcript.profiles?.full_name || 'Vendedor Desconocido'}</span> • {format(new Date(transcript.created_at), "d MMM, yyyy")}
                           </div>
                       </div>
                       </div>
@@ -355,7 +354,7 @@ export default function Dashboard() {
                               ? "text-brand-primary-600 bg-brand-primary-50"
                               : "text-gray-400 hover:text-brand-primary-600 hover:bg-brand-primary-50"
                             }`}
-                          title={playingId === transcript.id ? "Pause Recording" : "Play Recording"}
+                          title={playingId === transcript.id ? "Pausar Grabación" : "Reproducir Grabación"}
                         >
                           {playingId === transcript.id ? (
                             <div className="flex gap-0.5 items-end h-3">
@@ -378,7 +377,7 @@ export default function Dashboard() {
                           }}
                           disabled={downloadingId === transcript.id || transcript.status !== 'confirmed'}
                           className="h-8 w-8 text-gray-400 hover:text-brand-primary-600 hover:bg-brand-primary-50 transition-colors"
-                          title="Download PDF"
+                          title="Descargar PDF"
                         >
                           {downloadingId === transcript.id ? (
                             <Loader2 className="h-4 w-4 animate-spin" />
@@ -396,7 +395,7 @@ export default function Dashboard() {
                             }}
                             disabled={deletingId === transcript.id}
                             className="h-8 w-8 text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors"
-                            title="Delete Report"
+                            title="Eliminar Informe"
                           >
                             {deletingId === transcript.id ? (
                               <Loader2 className="h-4 w-4 animate-spin" />
@@ -420,12 +419,12 @@ export default function Dashboard() {
         open={!!deleteTarget}
         onOpenChange={(open) => { if (!open) setDeleteTarget(null); }}
         onConfirm={handleDeleteReport}
-        title="Delete Report"
-        description={`Are you sure you want to permanently delete "${
-          deleteTarget?.user_templates?.name || 'this report'
-        }" by ${deleteTarget?.profiles?.full_name || 'Unknown Salesperson'}? This action cannot be undone and all associated data will be lost.`}
-        confirmText="Delete Report"
-        cancelText="Cancel"
+        title="Eliminar Informe"
+        description={`¿Estás seguro de que quieres eliminar permanentemente "${
+          deleteTarget?.user_templates?.name || 'este informe'
+        }" de ${deleteTarget?.profiles?.full_name || 'Vendedor Desconocido'}? Esta acción no se puede deshacer y todos los datos asociados se perderán.`}
+        confirmText="Eliminar Informe"
+        cancelText="Cancelar"
         variant="destructive"
         isLoading={!!deletingId}
       />

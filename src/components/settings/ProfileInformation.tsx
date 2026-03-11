@@ -65,7 +65,7 @@ export function ProfileInformation({ initialData }: ProfileInformationProps) {
         }
       } catch (error) {
         console.error('Error loading profile:', error);
-        toast.error('Failed to load profile');
+        toast.error('Error al cargar el perfil');
       } finally {
         setIsLoading(false);
       }
@@ -93,11 +93,11 @@ export function ProfileInformation({ initialData }: ProfileInformationProps) {
 
       await refreshProfile();
 
-      toast.success('Profile updated successfully');
+      toast.success('Perfil actualizado con éxito');
       setPendingFormData(null);
     } catch (error: unknown) {
       console.error('Error updating profile:', error);
-      const errorMessage = error instanceof Error ? error.message : 'Failed to update profile';
+      const errorMessage = error instanceof Error ? error.message : 'Error al actualizar el perfil';
       toast.error(errorMessage);
     } finally {
       setIsSavingProfile(false);
@@ -124,9 +124,9 @@ export function ProfileInformation({ initialData }: ProfileInformationProps) {
             <UserCircle className="h-5 w-5 text-brand-primary-600" />
           </div>
           <div>
-            <CardTitle className="text-xl">Profile Information</CardTitle>
+            <CardTitle className="text-xl">Información del Perfil</CardTitle>
             <CardDescription className="mt-1">
-              Update your personal information and contact details
+              Actualiza tu información personal y datos de contacto
             </CardDescription>
           </div>
         </div>
@@ -136,7 +136,7 @@ export function ProfileInformation({ initialData }: ProfileInformationProps) {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="space-y-2">
               <Label htmlFor="full_name" className="text-sm font-medium">
-                Full Name
+                Nombre Completo
               </Label>
               <div className="relative">
                 <User className="absolute left-3 top-3 h-5 w-5 text-gray-400" />
@@ -144,7 +144,7 @@ export function ProfileInformation({ initialData }: ProfileInformationProps) {
                   id="full_name"
                   {...registerProfile('full_name')}
                   className="pl-10 h-11"
-                  placeholder="Enter your full name"
+                  placeholder="Introduce tu nombre completo"
                 />
               </div>
               {profileErrors.full_name && (
@@ -157,7 +157,7 @@ export function ProfileInformation({ initialData }: ProfileInformationProps) {
             {profile?.role !== 'manager' && (
               <div className="space-y-2">
                 <Label htmlFor="phone_number" className="text-sm font-medium">
-                  Phone Number
+                  Número de Teléfono
                 </Label>
                 <div className="relative">
                   <Phone className="absolute left-3 top-3 h-5 w-5 text-gray-400" />
@@ -165,14 +165,14 @@ export function ProfileInformation({ initialData }: ProfileInformationProps) {
                     id="phone_number"
                     {...registerProfile('phone_number')}
                     className={`pl-10 h-11 ${profile?.phone_number ? 'bg-gray-50 cursor-not-allowed' : ''}`}
-                    placeholder="e.g. +92 3XX... or +34 6XX..."
+                    placeholder="ej. +34 6XX..."
                     disabled={!!profile?.phone_number}
                     readOnly={!!profile?.phone_number}
                   />
                 </div>
                 {profile?.phone_number ? (
                   <p className="text-xs text-gray-500 mt-1">
-                    Phone number cannot be changed once set. Contact support for assistance.
+                    El número de teléfono no se puede cambiar una vez configurado. Contacta con soporte para asistencia.
                   </p>
                 ) : (
                   profileErrors.phone_number && (
@@ -186,7 +186,7 @@ export function ProfileInformation({ initialData }: ProfileInformationProps) {
 
             <div className="space-y-2">
               <Label htmlFor="email" className="text-sm font-medium">
-                Email Address
+                Correo Electrónico
               </Label>
               <div className="relative">
                 <Mail className="absolute left-3 top-3 h-5 w-5 text-gray-400" />
@@ -195,19 +195,19 @@ export function ProfileInformation({ initialData }: ProfileInformationProps) {
                   type="email"
                   {...registerProfile('email')}
                   className="pl-10 h-11 bg-gray-50 cursor-not-allowed"
-                  placeholder="Enter your email"
+                  placeholder="Introduce tu correo"
                   disabled
                   readOnly
                 />
               </div>
               <p className="text-xs text-gray-500 mt-1">
-                Email cannot be changed
+                El correo no se puede cambiar
               </p>
             </div>
 
             <div className="space-y-2">
               <Label htmlFor="company_name" className="text-sm font-medium">
-                Company Name
+                Nombre de la Empresa
               </Label>
               <div className="relative">
                 <Building2 className="absolute left-3 top-3 h-5 w-5 text-gray-400" />
@@ -216,13 +216,13 @@ export function ProfileInformation({ initialData }: ProfileInformationProps) {
                   type="text"
                   value={profile?.company_name || ''}
                   className="pl-10 h-11 bg-gray-50 cursor-not-allowed"
-                  placeholder="Company name"
+                  placeholder="Nombre de la empresa"
                   disabled
                   readOnly
                 />
               </div>
               <p className="text-xs text-gray-500 mt-1">
-                Company name cannot be changed
+                El nombre de la empresa no se puede cambiar
               </p>
             </div>
           </div>
@@ -233,7 +233,7 @@ export function ProfileInformation({ initialData }: ProfileInformationProps) {
                 <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
                   <Shield className="h-4 w-4 text-gray-500" />
                   <div>
-                    <p className="text-xs text-gray-500">Role</p>
+                    <p className="text-xs text-gray-500">Rol</p>
                     <p className="text-sm font-medium text-gray-900 capitalize">
                       {profile.role.replace('_', ' ')}
                     </p>
@@ -242,9 +242,9 @@ export function ProfileInformation({ initialData }: ProfileInformationProps) {
                 <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
                   <Calendar className="h-4 w-4 text-gray-500" />
                   <div>
-                    <p className="text-xs text-gray-500">Member since</p>
+                    <p className="text-xs text-gray-500">Miembro desde</p>
                     <p className="text-sm font-medium text-gray-900">
-                      {new Date(profile.created_at).toLocaleDateString('en-US', {
+                      {new Date(profile.created_at).toLocaleDateString('es-ES', {
                         year: 'numeric',
                         month: 'long',
                         day: 'numeric',
@@ -265,12 +265,12 @@ export function ProfileInformation({ initialData }: ProfileInformationProps) {
               {isSavingProfile ? (
                 <>
                   <Loader2 className="h-4 w-4 animate-spin" />
-                  Saving...
+                  Guardando...
                 </>
               ) : (
                 <>
                   <Save className="h-4 w-4" />
-                  Save Changes
+                  Guardar Cambios
                 </>
               )}
             </Button>
@@ -281,10 +281,10 @@ export function ProfileInformation({ initialData }: ProfileInformationProps) {
           open={showConfirmDialog}
           onOpenChange={setShowConfirmDialog}
           onConfirm={handleConfirmUpdate}
-          title="Confirm Profile Update"
-          description="Are you sure you want to update your profile information? This action will save your changes."
-          confirmText="Save Changes"
-          cancelText="Cancel"
+          title="Confirmar Actualización de Perfil"
+          description="¿Estás seguro de que quieres actualizar la información de tu perfil? Esta acción guardará tus cambios."
+          confirmText="Guardar Cambios"
+          cancelText="Cancelar"
           isLoading={isSavingProfile}
         />
       </CardContent>

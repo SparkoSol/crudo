@@ -29,8 +29,8 @@ const inviteSchema = z.object({
   email: z
     .string()
     .trim()
-    .nonempty("Email is required")
-    .email("Invalid email address"),
+    .nonempty("Se requiere correo electrónico")
+    .email("Dirección de correo electrónico inválida"),
 });
 
 type InviteFormValues = z.infer<typeof inviteSchema>;
@@ -54,12 +54,12 @@ export default function Invite() {
 
   const onSubmit = async (data: InviteFormValues) => {
     if (!user || !profile) {
-      toast.error("User information not available");
+      toast.error("Información del usuario no disponible");
       return;
     }
 
     if (profile.role !== "manager") {
-      toast.error("Only managers can invite sales representatives");
+      toast.error("Solo los gerentes pueden invitar representantes de ventas");
       return;
     }
 
@@ -72,7 +72,7 @@ export default function Invite() {
         managerCompanyName: profile.company_name || null,
       });
 
-      toast.success(`Invitation sent successfully to ${data.email}`);
+      toast.success(`Invitación enviada con éxito a ${data.email}`);
       setInvitedEmail(data.email);
       reset();
     } catch (error: unknown) {
@@ -80,7 +80,7 @@ export default function Invite() {
       const errorMessage =
         error instanceof Error
           ? error.message
-          : "Failed to send invitation. Please try again.";
+          : "Error al enviar la invitación. Por favor, inténtalo de nuevo.";
       toast.error(errorMessage);
     } finally {
       setIsSubmitting(false);
@@ -91,10 +91,10 @@ export default function Invite() {
     <div className="p-6 lg:p-8 pt-20 lg:pt-6 max-w-7xl mx-auto">
       <div className="mb-8">
         <h1 className="text-3xl font-bold text-gray-900 mb-2">
-          Invite Sales Representative
+          Invitar Representante de Ventas
         </h1>
         <p className="text-gray-600">
-          Send an invitation to a sales representative to join your team
+          Envía una invitación a un representante de ventas para unirse a tu equipo
         </p>
       </div>
 
@@ -106,10 +106,10 @@ export default function Invite() {
                 <UserPlus className="h-5 w-5 text-brand-primary-600" />
               </div>
               <div>
-                <CardTitle className="text-xl">Send Invitation</CardTitle>
+                <CardTitle className="text-xl">Enviar Invitación</CardTitle>
                 <CardDescription className="mt-1">
-                  Enter the email address of the sales representative you
-                  want to invite
+                  Introduce la dirección de correo electrónico del representante de ventas que
+                  quieres invitar
                 </CardDescription>
               </div>
             </div>
@@ -118,7 +118,7 @@ export default function Invite() {
             <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
               <div className="space-y-2">
                 <Label htmlFor="email" className="text-sm font-medium">
-                  Email Address
+                  Dirección de Correo Electrónico
                 </Label>
                 <div className="relative">
                   <Mail className="absolute left-3 top-3 h-5 w-5 text-gray-400" />
@@ -152,12 +152,12 @@ export default function Invite() {
                   {isSubmitting ? (
                     <>
                       <Loader2 className="h-4 w-4 animate-spin" />
-                      Sending Invitation...
+                      Enviando Invitación...
                     </>
                   ) : (
                     <>
                       <Send className="h-4 w-4" />
-                      Send Invitation
+                      Enviar Invitación
                     </>
                   )}
                 </Button>
@@ -170,13 +170,12 @@ export default function Invite() {
                   <CheckCircle2 className="h-5 w-5 text-green-600 mt-0.5 flex-shrink-0" />
                   <div className="text-sm text-green-800">
                     <p className="font-medium mb-1">
-                      Invitation sent successfully!
+                      ¡Invitación enviada con éxito!
                     </p>
                     <p className="text-green-700">
-                      An invitation email has been sent to{" "}
-                      <strong>{invitedEmail}</strong>. The sales
-                      representative will receive their login credentials
-                      via email.
+                      Se ha enviado un correo electrónico de invitación a{" "}
+                      <strong>{invitedEmail}</strong>. El representante de
+                      ventas recibirá sus credenciales de acceso por correo electrónico.
                     </p>
                   </div>
                 </div>

@@ -65,7 +65,7 @@ export default function Subscription() {
 
     const handleSubscribe = async (tier: SubscriptionTier) => {
         if (!user) {
-            toast.error('Please login to subscribe');
+            toast.error('Por favor, inicia sesión para suscribirte');
             return;
         }
 
@@ -83,7 +83,7 @@ export default function Subscription() {
             }
         } catch (err: unknown) {
             console.error(err);
-            toast.error(err instanceof Error ? err.message : 'Failed to initiate checkout');
+            toast.error(err instanceof Error ? err.message : 'Error al iniciar el proceso de pago');
         } finally {
             setLoadingTier(null);
         }
@@ -96,7 +96,7 @@ export default function Subscription() {
 
     const handleBuyPack = async (packId: string) => {
         if (!user) {
-            toast.error('Please login to purchase credits');
+            toast.error('Por favor, inicia sesión para comprar créditos');
             return;
         }
 
@@ -108,16 +108,16 @@ export default function Subscription() {
             }
         } catch (err: unknown) {
             console.error(err);
-            toast.error(err instanceof Error ? err.message : 'Failed to start checkout');
+            toast.error(err instanceof Error ? err.message : 'Error al iniciar el pago');
         } finally {
             setLoadingPackId(null);
         }
     };
 
     const getButtonLabel = (tier: SubscriptionTier) => {
-        if (isCurrentPlan(tier)) return 'Current Plan';
-        if (subscription?.status === 'active') return 'Switch Plan';
-        return 'Get Started';
+        if (isCurrentPlan(tier)) return 'Plan Actual';
+        if (subscription?.status === 'active') return 'Cambiar Plan';
+        return 'Empezar';
     };
 
     const getDisplayPrice = (plan: typeof SUBSCRIPTION_PLANS[0]) => {
@@ -140,17 +140,17 @@ export default function Subscription() {
                         <div className="max-w-2xl">
                             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-brand-primary-100/60 text-brand-primary-700 text-xs font-semibold mb-4">
                                 <Sparkles className="h-3.5 w-3.5" />
-                                Flexible pricing for every team
+                                Precios flexibles para cada equipo
                             </div>
                             <h1 className="text-3xl sm:text-4xl lg:text-5xl font-extrabold text-gray-900 tracking-tight mb-2 sm:mb-3">
-                                Choose your plan
+                                Elige tu plan
                             </h1>
                             <p className="text-base sm:text-lg text-gray-500 leading-relaxed">
-                                Pay a fixed platform fee, then only for the visits you actually record. No hidden costs.
+                                Paga una cuota fija de plataforma, luego solo por las visitas que realmente registres. Sin costes ocultos.
                             </p>
                         </div>
                         {user ? (
-                            <div className="relative group self-start" aria-label={`${remainingCredits} remaining credits`}>
+                            <div className="relative group self-start" aria-label={`${remainingCredits} créditos restantes`}>
                                 <div className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white/80 backdrop-blur-sm border border-gray-200/60 shadow-sm cursor-default transition-all duration-200 group-hover:border-amber-300 group-hover:shadow-md group-hover:shadow-amber-100/50">
                                     <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-amber-100 to-orange-100 flex items-center justify-center">
                                         <Coins className="h-4 w-4 text-amber-600" />
@@ -162,7 +162,7 @@ export default function Subscription() {
                                     )}
                                 </div>
                                 <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 px-3 py-1.5 bg-gray-900 text-white text-xs font-medium rounded-lg whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none shadow-lg">
-                                    Remaining credits
+                                    Créditos restantes
                                     <div className="absolute -top-1 left-1/2 -translate-x-1/2 w-2 h-2 bg-gray-900 rotate-45" />
                                 </div>
                             </div>
@@ -173,7 +173,7 @@ export default function Subscription() {
                                 className="gap-2 text-gray-600 hover:text-brand-primary-600 hover:bg-brand-primary-50 hover:border-brand-primary-200 transition-all duration-200 rounded-xl self-start"
                             >
                                 <LogIn className="h-4 w-4" />
-                                Login
+                                Iniciar Sesión
                             </Button>
                         )}
                     </div>
@@ -189,7 +189,7 @@ export default function Subscription() {
                                         : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'
                                 }`}
                             >
-                                Monthly
+                                Mensual
                             </button>
                             <button
                                 onClick={() => setBillingPeriod('annual')}
@@ -199,13 +199,13 @@ export default function Subscription() {
                                         : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'
                                 }`}
                             >
-                                Annual
+                                Anual
                                 <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full transition-colors duration-300 ${
                                     billingPeriod === 'annual'
                                         ? 'bg-white/20 text-white'
                                         : 'bg-green-100 text-green-700'
                                 }`}>
-                                    Save {ANNUAL_SAVINGS_PERCENT}%
+                                    Ahorra {ANNUAL_SAVINGS_PERCENT}%
                                 </span>
                             </button>
                         </div>
@@ -231,7 +231,7 @@ export default function Subscription() {
                                     <div className="absolute top-1 left-1/2 -translate-x-1/2">
                                         <span className="inline-flex items-center gap-1 text-[10px] font-bold bg-brand-primary-600 text-white px-3 py-1 rounded-full uppercase tracking-wider shadow-md shadow-brand-primary-200/50">
                                             <Star className="h-3 w-3 fill-current" />
-                                            Most Popular
+                                            Más Popular
                                         </span>
                                     </div>
                                 </>
@@ -256,12 +256,12 @@ export default function Subscription() {
                                             €{getDisplayPrice(plan)}
                                         </span>
                                         <span className="text-gray-400 text-base font-medium">
-                                            /month
+                                            /mes
                                         </span>
                                     </div>
                                     {billingPeriod === 'annual' && (
                                         <p className="text-xs text-gray-400 mt-1.5">
-                                            Billed as €{plan.annualPrice.toLocaleString()} per year
+                                            Facturado como €{plan.annualPrice.toLocaleString()} al año
                                         </p>
                                     )}
                                 </div>
@@ -315,7 +315,7 @@ export default function Subscription() {
                                         )}
                                     </Button>
                                     <p className="text-[11px] text-center text-gray-400">
-                                        Credits not included
+                                        Créditos no incluidos
                                     </p>
                                 </div>
                             </CardFooter>
@@ -326,7 +326,7 @@ export default function Subscription() {
                 {/* Section Divider */}
                 <div className="flex items-center gap-3 sm:gap-4 mb-8 sm:mb-12">
                     <div className="flex-1 h-px bg-gradient-to-r from-transparent via-gray-200 to-transparent" />
-                    <span className="text-[10px] sm:text-xs font-semibold text-gray-400 uppercase tracking-widest whitespace-nowrap">Usage Credits</span>
+                    <span className="text-[10px] sm:text-xs font-semibold text-gray-400 uppercase tracking-widest whitespace-nowrap">Créditos de Uso</span>
                     <div className="flex-1 h-px bg-gradient-to-r from-transparent via-gray-200 to-transparent" />
                 </div>
 
@@ -339,16 +339,16 @@ export default function Subscription() {
                                 <Coins className="h-4 w-4 sm:h-5 sm:w-5 text-orange-600" />
                             </div>
                             <div className="min-w-0">
-                                <h2 className="text-lg sm:text-xl font-bold text-gray-900">Usage Credits</h2>
-                                <p className="text-xs sm:text-sm text-gray-500">You only pay for the visits you actually process. The more you use, the less you pay per credit</p>
+                                <h2 className="text-lg sm:text-xl font-bold text-gray-900">Créditos de Uso</h2>
+                                <p className="text-xs sm:text-sm text-gray-500">Solo pagas por las visitas que realmente procesas. Cuanto más usas, menos pagas por crédito</p>
                             </div>
                         </div>
 
                         {/* Volume Pricing Table */}
                         <div className="rounded-xl border border-gray-200 overflow-hidden">
                             <div className="grid grid-cols-2 bg-gray-50/80 border-b border-gray-200">
-                                <div className="px-3 sm:px-5 py-2.5 sm:py-3.5 text-[10px] sm:text-xs font-semibold text-gray-500 uppercase tracking-wider">Monthly Volume</div>
-                                <div className="px-3 sm:px-5 py-2.5 sm:py-3.5 text-[10px] sm:text-xs font-semibold text-gray-500 uppercase tracking-wider text-right">Price per Credit</div>
+                                <div className="px-3 sm:px-5 py-2.5 sm:py-3.5 text-[10px] sm:text-xs font-semibold text-gray-500 uppercase tracking-wider">Volumen Mensual</div>
+                                <div className="px-3 sm:px-5 py-2.5 sm:py-3.5 text-[10px] sm:text-xs font-semibold text-gray-500 uppercase tracking-wider text-right">Precio por Crédito</div>
                             </div>
                             {CREDIT_INFO.pricingTiers.map((tier, i) => (
                                 <div
@@ -392,13 +392,13 @@ export default function Subscription() {
                                     <div className="h-7 w-7 rounded-lg bg-gray-200/60 flex items-center justify-center">
                                         <ArrowRight className="h-3.5 w-3.5 text-gray-600" />
                                     </div>
-                                    <span className="text-xs font-semibold text-gray-600 uppercase tracking-wider">How it works</span>
+                                    <span className="text-xs font-semibold text-gray-600 uppercase tracking-wider">Cómo funciona</span>
                                 </div>
                                 <p className="text-sm text-gray-600 leading-relaxed">
-                                    Credits are used each time iNotus processes a visit report. This includes transcribing, organizing, and sending data to your ERP.
+                                    Los créditos se usan cada vez que Crudo procesa un informe de visita. Esto incluye transcribir, organizar y enviar datos a tu ERP.
                                 </p>
                                 <p className="text-sm text-gray-500 mt-2">
-                                    A sales report typically uses <strong className="text-gray-700">{CREDIT_INFO.typicalUsagePerReport}</strong>, depending on complexity. You'll receive a usage invoice at the end of each month.
+                                    Un informe de ventas suele utilizar <strong className="text-gray-700">{CREDIT_INFO.typicalUsagePerReport}</strong>, dependiendo de la complejidad. Recibirás una factura de uso al final de cada mes.
                                 </p>
                             </div>
 
@@ -408,7 +408,7 @@ export default function Subscription() {
                                     <div className="h-7 w-7 rounded-lg bg-blue-100 flex items-center justify-center">
                                         <RotateCcw className="h-3.5 w-3.5 text-blue-600" />
                                     </div>
-                                    <span className="text-xs font-semibold text-blue-700 uppercase tracking-wider">Unused Credits</span>
+                                    <span className="text-xs font-semibold text-blue-700 uppercase tracking-wider">Créditos no usados</span>
                                 </div>
                                 <ul className="space-y-2.5">
                                     {CREDIT_INFO.rolloverRules.map((rule, i) => (
@@ -426,7 +426,7 @@ export default function Subscription() {
                 {/* Section Divider */}
                 <div className="flex items-center gap-3 sm:gap-4 mb-8 sm:mb-12">
                     <div className="flex-1 h-px bg-gradient-to-r from-transparent via-gray-200 to-transparent" />
-                    <span className="text-[10px] sm:text-xs font-semibold text-gray-400 uppercase tracking-widest whitespace-nowrap">Credit Packs</span>
+                    <span className="text-[10px] sm:text-xs font-semibold text-gray-400 uppercase tracking-widest whitespace-nowrap">Packs de Créditos</span>
                     <div className="flex-1 h-px bg-gradient-to-r from-transparent via-gray-200 to-transparent" />
                 </div>
 
@@ -439,8 +439,8 @@ export default function Subscription() {
                                 <Package className="h-4 w-4 sm:h-5 sm:w-5 text-green-600" />
                             </div>
                             <div className="min-w-0">
-                                <h2 className="text-lg sm:text-xl font-bold text-gray-900">Prepaid Credit Packs</h2>
-                                <p className="text-xs sm:text-sm text-gray-500">Buy credits upfront at a discounted rate. Prepaid credits are used first, and unused credits roll over each month</p>
+                                <h2 className="text-lg sm:text-xl font-bold text-gray-900">Packs de Créditos Prepago</h2>
+                                <p className="text-xs sm:text-sm text-gray-500">Compra créditos por adelantado con descuento. Los créditos prepago se usan primero, y los créditos no usados se acumulan cada mes</p>
                             </div>
                         </div>
 
@@ -458,7 +458,7 @@ export default function Subscription() {
                                         <div className="absolute -top-2.5 left-4">
                                             <span className="inline-flex items-center gap-1 text-[10px] font-bold bg-green-600 text-white px-2.5 py-0.5 rounded-full uppercase tracking-wider shadow-sm">
                                                 <Star className="h-2.5 w-2.5 fill-current" />
-                                                Best Value
+                                                Mejor Valor
                                             </span>
                                         </div>
                                     )}
@@ -466,19 +466,19 @@ export default function Subscription() {
                                         <p className="text-sm font-semibold text-gray-900">{pack.name}</p>
                                         <p className="text-2xl font-extrabold text-gray-900 mt-1">
                                             {pack.credits.toLocaleString()}
-                                            <span className="text-sm font-normal text-gray-400 ml-1">credits</span>
+                                            <span className="text-sm font-normal text-gray-400 ml-1">créditos</span>
                                         </p>
                                     </div>
                                     <div className="flex items-baseline gap-1.5 mb-1">
                                         <span className="text-lg font-bold text-gray-900">€{pack.price.toLocaleString()}</span>
-                                        <span className="text-xs text-gray-400">€{pack.pricePerCredit.toFixed(2)}/credit</span>
+                                        <span className="text-xs text-gray-400">€{pack.pricePerCredit.toFixed(2)}/crédito</span>
                                     </div>
                                     <span className={`text-xs font-medium px-2 py-0.5 rounded-full w-fit mb-4 ${
                                         pack.highlighted
                                             ? 'text-green-700 bg-green-100'
                                             : 'text-green-700 bg-green-50'
                                     }`}>
-                                        Save {pack.savingsPercent}%
+                                        Ahorra {pack.savingsPercent}%
                                     </span>
                                     <Button
                                         onClick={() => handleBuyPack(pack.id)}
@@ -494,7 +494,7 @@ export default function Subscription() {
                                         ) : (
                                             <>
                                                 <ShoppingCart className="h-3.5 w-3.5 mr-1.5" />
-                                                Buy Now
+                                                Comprar Ahora
                                             </>
                                         )}
                                     </Button>
@@ -503,7 +503,7 @@ export default function Subscription() {
                         </div>
 
                         <p className="text-[10px] sm:text-xs text-gray-400 mt-4 sm:mt-6 text-center">
-                            Prepaid credits are used before pay-as-you-go billing. Unused credits carry over each month (up to 100% of your last purchase).
+                            Los créditos prepago se usan antes que la facturación por uso. Los créditos no usados se acumulan cada mes (hasta el 100% de tu última compra).
                         </p>
                     </div>
                 </div>
@@ -513,17 +513,17 @@ export default function Subscription() {
                     <div className="flex flex-col sm:flex-row items-center justify-center gap-4 sm:gap-6 py-4 sm:py-6">
                         <div className="flex items-center gap-2 text-gray-400">
                             <Shield className="h-4 w-4" />
-                            <span className="text-xs font-medium">Secure payments via Stripe</span>
+                            <span className="text-xs font-medium">Pagos seguros vía Stripe</span>
                         </div>
                         <div className="hidden sm:block h-4 w-px bg-gray-200" />
                         <div className="flex items-center gap-2 text-gray-400">
                             <RotateCcw className="h-4 w-4" />
-                            <span className="text-xs font-medium">Cancel anytime from Settings</span>
+                            <span className="text-xs font-medium">Cancela en cualquier momento desde Configuración</span>
                         </div>
                         <div className="hidden sm:block h-4 w-px bg-gray-200" />
                         <div className="flex items-center gap-2 text-gray-400">
                             <Zap className="h-4 w-4" />
-                            <span className="text-xs font-medium">No long-term commitment</span>
+                            <span className="text-xs font-medium">Sin compromiso a largo plazo</span>
                         </div>
                     </div>
                 </div>

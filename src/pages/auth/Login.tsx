@@ -35,12 +35,12 @@ export default function LoginForm() {
         password: data.password,
       });
 
-      toast.success("Login successful!");
+      toast.success("¡Inicio de sesión con éxito!");
       navigate("/", { replace: true });
     } catch (error: any) {
       console.error("Login error:", error);
       const errorMessage =
-        error?.message || "Invalid email or password. Please try again.";
+        error?.message || "Correo o contraseña incorrectos. Por favor, inténtalo de nuevo.";
       toast.error(errorMessage);
     } finally {
       setIsSubmitting(false);
@@ -61,10 +61,10 @@ export default function LoginForm() {
           </div>
 
           <h1 className="sm:text-3xl text-2xl font-bold text-gray-900 mb-2">
-            Welcome Back
+            Bienvenido de nuevo
           </h1>
           <p className="text-gray-500 mb-8">
-            Login to manage your sales reports
+            Inicia sesión para gestionar tus informes de ventas
           </p>
 
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-3">
@@ -74,7 +74,7 @@ export default function LoginForm() {
               render={({ field, fieldState }) => (
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Email
+                    Correo Electrónico
                   </label>
                   <div className="relative">
                     <Mail className="absolute left-3 top-3.5 h-5 w-5 text-gray-400" />
@@ -99,7 +99,7 @@ export default function LoginForm() {
               render={({ field, fieldState }) => (
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Password
+                    Contraseña
                   </label>
                   <div className="relative">
                     <Lock className="absolute left-3 top-3.5 h-5 w-5 text-gray-400" />
@@ -136,7 +136,7 @@ export default function LoginForm() {
                 to="/auth/forgot-password"
                 className="text-sm text-brand-primary-600 hover:underline"
               >
-                Forgot password?
+                ¿Has olvidado tu contraseña?
               </Link>
             </div>
 
@@ -149,30 +149,30 @@ export default function LoginForm() {
               {isSubmitting ? (
                 <>
                   <Loader2 className="h-4 w-4 animate-spin mr-2 inline" />
-                  Signing in...
+                  Iniciando sesión...
                 </>
               ) : (
-                "Sign in"
+                "Iniciar sesión"
               )}
             </Button>
           </form>
 
           <CardFooter className="flex justify-center items-center mt-3 px-0">
             <p className="text-center text-gray-600 text-sm">
-              Don't have an account?{" "}
+              ¿No tienes una cuenta?{" "}
               <Link
                 to="/auth/register"
                 className="text-brand-primary-600 font-medium hover:underline"
               >
-                Create an account
+                Crea una cuenta
               </Link>
             </p>
           </CardFooter>
         </div>
 
         <AuthImageSection
-          title="Transform sales conversations into actionable insights"
-          description="iNotus helps your sales team capture field data automatically and turn it into smart reports."
+          title="Transforma las conversaciones de ventas en información útil"
+          description="iNotus ayuda a tu equipo de ventas a capturar datos de campo automáticamente y convertirlos en informes inteligentes."
         />
       </Card>
     </div>

@@ -59,7 +59,7 @@ export default function Salespeople() {
       setProfiles(salesReps);
     } catch (error) {
       console.error("Failed to load salespeople:", error);
-      toast.error("Failed to load salespeople");
+      toast.error("Error al cargar los vendedores");
     } finally {
       setLoading(false);
     }
@@ -76,7 +76,7 @@ export default function Salespeople() {
     try {
       setOperatingId(selectedProfileId);
       await unlinkPhoneNumber(selectedProfileId);
-      toast.success("Phone number unlinked successfully");
+      toast.success("Número de teléfono desvinculado con éxito");
 
       setProfiles((prev) =>
         prev.map((p) =>
@@ -85,7 +85,7 @@ export default function Salespeople() {
       );
     } catch (error) {
       console.error("Failed to unlink phone number:", error);
-      toast.error("Failed to unlink phone number");
+      toast.error("Error al desvincular el número de teléfono");
     } finally {
       setOperatingId(null);
       setSelectedProfileId(null);
@@ -104,11 +104,11 @@ export default function Salespeople() {
     try {
       setOperatingId(profileToDelete.id);
       await deleteProfile(profileToDelete.id);
-      toast.success("Salesperson deleted successfully");
+      toast.success("Vendedor eliminado con éxito");
       setProfiles((prev) => prev.filter((p) => p.id !== profileToDelete.id));
     } catch (error) {
       console.error("Failed to delete salesperson:", error);
-      toast.error("Failed to delete salesperson");
+      toast.error("Error al eliminar al vendedor");
     } finally {
       setOperatingId(null);
       setProfileToDelete(null);
@@ -135,10 +135,10 @@ export default function Salespeople() {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-3xl font-bold text-gray-900 mb-2">
-              Salespeople
+              Vendedores
             </h1>
             <p className="text-gray-600">
-              Manage your sales team members and their profiles
+              Gestiona a los miembros de tu equipo de ventas y sus perfiles
             </p>
           </div>
           <Button
@@ -146,7 +146,7 @@ export default function Salespeople() {
             className="gap-2 bg-gradient-to-r from-brand-primary-600 to-brand-primary-700 hover:from-brand-primary-700 hover:to-brand-primary-800 shadow-md"
           >
             <UserPlus className="h-4 w-4" />
-            Invite Salesperson
+            Invitar Vendedor
           </Button>
         </div>
       </div>
@@ -156,7 +156,7 @@ export default function Salespeople() {
           <Search className="absolute left-3 top-3 h-5 w-5 text-gray-400" />
           <Input
             type="text"
-            placeholder="Search salespeople..."
+            placeholder="Buscar vendedores..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="pl-10 h-11"
@@ -173,12 +173,12 @@ export default function Salespeople() {
           <CardContent className="p-12 text-center">
             <Users className="h-12 w-12 text-gray-400 mx-auto mb-4" />
             <h3 className="text-lg font-semibold text-gray-900 mb-2">
-              No salespeople found
+              No se encontraron vendedores
             </h3>
             <p className="text-gray-600">
               {searchQuery
-                ? "Try adjusting your search terms"
-                : "Invite your first salesperson to get started"}
+                ? "Intenta ajustar tus términos de búsqueda"
+                : "Invita a tu primer vendedor para empezar"}
             </p>
           </CardContent>
         </Card>
@@ -201,10 +201,10 @@ export default function Salespeople() {
                     </div>
                     <div>
                       <CardTitle className="text-base font-bold text-gray-900">
-                        {profile.full_name || "Unnamed Salesperson"}
+                        {profile.full_name || "Vendedor sin nombre"}
                       </CardTitle>
                       <CardDescription className="text-xs">
-                        Joined{" "}
+                        Se unió el{" "}
                         {new Date(profile.created_at).toLocaleDateString()}
                       </CardDescription>
                     </div>
@@ -216,7 +216,7 @@ export default function Salespeople() {
                       size="icon"
                       className="h-8 w-8 text-gray-500 hover:text-brand-primary-600 hover:bg-brand-primary-50 transition-colors"
                       onClick={() => handleEditClick(profile)}
-                      title="Edit Salesperson"
+                      title="Editar Vendedor"
                     >
                       <Pencil className="h-4 w-4" />
                     </Button>
@@ -226,7 +226,7 @@ export default function Salespeople() {
                       className="h-8 w-8 text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors"
                       onClick={() => handleDeleteClick(profile)}
                       disabled={operatingId === profile.id}
-                      title="Delete Salesperson"
+                      title="Eliminar Vendedor"
                     >
                       {operatingId === profile.id ? (
                         <Loader2 className="h-4 w-4 animate-spin text-red-500" />
@@ -251,7 +251,7 @@ export default function Salespeople() {
                           profile.phone_number ? "" : "text-gray-400 italic"
                         }
                       >
-                        {profile.phone_number || "No phone number"}
+                        {profile.phone_number || "Sin número de teléfono"}
                       </span>
                       {profile.phone_number && (
                         <Button
@@ -260,7 +260,7 @@ export default function Salespeople() {
                           className="h-6 w-6 text-red-500 hover:text-red-600 hover:bg-red-50"
                           onClick={() => handleUnlinkClick(profile.id)}
                           disabled={operatingId === profile.id}
-                          title="Unlink Phone Number"
+                          title="Desvincular Número de Teléfono"
                         >
                           {operatingId === profile.id ? (
                             <Loader2 className="h-3 w-3 animate-spin" />
@@ -288,20 +288,20 @@ export default function Salespeople() {
         open={showUnlinkConfirm}
         onOpenChange={setShowUnlinkConfirm}
         onConfirm={handleUnlinkConfirm}
-        title="Unlink Phone Number"
-        description="Are you sure you want to unlink this salesperson's phone number? They will need to re-verify their number to use the system."
-        confirmText="Unlink"
-        cancelText="Cancel"
+        title="Desvincular Número de Teléfono"
+        description="¿Estás seguro de que quieres desvincular el número de teléfono de este vendedor? Deberá volver a verificar su número para usar el sistema."
+        confirmText="Desvincular"
+        cancelText="Cancelar"
         isLoading={!!operatingId}
       />
       <ConfirmationDialog
         open={showDeleteConfirm}
         onOpenChange={setShowDeleteConfirm}
         onConfirm={handleDeleteConfirm}
-        title="Delete Salesperson"
-        description={`Are you sure you want to delete ${profileToDelete?.full_name || "this salesperson"}? This action will permanently remove them from your team. This cannot be undone.`}
-        confirmText="Delete"
-        cancelText="Cancel"
+        title="Eliminar Vendedor"
+        description={`¿Estás seguro de que quieres eliminar a ${profileToDelete?.full_name || "este vendedor"}? Esta acción lo eliminará permanentemente de tu equipo. Esto no se puede deshacer.`}
+        confirmText="Eliminar"
+        cancelText="Cancelar"
         variant="destructive"
         isLoading={!!operatingId}
       />

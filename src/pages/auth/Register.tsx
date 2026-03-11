@@ -42,14 +42,14 @@ export default function Register() {
     try {
       await signupSupabase(data);
       toast.success(
-        "Account created successfully! Please check your email to verify your account."
+        "¡Cuenta creada con éxito! Por favor, revisa tu correo para verificar tu cuenta."
       );
       form.reset();
       navigate("/auth/login");
     } catch (err: any) {
       console.error("Signup error:", err);
       const errorMessage =
-        err?.message || "Failed to create account. Please try again.";
+        err?.message || "Error al crear la cuenta. Por favor, inténtalo de nuevo.";
       toast.error(errorMessage);
     }
   };
@@ -69,10 +69,10 @@ export default function Register() {
           </div>
 
           <h1 className="sm:text-3xl text-2xl font-bold text-gray-900 mb-2">
-            Create your account
+            Crea tu cuenta
           </h1>
           <p className="text-gray-500 mb-8">
-            Sign up to start managing your sales reports
+            Regístrate para empezar a gestionar tus informes de ventas
           </p>
 
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-3">
@@ -83,7 +83,7 @@ export default function Register() {
               render={({ field, fieldState }) => (
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Full Name
+                    Nombre Completo
                   </label>
                   <div className="relative">
                     <User className="absolute left-3 top-3.5 h-5 w-5 text-gray-400" />
@@ -110,7 +110,7 @@ export default function Register() {
               render={({ field, fieldState }) => (
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Company Name
+                    Nombre de la Empresa
                   </label>
                   <div className="relative">
                     <User className="absolute left-3 top-3.5 h-5 w-5 text-gray-400" />
@@ -137,7 +137,7 @@ export default function Register() {
               render={({ field, fieldState }) => (
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Email
+                    Correo Electrónico
                   </label>
                   <div className="relative">
                     <Mail className="absolute left-3 top-3.5 h-5 w-5 text-gray-400" />
@@ -165,7 +165,7 @@ export default function Register() {
               render={({ field, fieldState }) => (
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Password
+                    Contraseña
                   </label>
                   <div className="relative">
                     <Lock className="absolute left-3 top-3.5 h-5 w-5 text-gray-400" />
@@ -205,26 +205,26 @@ export default function Register() {
                hover:from-brand-primary-700 hover:to-brand-primary-800 text-white font-medium rounded-lg shadow-md"
               disabled={isSubmitting}
             >
-              {isSubmitting ? "Creating account..." : "Create account"}
+              {isSubmitting ? "Creando cuenta..." : "Crear cuenta"}
             </Button>
           </form>
 
           <CardFooter className="flex justify-center items-center mt-3 px-0">
             <p className="text-center text-gray-600 text-sm">
-              Already have an account?{" "}
+              ¿Ya tienes una cuenta?{" "}
               <Link
                 to="/auth/login"
                 className="text-brand-primary-600 font-medium hover:underline"
               >
-                Sign in
+                Iniciar sesión
               </Link>
             </p>
           </CardFooter>
         </div>
 
         <AuthImageSection
-          title="Join iNotus and boost your sales insights"
-          description="Automate data collection and generate smart reports effortlessly."
+          title="Únete a iNotus y potencia tus informes de ventas"
+          description="Automatiza la recopilación de datos y genera informes inteligentes sin esfuerzo."
         />
       </Card>
     </div>

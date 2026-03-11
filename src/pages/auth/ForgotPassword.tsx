@@ -28,12 +28,12 @@ export default function ForgotPassword() {
     try {
       await resetPassword(data.email);
       setIsSuccess(true);
-      toast.success("Password reset email sent! Check your inbox.");
+      toast.success("¡Correo de restablecimiento de contraseña enviado! Revisa tu bandeja de entrada.");
       form.reset();
     } catch (error: any) {
       console.error("Password reset error:", error);
       const errorMessage =
-        error?.message || "Failed to send reset email. Please try again.";
+        error?.message || "Error al enviar el correo de restablecimiento. Por favor, inténtalo de nuevo.";
       toast.error(errorMessage);
     } finally {
       setIsSubmitting(false);
@@ -48,15 +48,15 @@ export default function ForgotPassword() {
           className="flex items-center gap-2 text-sm text-gray-600 hover:text-brand-primary-600 mb-6"
         >
           <ArrowLeft size={18} />
-          Back to Login
+          Volver al Inicio de Sesión
         </Link>
 
         <h1 className="sm:text-3xl text-2xl  font-bold text-gray-900 mb-2">
-          Forgot your password?
+          ¿Has olvidado tu contraseña?
         </h1>
         <p className="text-gray-500 mb-6 text-sm">
-          Enter your email address and we’ll send you a link to reset your
-          password.
+          Introduce tu dirección de correo electrónico y te enviaremos un enlace para restablecer tu
+          contraseña.
         </p>
 
         {isSuccess ? (
@@ -64,11 +64,11 @@ export default function ForgotPassword() {
             <div className="flex items-start gap-3">
               <CheckCircle2 className="h-5 w-5 text-green-600 mt-0.5 flex-shrink-0" />
               <div className="text-sm text-green-800">
-                <p className="font-medium mb-1">Email sent successfully!</p>
+                <p className="font-medium mb-1">¡Correo enviado con éxito!</p>
                 <p className="text-green-700">
-                  We've sent a password reset link to your email address. Please
-                  check your inbox and follow the instructions to reset your
-                  password.
+                  Hemos enviado un enlace de restablecimiento de contraseña a tu dirección de correo electrónico. Por
+                  favor, revisa tu bandeja de entrada y sigue las instrucciones para restablecer tu
+                  contraseña.
                 </p>
               </div>
             </div>
@@ -81,7 +81,7 @@ export default function ForgotPassword() {
               render={({ field, fieldState }) => (
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Email address
+                    Dirección de correo electrónico
                   </label>
                   <div className="relative">
                     <Mail className="absolute left-3 top-3.5 h-5 w-5 text-gray-400" />
@@ -109,22 +109,22 @@ export default function ForgotPassword() {
               {isSubmitting ? (
                 <>
                   <Loader2 className="h-4 w-4 animate-spin mr-2 inline" />
-                  Sending...
+                  Enviando...
                 </>
               ) : (
-                "Send Reset Link"
+                "Enviar Enlace de Restablecimiento"
               )}
             </Button>
           </form>
         )}
 
         <p className="text-center text-sm text-gray-500 mt-6">
-          Remember your password?{" "}
+          ¿Recuerdas tu contraseña?{" "}
           <Link
             to="/auth/login"
             className="text-brand-primary-600 font-medium hover:underline"
           >
-            Login
+            Iniciar sesión
           </Link>
         </p>
       </Card>
