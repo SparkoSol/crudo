@@ -2041,7 +2041,7 @@ serve(async (req) => {
                     let action: "confirm" | "retake" | null = null;
                     if (buttonId === "Confirm" || buttonText.includes("confirm") || buttonText.includes("confirmar")) {
                       action = "confirm";
-                    } else if (buttonId === "Retake" || buttonText.includes("retake")) {
+                    } else if (buttonId === "Retake" || buttonText.includes("retake") || buttonText.includes("volver a grabar")) {
                       action = "retake";
                     }
 
