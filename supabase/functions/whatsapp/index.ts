@@ -12,7 +12,7 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type",
 };
 
-const OPENAI_WHISPER_API_URL = "https://api.openai.com/v1/audio/translations";
+const OPENAI_WHISPER_API_URL = "https://api.openai.com/v1/audio/transcriptions";
 const OPENAI_API_URL = "https://api.openai.com/v1/chat/completions";
 
 interface TemplateField {
@@ -31,7 +31,7 @@ interface UserTemplate {
 
 const PLACE_VISITED_FIELD: TemplateField = {
   name: "place_visited",
-  label: "Place Visited",
+  label: "Lugar Visitado",
   type: "text",
   required: true,
 };
@@ -2459,8 +2459,8 @@ serve(async (req) => {
                           document: {
                             id: mediaId,
                             caption:
-                              "Here is your processed transcript report. 📄",
-                            filename: "transcript_report.pdf",
+                              "Aquí tienes el informe de tu transcripción procesada. 📄",
+                            filename: "informe_transcripcion.pdf",
                           },
                         };
 
