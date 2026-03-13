@@ -605,7 +605,18 @@ serve(async (req) => {
                     originalTranscript: string,
                     modificationRequest: string,
                     openaiKey: string,
+                    currentFilledData?: Record<string, any>,
                   ): Promise<string> {
+                    let filledDataContext = "";
+                    if (currentFilledData && Object.keys(currentFilledData).length > 0) {
+                      const fieldEntries = Object.entries(currentFilledData)
+                        .filter(([_, v]) => v !== null && v !== undefined && String(v).trim() !== "")
+                        .map(([k, v]) => `- ${k}: ${v}`)
+                        .join("\n");
+                      if (fieldEntries) {
+                        filledDataContext = `\n\nDatos estructurados actuales del informe:\n${fieldEntries}\n`;
+                      }
+                    }
                     const resp = await fetch(OPENAI_API_URL, {
                       method: "POST",
                       headers: {
@@ -619,12 +630,16 @@ serve(async (req) => {
                             role: "system",
                             content:
                               "Eres un asistente que actualiza informes de visitas de ventas basándose en solicitudes de modificación. " +
+                              "El informe tiene tanto una transcripción de texto como datos estructurados (como place_visited, name, etc.). " +
+                              "Si la modificación afecta algún campo estructurado, asegúrate de reflejar esos cambios en el texto de la transcripción. " +
+                              "Por ejemplo, si se pide cambiar el lugar visitado, actualiza la mención del lugar en el texto. " +
                               "Devuelve ÚNICAMENTE el texto del informe actualizado, preservando el formato y la estructura original tanto como sea posible.",
                           },
                           {
                             role: "user",
                             content:
                               `Transcripción del informe original:\n${originalTranscript}\n\n` +
+                              filledDataContext +
                               `Solicitud de modificación: ${modificationRequest}\n\n` +
                               "Aplica la modificación y devuelve únicamente el texto del informe actualizado.",
                           },
@@ -774,7 +789,7 @@ serve(async (req) => {
                             type: "text",
                             text: { body: "⏳ Procesando tu modificación..." },
                           });
-                          const updatedText = await applyModificationWithGPT(originalText, textBody, openaiApiKey);
+                          const updatedText = await applyModificationWithGPT(originalText, textBody, openaiApiKey, targetReport.filled_data);
 
                           let updatedFilledData = targetReport.filled_data || {};
                           let tplFieldsForDisplay: TemplateField[] = [];
@@ -787,7 +802,13 @@ serve(async (req) => {
                             if (tplForExtract?.fields && (tplForExtract.fields as any[]).length > 0) {
                               tplFieldsForDisplay = ensurePlaceVisitedField(tplForExtract.fields as TemplateField[]);
                               const newExtracted = await extractFieldsWithGPT(updatedText, tplFieldsForDisplay, openaiApiKey);
-                              if (newExtracted) updatedFilledData = newExtracted;
+                              if (newExtracted) {
+                                for (const [key, value] of Object.entries(newExtracted)) {
+                                  if (value !== null && value !== undefined && String(value).trim() !== "") {
+                                    updatedFilledData[key] = value;
+                                  }
+                                }
+                              }
                             }
                           }
 
@@ -1251,7 +1272,7 @@ serve(async (req) => {
 
                           if (targetReport) {
                             const originalText = targetReport.modified_transcript || targetReport.transcript || "";
-                            const updatedText = await applyModificationWithGPT(originalText, transcript, openaiApiKey);
+                            const updatedText = await applyModificationWithGPT(originalText, transcript, openaiApiKey, targetReport.filled_data);
 
                             // Re-extract filled_data from the updated transcript so report fields are also updated
                             let updatedFilledData = targetReport.filled_data || {};
@@ -1265,7 +1286,14 @@ serve(async (req) => {
                               if (tplForExtract?.fields && (tplForExtract.fields as any[]).length > 0) {
                                 voiceTplFields = ensurePlaceVisitedField(tplForExtract.fields as TemplateField[]);
                                 const newExtracted = await extractFieldsWithGPT(updatedText, voiceTplFields, openaiApiKey);
-                                if (newExtracted) updatedFilledData = newExtracted;
+                                if (newExtracted) {
+                                  // Smart merge: only overwrite fields where GPT extracted a non-null, non-empty value
+                                  for (const [key, value] of Object.entries(newExtracted)) {
+                                    if (value !== null && value !== undefined && String(value).trim() !== "") {
+                                      updatedFilledData[key] = value;
+                                    }
+                                  }
+                                }
                               }
                             }
 
