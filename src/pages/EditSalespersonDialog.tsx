@@ -50,7 +50,7 @@ export function EditSalespersonDialog({
     phone_number: "",
     whatsapp_number: "",
     status: "active" as "active" | "inactive",
-    template_id: "",
+    template_id: undefined as string | undefined,
   });
 
   // Load templates dynamically
@@ -80,7 +80,7 @@ export function EditSalespersonDialog({
         phone_number: salesperson.phone_number || "",
         whatsapp_number: salesperson.whatsapp_number || "",
         status: salesperson.status || "active",
-        template_id: salesperson.template_id || "",
+        template_id: salesperson.template_id || undefined,
       });
     }
   }, [salesperson]);
@@ -118,8 +118,8 @@ export function EditSalespersonDialog({
         .from("profiles")
         .update({
           full_name: form.full_name,
-          phone_number: form.phone_number,
-          template_id: form.template_id,
+          phone_number: form.phone_number || null,
+          template_id: form.template_id || null,
           is_active: form.status === "active",
           updated_at: new Date().toISOString(),
         })

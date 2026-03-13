@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Card,
   CardContent,
@@ -9,7 +9,14 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { useForm } from "react-hook-form";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import {
@@ -19,11 +26,15 @@ import {
   Loader2,
   CheckCircle2,
   AlertCircle,
+  User,
+  Phone,
+  FileText,
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { inviteSalesRepresentative } from "@/services/inviteServices";
 import toast from "react-hot-toast";
 import { cn } from "@/lib/utils";
+import { supabase } from "@/lib/supabase/client";
 
 const inviteSchema = z.object({
   email: z
@@ -31,6 +42,21 @@ const inviteSchema = z.object({
     .trim()
     .nonempty("Se requiere correo electrónico")
     .email("Dirección de correo electrónico inválida"),
+  full_name: z
+    .string()
+    .trim()
+    .nonempty("Se requiere el nombre completo"),
+  phone_number: z
+    .string()
+    .trim()
+    .optional()
+    .refine(
+      (val) => !val || /^\+[1-9]\d{1,14}$/.test(val),
+      "Formato de número de teléfono no válido (ej: +34612345678)"
+    ),
+  template_id: z
+    .string()
+    .nonempty("Se requiere seleccionar una plantilla"),
 });
 
 type InviteFormValues = z.infer<typeof inviteSchema>;
@@ -39,18 +65,43 @@ export default function Invite() {
   const { user, profile } = useAuth();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [invitedEmail, setInvitedEmail] = useState<string | null>(null);
+  const [templates, setTemplates] = useState<{ id: string; name: string }[]>(
+    []
+  );
 
   const {
     register,
     handleSubmit,
+    control,
     formState: { errors },
     reset,
   } = useForm<InviteFormValues>({
     resolver: zodResolver(inviteSchema),
     defaultValues: {
       email: "",
+      full_name: "",
+      phone_number: "",
+      template_id: "",
     },
   });
+
+  // Load templates for the manager
+  useEffect(() => {
+    const loadTemplates = async () => {
+      if (!profile || profile.role !== "manager") return;
+
+      const { data, error } = await supabase
+        .from("user_templates")
+        .select("id, name")
+        .eq("user_id", profile.id);
+
+      if (!error && data) {
+        setTemplates(data);
+      }
+    };
+
+    loadTemplates();
+  }, [profile]);
 
   const onSubmit = async (data: InviteFormValues) => {
     if (!user || !profile) {
@@ -67,6 +118,9 @@ export default function Invite() {
     try {
       await inviteSalesRepresentative({
         email: data.email,
+        fullName: data.full_name,
+        phoneNumber: data.phone_number || null,
+        templateId: data.template_id,
         managerId: profile.id,
         managerFullName: profile.full_name,
         managerCompanyName: profile.company_name || null,
@@ -108,17 +162,46 @@ export default function Invite() {
               <div>
                 <CardTitle className="text-xl">Enviar Invitación</CardTitle>
                 <CardDescription className="mt-1">
-                  Introduce la dirección de correo electrónico del representante de ventas que
-                  quieres invitar
+                  Completa los datos del representante de ventas que quieres
+                  invitar
                 </CardDescription>
               </div>
             </div>
           </CardHeader>
           <CardContent>
-            <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+            <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
+              {/* Full Name */}
+              <div className="space-y-2">
+                <Label htmlFor="full_name" className="text-sm font-medium">
+                  Nombre Completo
+                </Label>
+                <div className="relative">
+                  <User className="absolute left-3 top-3 h-5 w-5 text-gray-400" />
+                  <Input
+                    id="full_name"
+                    type="text"
+                    {...register("full_name")}
+                    className={cn(
+                      "pl-10 h-11",
+                      errors.full_name &&
+                        "border-red-500 focus:border-red-500 focus:ring-red-500"
+                    )}
+                    placeholder="Juan Pérez"
+                    disabled={isSubmitting}
+                  />
+                </div>
+                {errors.full_name && (
+                  <p className="text-sm text-red-500 mt-1 flex items-center gap-1">
+                    <AlertCircle className="h-4 w-4" />
+                    {errors.full_name.message}
+                  </p>
+                )}
+              </div>
+
+              {/* Email */}
               <div className="space-y-2">
                 <Label htmlFor="email" className="text-sm font-medium">
-                  Dirección de Correo Electrónico
+                  Correo Electrónico
                 </Label>
                 <div className="relative">
                   <Mail className="absolute left-3 top-3 h-5 w-5 text-gray-400" />
@@ -129,9 +212,9 @@ export default function Invite() {
                     className={cn(
                       "pl-10 h-11",
                       errors.email &&
-                      "border-red-500 focus:border-red-500 focus:ring-red-500"
+                        "border-red-500 focus:border-red-500 focus:ring-red-500"
                     )}
-                    placeholder="sales.representative@example.com"
+                    placeholder="vendedor@ejemplo.com"
                     disabled={isSubmitting}
                   />
                 </div>
@@ -139,6 +222,89 @@ export default function Invite() {
                   <p className="text-sm text-red-500 mt-1 flex items-center gap-1">
                     <AlertCircle className="h-4 w-4" />
                     {errors.email.message}
+                  </p>
+                )}
+              </div>
+
+              {/* Phone Number */}
+              <div className="space-y-2">
+                <Label htmlFor="phone_number" className="text-sm font-medium">
+                  Número de Teléfono{" "}
+                  <span className="text-gray-400 font-normal">(opcional)</span>
+                </Label>
+                <div className="relative">
+                  <Phone className="absolute left-3 top-3 h-5 w-5 text-gray-400" />
+                  <Input
+                    id="phone_number"
+                    type="tel"
+                    {...register("phone_number")}
+                    className={cn(
+                      "pl-10 h-11",
+                      errors.phone_number &&
+                        "border-red-500 focus:border-red-500 focus:ring-red-500"
+                    )}
+                    placeholder="+34612345678"
+                    disabled={isSubmitting}
+                  />
+                </div>
+                {errors.phone_number && (
+                  <p className="text-sm text-red-500 mt-1 flex items-center gap-1">
+                    <AlertCircle className="h-4 w-4" />
+                    {errors.phone_number.message}
+                  </p>
+                )}
+              </div>
+
+              {/* Template Selection */}
+              <div className="space-y-2">
+                <Label htmlFor="template_id" className="text-sm font-medium">
+                  Seleccionar Plantilla
+                </Label>
+                <div className="relative">
+                  <FileText className="absolute left-3 top-3 h-5 w-5 text-gray-400 z-10 pointer-events-none" />
+                  <Controller
+                    name="template_id"
+                    control={control}
+                    render={({ field }) => (
+                      <Select
+                        value={field.value}
+                        onValueChange={field.onChange}
+                        disabled={isSubmitting}
+                      >
+                        <SelectTrigger
+                          id="template_id"
+                          className={cn(
+                            "pl-10 h-11",
+                            errors.template_id &&
+                              "border-red-500 focus:border-red-500 focus:ring-red-500"
+                          )}
+                        >
+                          <SelectValue placeholder="Seleccionar plantilla" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {templates.length === 0 ? (
+                            <div className="py-3 px-2 text-sm text-gray-500 text-center">
+                              No hay plantillas disponibles
+                            </div>
+                          ) : (
+                            templates.map((template) => (
+                              <SelectItem
+                                key={template.id}
+                                value={template.id}
+                              >
+                                {template.name}
+                              </SelectItem>
+                            ))
+                          )}
+                        </SelectContent>
+                      </Select>
+                    )}
+                  />
+                </div>
+                {errors.template_id && (
+                  <p className="text-sm text-red-500 mt-1 flex items-center gap-1">
+                    <AlertCircle className="h-4 w-4" />
+                    {errors.template_id.message}
                   </p>
                 )}
               </div>

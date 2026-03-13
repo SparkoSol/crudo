@@ -32,14 +32,6 @@ const generatePassword = (): string => {
     .join("");
 };
 
-const generateSalesRepName = (
-  managerFullName: string | null,
-  managerCompanyName?: string | null
-): string => {
-  const baseName = managerCompanyName || managerFullName || "Company";
-  return `${baseName} - Sales Representative`;
-};
-
 const createAuthUser = async (
   email: string,
   password: string
@@ -66,7 +58,9 @@ const createProfile = async (
   email: string,
   managerId: string,
   fullName: string,
-  companyName: string | null
+  companyName: string | null,
+  phoneNumber: string | null,
+  templateId: string | null
 ): Promise<void> => {
   const { error } = await supabaseAdmin.from("profiles").insert({
     id: userId,
@@ -75,6 +69,8 @@ const createProfile = async (
     role: "sales_representative",
     manager_id: managerId,
     company_name: companyName,
+    phone_number: phoneNumber,
+    template_id: templateId,
   });
 
   if (error) {
@@ -90,17 +86,14 @@ export const inviteSalesRepresentative = async (
 
     const { userId } = await createAuthUser(data.email, password);
 
-    const fullName = generateSalesRepName(
-      data.managerFullName,
-      data.managerCompanyName
-    );
-
     await createProfile(
       userId,
       data.email,
       data.managerId,
-      fullName,
-      data.managerCompanyName || null
+      data.fullName,
+      data.managerCompanyName || null,
+      data.phoneNumber || null,
+      data.templateId || null
     );
 
     try {
@@ -112,7 +105,7 @@ export const inviteSalesRepresentative = async (
           password: password,
         },
         data.email,
-        fullName
+        data.fullName
       );
       console.log("Invitation email sent successfully");
     } catch (emailError) {
