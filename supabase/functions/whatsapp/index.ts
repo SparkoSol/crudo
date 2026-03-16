@@ -110,6 +110,18 @@ function normalizePhoneNumber(phoneNumber: string): string {
   return phoneNumber.startsWith("+") ? phoneNumber : `+${phoneNumber}`;
 }
 
+/**
+ * Helper to check if a value should be considered "empty" in our report context.
+ * Returns true if the value is null, undefined, an empty string, an empty array, 
+ * or the string "N/A" (case-insensitive).
+ */
+function isValEmpty(v: any): boolean {
+  if (v === null || v === undefined) return true;
+  if (Array.isArray(v)) return v.length === 0;
+  const s = String(v).trim();
+  return s === "" || s.toLowerCase() === "n/a" || s === "[]";
+}
+
 // Helper function to extract fields from transcript using GPT
 async function extractFieldsWithGPT(
   transcript: string,
@@ -124,7 +136,7 @@ async function extractFieldsWithGPT(
       )
       .join("\n");
 
-    const systemPrompt = `Eres un asistente útil que extrae datos estructurados de transcripciones de voz.
+    const systemPrompt = `Eres un asistente útil que extrae datos estructurados de transcripciones de voz de informes de visitas comerciales/ventas.
 Dado un texto de transcripción y una lista de campos de plantilla, extrae la información relevante y completa los campos de la plantilla.
 Devuelve ÚNICAMENTE un objeto JSON válido con los nombres de los campos como claves y los valores extraídos como valores.
 
@@ -136,6 +148,13 @@ Para campos marcados como "optional" (opcional):
 - Extrae el valor si está presente.
 - Devuelve null si no está presente o no está claro.
 
+ADEMÁS de los campos de la plantilla, SIEMPRE debes extraer estos 3 campos adicionales del contexto de la transcripción:
+- "novedades": Un array de strings. Novedades, actualizaciones o noticias mencionadas durante la visita (productos nuevos mostrados, eventos, cambios en el negocio del cliente, etc.). Si no hay novedades claras, devuelve un array vacío []. NO uses "N/A".
+- "objeciones": Un array de strings. Objeciones, quejas, preocupaciones o problemas que el cliente expresó (precio alto, competencia más barata, insatisfacción, etc.). Si no hay objeciones claras, devuelve un array vacío []. NO uses "N/A".
+- "sugerencias": Un array de strings. Sugerencias de acción o consejos para el siguiente paso. Incluye cualquier consejo que el vendedor mencione explícitamente en la transcripción. Si el vendedor no da consejos explícitos, genera 1-2 sugerencias breves y accionables basadas en las novedades y objeciones detectadas. Si no hay contexto suficiente, devuelve un array vacío []. NO uses "N/A".
+
+IMPORTANTE: Bajo ninguna circunstancia devuelvas "N/A" como cadena de texto. Si un campo no tiene datos, usa null o un array vacío según corresponda.
+
 Sé preciso y solo extrae información que esté claramente expresada en la transcripción.`;
 
     const userPrompt = `Transcripción:
@@ -144,7 +163,7 @@ ${transcript}
 Campos de la Plantilla:
 ${fieldsDescription}
 
-Extrae y completa todos los campos de la plantilla a partir de la transcripción. Devuelve un objeto JSON con los nombres de los campos como claves.`;
+Extrae y completa todos los campos de la plantilla a partir de la transcripción, e incluye siempre los campos "novedades", "objeciones" y "sugerencias". Devuelve un objeto JSON con los nombres de los campos como claves.`;
 
     const gptResponse = await fetch(OPENAI_API_URL, {
       method: "POST",
@@ -249,16 +268,32 @@ function mergeFieldData(
   return { ...gptData, ...collectedData };
 }
 
-// Helper function to build confirmation message
+// Helper function to build confirmation message with rich sectioned format
 function buildConfirmationMessage(
   filledData: Record<string, any>,
   templateFields: TemplateField[],
 ): string {
-  let message = "¡Perfecto! He recopilado toda la información. Aquí está tu informe:\n\n";
+  // Build the summary line using place_visited
+  const placeVisited = filledData.place_visited || filledData.Place_visited || "";
+  let message = "";
+  if (placeVisited && !isValEmpty(placeVisited)) {
+    message += `Resumen de visita – ${placeVisited}\n\n`;
+  }
 
+  // Extract the smart sections (filtering out any N/A/empty items)
+  const filterArr = (arr: any) => (Array.isArray(arr) ? arr.filter(it => !isValEmpty(it)) : []);
+  const novedades = filterArr(filledData.novedades);
+  const objeciones = filterArr(filledData.objeciones);
+  const sugerencias = filterArr(filledData.sugerencias);
+
+  // Fields to skip in the general section (shown separately)
+  const skipFields = new Set(["place_visited", "novedades", "objeciones", "sugerencias"]);
+
+  // Show remaining template fields (if any, excluding the smart sections and place_visited)
+  const remainingFields: string[] = [];
   for (const field of templateFields) {
     const name = field.name || (field as any).key || (field as any).id || "";
-    if (!name) continue;
+    if (!name || skipFields.has(name)) continue;
 
     let value = filledData[name];
     if (value === undefined || value === null) {
@@ -266,15 +301,57 @@ function buildConfirmationMessage(
       value = filledData[capitalizedKey];
     }
 
-    const displayValue = value !== null && value !== undefined && value !== ""
-      ? String(value)
-      : "(no proporcionado)";
-
-    const label = field.label || (field as any).title || name || "Campo";
-    message += `${label}: ${displayValue}\n`;
+    if (!isValEmpty(value)) {
+      const label = field.label || (field as any).title || name || "Campo";
+      remainingFields.push(`• *${label}*: ${String(value)}`);
+    }
   }
 
-  message += "\n¿Es correcto?";
+  if (remainingFields.length > 0) {
+    message += remainingFields.join("\n") + "\n\n";
+  }
+
+  // Novedades section
+  if (novedades.length > 0) {
+    message += "🆕 *Novedades*\n";
+    for (const item of novedades) {
+      message += `• ${item}\n`;
+    }
+    message += "\n";
+  }
+
+  // Objeciones section
+  if (objeciones.length > 0) {
+    message += "⚠️ *Objeciones*\n";
+    for (const item of objeciones) {
+      message += `• ${item}\n`;
+    }
+    message += "\n";
+  }
+
+  // Sugerencias section
+  if (sugerencias.length > 0) {
+    message += "💡 *Sugerencias rápidas*\n";
+    for (const item of sugerencias) {
+      message += `• ${item}\n`;
+    }
+    message += "\n";
+  }
+
+  // If everything is empty (rare), show at least one identifier or fallback
+  if (!message.trim()) {
+    message = "Aquí tienes los detalles recopilados:\n\n";
+    for (const field of templateFields) {
+      const name = field.name || "";
+      if (name && !isValEmpty(filledData[name])) {
+        const label = field.label || name;
+        message += `• *${label}*: ${filledData[name]}\n`;
+      }
+    }
+    message += "\n";
+  }
+
+  message += "¿Está correcta esta info o quieres que ajuste algo?";
   return message;
 }
 
@@ -581,7 +658,7 @@ serve(async (req) => {
 
                   async function sendModifiedReportTemplate(to: string, reportText: string, isCreation: boolean = false): Promise<void> {
                     const modTemplateName = Deno.env.get("WHATSAPP_MODIFIED_REPORT_TEMPLATE_NAME") || "sales_modified_report";
-                    const headerText = isCreation ? "✨ *NUEVO INFORME CREADO*\n\n" : "📝 *INFORME MODIFICADO*\n\n";
+                    const headerText = isCreation ? "📝 *REPORTE CREADO*\n\n" : "📝 *REPORTE MODIFICADO*\n\n";
                     await sendWAMessage({
                       messaging_product: "whatsapp",
                       recipient_type: "individual",
@@ -610,7 +687,7 @@ serve(async (req) => {
                     let filledDataContext = "";
                     if (currentFilledData && Object.keys(currentFilledData).length > 0) {
                       const fieldEntries = Object.entries(currentFilledData)
-                        .filter(([_, v]) => v !== null && v !== undefined && String(v).trim() !== "")
+                        .filter(([_, v]) => !isValEmpty(v))
                         .map(([k, v]) => `- ${k}: ${v}`)
                         .join("\n");
                       if (fieldEntries) {
@@ -641,7 +718,7 @@ serve(async (req) => {
                               `Transcripción del informe original:\n${originalTranscript}\n\n` +
                               filledDataContext +
                               `Solicitud de modificación: ${modificationRequest}\n\n` +
-                              "Aplica la modificación y devuelve únicamente el texto del informe actualizado.",
+                              "Aplica la modificación y devuelve únicamente el texto del informe actualizado. NO uses 'N/A' para referirte a campos sin información; simplemente omite el dato o devuelve null.",
                           },
                         ],
                         temperature: 0.3,
@@ -654,22 +731,49 @@ serve(async (req) => {
 
                   function buildReportDisplay(record: any): string {
                     const date = new Date(record.created_at).toLocaleDateString();
-                    const transcript = record.modified_transcript || record.transcript || "";
                     const filledData = record.filled_data || {};
                     const placeVisited = filledData.place_visited || "";
-                    let text = placeVisited
-                      ? `📋 *Informe – ${placeVisited}* (${date})\n\n`
-                      : `📋 *Informe – ${date}*\n\n`;
-                    if (Object.keys(filledData).length > 0) {
-                      for (const [k, v] of Object.entries(filledData)) {
-                        if (v) text += `• *${k}*: ${v}\n`;
-                      }
+                    let text = (placeVisited && !isValEmpty(placeVisited))
+                      ? `📋 *Reporte – ${placeVisited}* (${date})\n\n`
+                      : `📋 *Reporte – ${date}*\n\n`;
+
+                    // Fields to skip in the general display
+                    const skipFields = new Set(["place_visited", "novedades", "objeciones", "sugerencias"]);
+
+                    // Show remaining fields
+                    const remainingEntries: string[] = [];
+                    for (const [k, v] of Object.entries(filledData)) {
+                      if (skipFields.has(k) || isValEmpty(v)) continue;
+                      remainingEntries.push(`• *${k}*: ${v}`);
+                    }
+                    if (remainingEntries.length > 0) {
+                      text += remainingEntries.join("\n") + "\n\n";
+                    }
+
+                    // Sections
+                    const filterArr = (arr: any) => (Array.isArray(arr) ? arr.filter(it => !isValEmpty(it)) : []);
+                    const novedades = filterArr(filledData.novedades);
+                    const objeciones = filterArr(filledData.objeciones);
+                    const sugerencias = filterArr(filledData.sugerencias);
+
+                    if (novedades.length > 0) {
+                      text += "🆕 *Novedades*\n";
+                      for (const item of novedades) { text += `• ${item}\n`; }
                       text += "\n";
                     }
-                    if (transcript && transcript.trim().length > 0) {
-                      const truncated = transcript.length > 800 ? transcript.substring(0, 800) + "..." : transcript;
-                      text += truncated;
+
+                    if (objeciones.length > 0) {
+                      text += "⚠️ *Objeciones*\n";
+                      for (const item of objeciones) { text += `• ${item}\n`; }
+                      text += "\n";
                     }
+
+                    if (sugerencias.length > 0) {
+                      text += "💡 *Sugerencias rápidas*\n";
+                      for (const item of sugerencias) { text += `• ${item}\n`; }
+                      text += "\n";
+                    }
+
                     return text.trim();
                   }
 
@@ -1887,7 +1991,9 @@ serve(async (req) => {
 
                             pageM.drawRectangle({ x: 0, y: pageHeight - 100, width: pageWidth, height: 100, color: rgb(0.1, 0.1, 0.1) });
                             yPositionM = pageHeight - 50;
-                            const titleStrM = filledDataMod.place_visited ? `${filledDataMod.place_visited} - Informe (Actualizado)` : "Informe de Visita de Ventas (Actualizado)";
+                            const titleStrM = (filledDataMod.place_visited && !isValEmpty(filledDataMod.place_visited)) 
+                              ? `${filledDataMod.place_visited} - Informe (Actualizado)` 
+                              : "Informe de Visita (Actualizado)";
                             addTextM(titleStrM, margin, yPositionM, 22, boldFontM, undefined, rgb(1, 1, 1));
                             yPositionM -= 35;
                             addTextM(`Generado: ${new Date().toLocaleString()}`, margin, yPositionM, 10, fontM, undefined, rgb(0.8, 0.8, 0.8));
@@ -1911,15 +2017,16 @@ serve(async (req) => {
                             yPositionM -= sectionSpacing;
 
                             // Filled data
-                            if (Object.keys(filledDataMod).length > 0) {
+                            const entriesMod = Object.entries(filledDataMod).filter(([_, v]) => !isValEmpty(v));
+                            if (entriesMod.length > 0) {
                               yPositionM = addTextM("Detalles del Informe", margin, yPositionM, 14, boldFontM);
                               pageM.drawLine({ start: { x: margin, y: yPositionM + 5 }, end: { x: pageWidth - margin, y: yPositionM + 5 }, thickness: 1, color: rgb(0.8, 0.8, 0.8) });
                               yPositionM -= 15;
                               const fieldMap: Record<string, string> = {};
                               if (tplM?.fields) { for (const f of (tplM.fields as any[])) { if (f.name) fieldMap[f.name] = f.label || f.name; } }
-                              for (const [k, v] of Object.entries(filledDataMod)) {
+                              for (const [k, v] of entriesMod) {
                                 const lbl = fieldMap[k] || k.charAt(0).toUpperCase() + k.slice(1).replace(/_/g, " ");
-                                const valStr = v !== null && v !== undefined && String(v).trim() !== "" ? String(v) : "N/A";
+                                const valStr = Array.isArray(v) ? v.join(", ") : String(v).trim();
                                 yPositionM = addTextM(`${lbl}:`, margin, yPositionM, 11, boldFontM);
                                 yPositionM = addTextM(valStr, margin + 20, yPositionM, 10, fontM, pageWidth - 2 * margin - 20);
                                 yPositionM -= 10;
@@ -2313,7 +2420,9 @@ serve(async (req) => {
                         });
 
                         yPosition = pageHeight - 50;
-                        const titleStrNew = typeof filledData === 'object' && filledData.place_visited ? `${filledData.place_visited} - Informe` : "Informe de Visita de Ventas";
+                        const titleStrNew = (typeof filledData === 'object' && filledData.place_visited && !isValEmpty(filledData.place_visited))
+                          ? `${filledData.place_visited} - Informe`
+                          : "Informe de Visita Comercial";
                         addText(
                           titleStrNew,
                           margin,
@@ -2369,7 +2478,8 @@ serve(async (req) => {
                         yPosition -= sectionSpacing;
 
                         // Add filled data section
-                        if (filledData && Object.keys(filledData).length > 0) {
+                        const activeEntries = Object.entries(filledData).filter(([_, v]) => !isValEmpty(v));
+                        if (activeEntries.length > 0) {
                           yPosition = addText(
                             "Detalles del Informe",
                             margin,
@@ -2395,14 +2505,11 @@ serve(async (req) => {
                             }
                           }
 
-                          for (const [key, value] of Object.entries(filledData)) {
+                          for (const [key, value] of activeEntries) {
                             const label = fieldLabelMap[key] ||
                               key.charAt(0).toUpperCase() +
                               key.slice(1).replace(/_/g, " ");
-                            const valStr = value !== null &&
-                              value !== undefined && String(value).trim() !== ""
-                              ? String(value)
-                              : "N/A";
+                            const valStr = Array.isArray(value) ? value.join(", ") : String(value).trim();
 
                             yPosition = addText(
                               `${label}:`,
