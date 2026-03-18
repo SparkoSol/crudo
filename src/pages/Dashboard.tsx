@@ -307,11 +307,12 @@ export default function Dashboard() {
                       <div>
                           {(() => {
                             const placeVisited = transcript.filled_data ? String((transcript.filled_data as Record<string, string>).place_visited || '') : '';
+                            const displayPlace = placeVisited ? placeVisited.charAt(0).toUpperCase() + placeVisited.slice(1) : '';
                             const templateName = transcript.user_templates?.name || 'Untitled Template';
                             return (
                               <>
                                 <h3 className="font-bold text-gray-900 text-xl group-hover:text-brand-primary-600 transition-colors">
-                                  {placeVisited || templateName}
+                                  {displayPlace || templateName}
                                 </h3>
                                 <div className="flex items-center gap-1.5 text-sm text-gray-500 font-medium mt-1">
                                   <FileText className="w-3.5 h-3.5" />

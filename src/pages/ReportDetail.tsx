@@ -179,13 +179,21 @@ export default function ReportDetail() {
         return null; // Should redirect in useEffect
     }
 
+    const filledData = transcript.filled_data || {};
     const title = transcript.user_templates?.name || 'Plantilla sin título';
     const authorName = transcript.profiles?.full_name || 'Vendedor Desconocido';
     const phoneNumber = transcript.profiles?.phone_number || 'N/A';
     const formattedDate = format(new Date(transcript.created_at), "EEEE, d 'de' MMMM 'de' yyyy, HH:mm", { locale: es });
-    const fields = transcript.user_templates?.fields || [];
-    const filledData = transcript.filled_data || {};
+    const fields: any[] = transcript.user_templates?.fields || [];
     const isUpdated = !!(transcript.modified_transcript);
+
+    const placeVisited: string = String(filledData['place_visited'] || filledData['Place_visited'] || '');
+    const placeVisitedDisplay = placeVisited ? placeVisited.charAt(0).toUpperCase() + placeVisited.slice(1) : '';
+    const filledFields = fields.filter((f) => {
+        const val = filledData[f.name];
+        return val !== null && val !== undefined && String(val).trim() !== '' && String(val).trim().toLowerCase() !== 'n/a';
+    });
+    const hasAnything = !!placeVisited || filledFields.length > 0;
 
     return (
         <div className="min-h-screen bg-gray-50/50">
@@ -234,19 +242,37 @@ export default function ReportDetail() {
                                 </CardTitle>
                             </CardHeader>
                             <CardContent className="p-6">
-                                <div className="space-y-8">
-                                    {fields.map((field) => (
+                                <div className="space-y-6">
+                                    {/* Client / place row */}
+                                    {placeVisited && (
+                                        <div className="flex items-center gap-3 pb-5 border-b border-gray-100">
+                                            <div className="w-9 h-9 rounded-full bg-brand-primary-50 flex items-center justify-center flex-shrink-0">
+                                                <span className="text-brand-primary-600 text-base">📍</span>
+                                            </div>
+                                            <div>
+                                                <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-0.5">Cliente visitado</p>
+                                                <p className="text-gray-800 font-semibold text-[15px]">{placeVisitedDisplay}</p>
+                                            </div>
+                                        </div>
+                                    )}
+                                    {/* Template fields that have a real value */}
+                                    {filledFields.map((field) => (
                                         <div key={field.name}>
-                                            <h3 className="text-sm font-semibold text-gray-700 mb-2 uppercase tracking-wide">
+                                            <h3 className="text-xs font-semibold text-gray-400 mb-1 uppercase tracking-wider">
                                                 {field.label}
                                             </h3>
-                                            <p className="text-gray-600 text-[15px] leading-relaxed whitespace-pre-wrap">
-                                                {String(filledData[field.name] || 'N/A')}
+                                            <p className="text-gray-700 text-[15px] leading-relaxed whitespace-pre-wrap">
+                                                {String(filledData[field.name])}
                                             </p>
                                         </div>
                                     ))}
-                                    {fields.length === 0 && (
-                                        <p className="text-gray-500 italic">No hay campos definidos para esta plantilla.</p>
+                                    {/* Empty state */}
+                                    {!hasAnything && (
+                                        <div className="flex flex-col items-center py-6 text-center">
+                                            <span className="text-3xl mb-2">📋</span>
+                                            <p className="text-gray-500 text-sm">No se extrajeron datos estructurados de este informe.</p>
+                                            <p className="text-gray-400 text-xs mt-1">Consulta la transcripción de audio para ver el contenido completo.</p>
+                                        </div>
                                     )}
                                 </div>
                             </CardContent>

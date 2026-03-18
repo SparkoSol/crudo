@@ -112,7 +112,7 @@ function normalizePhoneNumber(phoneNumber: string): string {
 
 /**
  * Helper to check if a value should be considered "empty" in our report context.
- * Returns true if the value is null, undefined, an empty string, an empty array, 
+ * Returns true if the value is null, undefined, an empty string, an empty array,
  * or the string "N/A" (case-insensitive).
  */
 function isValEmpty(v: any): boolean {
@@ -136,26 +136,25 @@ async function extractFieldsWithGPT(
       )
       .join("\n");
 
-    const systemPrompt = `Eres un asistente útil que extrae datos estructurados de transcripciones de voz de informes de visitas comerciales/ventas.
+    const systemPrompt = `Eres un asistente especializado en extraer datos estructurados de transcripciones de voz de informes de visitas comerciales/ventas.
 Dado un texto de transcripción y una lista de campos de plantilla, extrae la información relevante y completa los campos de la plantilla.
 Devuelve ÚNICAMENTE un objeto JSON válido con los nombres de los campos como claves y los valores extraídos como valores.
 
-IMPORTANTE para campos marcados como "required" (obligatorio):
-- Si la información está claramente presente en la transcripción, extráela con precisión.
-- Si la información NO está en la transcripción o no está clara, devuelve null para ese campo.
+REGLAS CRÍTICAS DE EXTRACCIÓN:
+1. Extrae ÚNICAMENTE lo que está explícitamente mencionado en la transcripción. NO inventes, NO inferas, NO combines información.
+2. Reproduce el contenido fielmente: si el vendedor dice que un producto "está sin stock" o "está pendiente", escríbelo exactamente así. NO lo reformules como una conclusión diferente.
+3. Si la transcripción dice que hay falta de disponibilidad temporal (ej: "llevan 2 semanas sin género"), escríbelo como falta de stock temporal, NO como que el producto no se venderá más.
+4. Para campos marcados como "required" (obligatorio): si la información NO está en la transcripción, devuelve null.
+5. Para campos marcados como "optional" (opcional): devuelve null si no está presente.
+6. NUNCA uses "N/A" como cadena de texto. Usa null o array vacío [] según corresponda.
 
-Para campos marcados como "optional" (opcional):
-- Extrae el valor si está presente.
-- Devuelve null si no está presente o no está claro.
-
-ADEMÁS de los campos de la plantilla, SIEMPRE debes extraer estos 3 campos adicionales del contexto de la transcripción:
-- "novedades": Un array de strings. Novedades, actualizaciones o noticias mencionadas durante la visita (productos nuevos mostrados, eventos, cambios en el negocio del cliente, etc.). Si no hay novedades claras, devuelve un array vacío []. NO uses "N/A".
-- "objeciones": Un array de strings. Objeciones, quejas, preocupaciones o problemas que el cliente expresó (precio alto, competencia más barata, insatisfacción, etc.). Si no hay objeciones claras, devuelve un array vacío []. NO uses "N/A".
-- "sugerencias": Un array de strings. Sugerencias de acción o consejos para el siguiente paso. Incluye cualquier consejo que el vendedor mencione explícitamente en la transcripción. Si el vendedor no da consejos explícitos, genera 1-2 sugerencias breves y accionables basadas en las novedades y objeciones detectadas. Si no hay contexto suficiente, devuelve un array vacío []. NO uses "N/A".
-
-IMPORTANTE: Bajo ninguna circunstancia devuelvas "N/A" como cadena de texto. Si un campo no tiene datos, usa null o un array vacío según corresponda.
-
-Sé preciso y solo extrae información que esté claramente expresada en la transcripción.`;
+ADEMÁS de los campos de la plantilla, SIEMPRE debes extraer estos 6 campos adicionales:
+- "novedades": Array de strings. Novedades o actualizaciones mencionadas (productos presentados, catálogos mostrados, eventos, cambios, etc.). Array vacío [] si no hay. NO uses "N/A".
+- "ventas_realizadas": Array de strings. Ventas concretas realizadas o pedidos tomados durante la visita (producto, precio, cantidad, condiciones especiales). Array vacío [] si no hay ventas.
+- "stock_disponibilidad": Array de strings. Problemas de stock o disponibilidad mencionados (productos sin existencias, tiempos de espera, desabastecimiento). Array vacío [] si no hay.
+- "objeciones": Array de strings. Objeciones, quejas o preocupaciones que el cliente expresó (precio alto, competencia, insatisfacción, falta de algo). Array vacío [] si no hay.
+- "proximos_pasos": Array de strings. Próximas acciones acordadas o tareas pendientes mencionadas por el vendedor (volver la próxima semana, enviar tarifa, llamar, etc.). Array vacío [] si no hay.
+- "sugerencias": Array de strings. Sugerencias de acción explícitamente mencionadas por el vendedor en la transcripción ÚNICAMENTE. Si el vendedor no da consejos explícitos, devuelve array vacío []. NO generes sugerencias inventadas.`;
 
     const userPrompt = `Transcripción:
 ${transcript}
@@ -163,7 +162,7 @@ ${transcript}
 Campos de la Plantilla:
 ${fieldsDescription}
 
-Extrae y completa todos los campos de la plantilla a partir de la transcripción, e incluye siempre los campos "novedades", "objeciones" y "sugerencias". Devuelve un objeto JSON con los nombres de los campos como claves.`;
+Extrae y completa todos los campos de la plantilla a partir de la transcripción, e incluye siempre los campos "novedades", "ventas_realizadas", "stock_disponibilidad", "objeciones", "proximos_pasos" y "sugerencias". Devuelve un objeto JSON con los nombres de los campos como claves. Sé fiel a la transcripción: no interpretes ni reformules el contenido.`;
 
     const gptResponse = await fetch(OPENAI_API_URL, {
       method: "POST",
@@ -235,7 +234,12 @@ function identifyMissingRequiredFields(
 
 // Helper function to build field collection message
 function buildFieldPromptMessage(field: TemplateField): string {
-  const label = field.label || (field as any).title || field.name || (field as any).key || "este campo";
+  const label =
+    field.label ||
+    (field as any).title ||
+    field.name ||
+    (field as any).key ||
+    "este campo";
   return `Necesito un poco más de información. Por favor, proporciona: ${label}`;
 }
 
@@ -268,26 +272,45 @@ function mergeFieldData(
   return { ...gptData, ...collectedData };
 }
 
+// Helper: capitalize first letter of a string
+function capitalizeFirst(str: string): string {
+  if (!str || typeof str !== "string") return str;
+  return str.charAt(0).toUpperCase() + str.slice(1);
+}
+
 // Helper function to build confirmation message with rich sectioned format
 function buildConfirmationMessage(
   filledData: Record<string, any>,
   templateFields: TemplateField[],
 ): string {
   // Build the summary line using place_visited
-  const placeVisited = filledData.place_visited || filledData.Place_visited || "";
+  const placeVisited =
+    filledData.place_visited || filledData.Place_visited || "";
   let message = "";
   if (placeVisited && !isValEmpty(placeVisited)) {
-    message += `Resumen de visita – ${placeVisited}\n\n`;
+    message += `📌 *Resumen cliente: ${capitalizeFirst(String(placeVisited))}*\n\n`;
   }
 
   // Extract the smart sections (filtering out any N/A/empty items)
-  const filterArr = (arr: any) => (Array.isArray(arr) ? arr.filter(it => !isValEmpty(it)) : []);
+  const filterArr = (arr: any) =>
+    Array.isArray(arr) ? arr.filter((it) => !isValEmpty(it)) : [];
   const novedades = filterArr(filledData.novedades);
+  const ventas_realizadas = filterArr(filledData.ventas_realizadas);
+  const stock_disponibilidad = filterArr(filledData.stock_disponibilidad);
   const objeciones = filterArr(filledData.objeciones);
+  const proximos_pasos = filterArr(filledData.proximos_pasos);
   const sugerencias = filterArr(filledData.sugerencias);
 
   // Fields to skip in the general section (shown separately)
-  const skipFields = new Set(["place_visited", "novedades", "objeciones", "sugerencias"]);
+  const skipFields = new Set([
+    "place_visited",
+    "novedades",
+    "ventas_realizadas",
+    "stock_disponibilidad",
+    "objeciones",
+    "proximos_pasos",
+    "sugerencias",
+  ]);
 
   // Show remaining template fields (if any, excluding the smart sections and place_visited)
   const remainingFields: string[] = [];
@@ -303,7 +326,7 @@ function buildConfirmationMessage(
 
     if (!isValEmpty(value)) {
       const label = field.label || (field as any).title || name || "Campo";
-      remainingFields.push(`• *${label}*: ${String(value)}`);
+      remainingFields.push(`• *${label}*: ${capitalizeFirst(String(value))}`);
     }
   }
 
@@ -315,25 +338,52 @@ function buildConfirmationMessage(
   if (novedades.length > 0) {
     message += "🆕 *Novedades*\n";
     for (const item of novedades) {
-      message += `• ${item}\n`;
+      message += `- ${capitalizeFirst(String(item))}\n`;
+    }
+    message += "\n";
+  }
+
+  // Ventas realizadas section
+  if (ventas_realizadas.length > 0) {
+    message += "🧾 *Ventas realizadas*\n";
+    for (const item of ventas_realizadas) {
+      message += `- ${capitalizeFirst(String(item))}\n`;
+    }
+    message += "\n";
+  }
+
+  // Stock / Disponibilidad section
+  if (stock_disponibilidad.length > 0) {
+    message += "🚨 *Stock / Disponibilidad*\n";
+    for (const item of stock_disponibilidad) {
+      message += `- ${capitalizeFirst(String(item))}\n`;
     }
     message += "\n";
   }
 
   // Objeciones section
   if (objeciones.length > 0) {
-    message += "⚠️ *Objeciones*\n";
+    message += "🧩 *Objeciones*\n";
     for (const item of objeciones) {
-      message += `• ${item}\n`;
+      message += `- ${capitalizeFirst(String(item))}\n`;
     }
     message += "\n";
   }
 
-  // Sugerencias section
+  // Próximos pasos section
+  if (proximos_pasos.length > 0) {
+    message += "📅 *Próximos pasos*\n";
+    for (const item of proximos_pasos) {
+      message += `- ${capitalizeFirst(String(item))}\n`;
+    }
+    message += "\n";
+  }
+
+  // Sugerencias section (only if explicitly mentioned by vendor)
   if (sugerencias.length > 0) {
-    message += "💡 *Sugerencias rápidas*\n";
+    message += "💡 *Sugerencias*\n";
     for (const item of sugerencias) {
-      message += `• ${item}\n`;
+      message += `- ${capitalizeFirst(String(item))}\n`;
     }
     message += "\n";
   }
@@ -345,13 +395,13 @@ function buildConfirmationMessage(
       const name = field.name || "";
       if (name && !isValEmpty(filledData[name])) {
         const label = field.label || name;
-        message += `• *${label}*: ${filledData[name]}\n`;
+        message += `• *${label}*: ${capitalizeFirst(String(filledData[name]))}\n`;
       }
     }
     message += "\n";
   }
 
-  message += "¿Está correcta esta info o quieres que ajuste algo?";
+  message += "¿Está todo correcto o ajusto algo antes de enviar al manager?";
   return message;
 }
 
@@ -643,7 +693,9 @@ serve(async (req) => {
 
                   // Helper: send the menu template (sales_menu)
                   async function sendMenuTemplate(to: string): Promise<void> {
-                    const menuTemplateName = Deno.env.get("WHATSAPP_MENU_TEMPLATE_NAME") || "sales_menu";
+                    const menuTemplateName =
+                      Deno.env.get("WHATSAPP_MENU_TEMPLATE_NAME") ||
+                      "sales_menu";
                     await sendWAMessage({
                       messaging_product: "whatsapp",
                       recipient_type: "individual",
@@ -656,17 +708,25 @@ serve(async (req) => {
                     });
                   }
 
-                  async function sendModifiedReportTemplate(to: string, reportText: string, isCreation: boolean = false): Promise<void> {
-                    const modTemplateName = Deno.env.get("WHATSAPP_MODIFIED_REPORT_TEMPLATE_NAME") || "sales_modified_report";
-                    const headerText = isCreation ? "📝 *REPORTE CREADO*\n\n" : "📝 *REPORTE MODIFICADO*\n\n";
+                  async function sendModifiedReportTemplate(
+                    to: string,
+                    reportText: string,
+                    isCreation: boolean = false,
+                  ): Promise<void> {
+                    const modTemplateName =
+                      Deno.env.get("WHATSAPP_MODIFIED_REPORT_TEMPLATE_NAME") ||
+                      "sales_modified_report";
+                    const headerText = isCreation
+                      ? "📝 *REPORTE CREADO*"
+                      : "📝 *REPORTE MODIFICADO*";
                     await sendWAMessage({
                       messaging_product: "whatsapp",
                       recipient_type: "individual",
                       to: normalizePhoneNumber(to),
                       type: "text",
-                      text: { body: `${headerText}${reportText}` },
+                      text: { body: `${headerText}\n\n${reportText}` },
                     });
-                    await sendWAMessage({   
+                    await sendWAMessage({
                       messaging_product: "whatsapp",
                       recipient_type: "individual",
                       to: normalizePhoneNumber(to),
@@ -685,7 +745,10 @@ serve(async (req) => {
                     currentFilledData?: Record<string, any>,
                   ): Promise<string> {
                     let filledDataContext = "";
-                    if (currentFilledData && Object.keys(currentFilledData).length > 0) {
+                    if (
+                      currentFilledData &&
+                      Object.keys(currentFilledData).length > 0
+                    ) {
                       const fieldEntries = Object.entries(currentFilledData)
                         .filter(([_, v]) => !isValEmpty(v))
                         .map(([k, v]) => `- ${k}: ${v}`)
@@ -701,7 +764,8 @@ serve(async (req) => {
                         "Content-Type": "application/json",
                       },
                       body: JSON.stringify({
-                        model: Deno.env.get("OPENAI_GPT_MODEL") || "gpt-4o-mini",
+                        model:
+                          Deno.env.get("OPENAI_GPT_MODEL") || "gpt-4o-mini",
                         messages: [
                           {
                             role: "system",
@@ -726,51 +790,106 @@ serve(async (req) => {
                     });
                     if (!resp.ok) return originalTranscript;
                     const json = await resp.json();
-                    return json.choices?.[0]?.message?.content || originalTranscript;
+                    return (
+                      json.choices?.[0]?.message?.content || originalTranscript
+                    );
                   }
 
                   function buildReportDisplay(record: any): string {
-                    const date = new Date(record.created_at).toLocaleDateString();
+                    const date = new Date(
+                      record.created_at,
+                    ).toLocaleDateString();
                     const filledData = record.filled_data || {};
                     const placeVisited = filledData.place_visited || "";
-                    let text = (placeVisited && !isValEmpty(placeVisited))
-                      ? `📋 *Reporte – ${placeVisited}* (${date})\n\n`
-                      : `📋 *Reporte – ${date}*\n\n`;
+                    let text =
+                      placeVisited && !isValEmpty(placeVisited)
+                        ? `📋 *Reporte – ${capitalizeFirst(String(placeVisited))}* (${date})\n\n`
+                        : `📋 *Reporte – ${date}*\n\n`;
 
                     // Fields to skip in the general display
-                    const skipFields = new Set(["place_visited", "novedades", "objeciones", "sugerencias"]);
+                    const skipFields = new Set([
+                      "place_visited",
+                      "novedades",
+                      "ventas_realizadas",
+                      "stock_disponibilidad",
+                      "objeciones",
+                      "proximos_pasos",
+                      "sugerencias",
+                    ]);
 
                     // Show remaining fields
                     const remainingEntries: string[] = [];
                     for (const [k, v] of Object.entries(filledData)) {
                       if (skipFields.has(k) || isValEmpty(v)) continue;
-                      remainingEntries.push(`• *${k}*: ${v}`);
+                      remainingEntries.push(
+                        `• *${k}*: ${capitalizeFirst(String(v))}`,
+                      );
                     }
                     if (remainingEntries.length > 0) {
                       text += remainingEntries.join("\n") + "\n\n";
                     }
 
                     // Sections
-                    const filterArr = (arr: any) => (Array.isArray(arr) ? arr.filter(it => !isValEmpty(it)) : []);
+                    const filterArr = (arr: any) =>
+                      Array.isArray(arr)
+                        ? arr.filter((it) => !isValEmpty(it))
+                        : [];
                     const novedades = filterArr(filledData.novedades);
+                    const ventas_realizadas = filterArr(
+                      filledData.ventas_realizadas,
+                    );
+                    const stock_disponibilidad = filterArr(
+                      filledData.stock_disponibilidad,
+                    );
                     const objeciones = filterArr(filledData.objeciones);
+                    const proximos_pasos = filterArr(filledData.proximos_pasos);
                     const sugerencias = filterArr(filledData.sugerencias);
 
                     if (novedades.length > 0) {
                       text += "🆕 *Novedades*\n";
-                      for (const item of novedades) { text += `• ${item}\n`; }
+                      for (const item of novedades) {
+                        text += `- ${capitalizeFirst(String(item))}\n`;
+                      }
+                      text += "\n";
+                    }
+
+                    if (ventas_realizadas.length > 0) {
+                      text += "🧾 *Ventas realizadas*\n";
+                      for (const item of ventas_realizadas) {
+                        text += `- ${capitalizeFirst(String(item))}\n`;
+                      }
+                      text += "\n";
+                    }
+
+                    if (stock_disponibilidad.length > 0) {
+                      text += "🚨 *Stock / Disponibilidad*\n";
+                      for (const item of stock_disponibilidad) {
+                        text += `- ${capitalizeFirst(String(item))}\n`;
+                      }
                       text += "\n";
                     }
 
                     if (objeciones.length > 0) {
-                      text += "⚠️ *Objeciones*\n";
-                      for (const item of objeciones) { text += `• ${item}\n`; }
+                      text += "🧩 *Objeciones*\n";
+                      for (const item of objeciones) {
+                        text += `- ${capitalizeFirst(String(item))}\n`;
+                      }
+                      text += "\n";
+                    }
+
+                    if (proximos_pasos.length > 0) {
+                      text += "📅 *Próximos pasos*\n";
+                      for (const item of proximos_pasos) {
+                        text += `- ${capitalizeFirst(String(item))}\n`;
+                      }
                       text += "\n";
                     }
 
                     if (sugerencias.length > 0) {
-                      text += "💡 *Sugerencias rápidas*\n";
-                      for (const item of sugerencias) { text += `• ${item}\n`; }
+                      text += "💡 *Sugerencias*\n";
+                      for (const item of sugerencias) {
+                        text += `- ${capitalizeFirst(String(item))}\n`;
+                      }
                       text += "\n";
                     }
 
@@ -800,8 +919,13 @@ serve(async (req) => {
 
                     if (reportSelectionConv) {
                       const choice = parseInt(textBody.trim(), 10);
-                      const reportList: any[] = reportSelectionConv.collected_data?.report_list || [];
-                      if (!isNaN(choice) && choice >= 1 && choice <= reportList.length) {
+                      const reportList: any[] =
+                        reportSelectionConv.collected_data?.report_list || [];
+                      if (
+                        !isNaN(choice) &&
+                        choice >= 1 &&
+                        choice <= reportList.length
+                      ) {
                         const chosenReport = reportList[choice - 1];
                         console.log("User selected report:", chosenReport.id);
                         await adminClient
@@ -831,7 +955,8 @@ serve(async (req) => {
                           .single();
 
                         if (targetReport) {
-                          const reportDisplay = buildReportDisplay(targetReport);
+                          const reportDisplay =
+                            buildReportDisplay(targetReport);
                           await sendWAMessage({
                             messaging_product: "whatsapp",
                             recipient_type: "individual",
@@ -840,19 +965,19 @@ serve(async (req) => {
                             text: { body: reportDisplay },
                           });
                         }
-                      await sendWAMessage({
-                        messaging_product: "whatsapp",
-                        recipient_type: "individual",
-                        to: normalizePhoneNumber(from),
-                        type: "text",
-                        text: {
-                          body:
-                            "✏️ *¿Qué te gustaría modificar?*\n\nPuedes:\n" +
-                            "• Escribir los cambios en texto\n" +
-                            "• Enviar un mensaje de voz con las correcciones\n\n" +
-                            'Ejemplo: _"Cambia la fecha del 12/12/2022 al 12/12/2023"_',
-                        },
-                      });
+                        await sendWAMessage({
+                          messaging_product: "whatsapp",
+                          recipient_type: "individual",
+                          to: normalizePhoneNumber(from),
+                          type: "text",
+                          text: {
+                            body:
+                              "✏️ *¿Qué te gustaría modificar?*\n\nPuedes:\n" +
+                              "• Escribir los cambios en texto\n" +
+                              "• Enviar un mensaje de voz con las correcciones\n\n" +
+                              'Ejemplo: _"Cambia la fecha del 12/12/2022 al 12/12/2023"_',
+                          },
+                        });
                       } else {
                         await sendWAMessage({
                           messaging_product: "whatsapp",
@@ -885,57 +1010,92 @@ serve(async (req) => {
                         .single();
 
                       if (targetReport && openaiApiKey) {
-                          const originalText = targetReport.modified_transcript || targetReport.transcript || "";
-                          await sendWAMessage({
-                            messaging_product: "whatsapp",
-                            recipient_type: "individual",
-                            to: normalizePhoneNumber(from),
-                            type: "text",
-                            text: { body: "⏳ Procesando tu modificación..." },
-                          });
-                          const updatedText = await applyModificationWithGPT(originalText, textBody, openaiApiKey, targetReport.filled_data);
+                        const originalText =
+                          targetReport.modified_transcript ||
+                          targetReport.transcript ||
+                          "";
+                        await sendWAMessage({
+                          messaging_product: "whatsapp",
+                          recipient_type: "individual",
+                          to: normalizePhoneNumber(from),
+                          type: "text",
+                          text: { body: "⏳ Procesando tu modificación..." },
+                        });
+                        const updatedText = await applyModificationWithGPT(
+                          originalText,
+                          textBody,
+                          openaiApiKey,
+                          targetReport.filled_data,
+                        );
 
-                          let updatedFilledData = targetReport.filled_data || {};
-                          let tplFieldsForDisplay: TemplateField[] = [];
-                          if (targetReport.template_id) {
-                            const { data: tplForExtract } = await adminClient
-                              .from("user_templates")
-                              .select("fields")
-                              .eq("id", targetReport.template_id)
-                              .maybeSingle();
-                            if (tplForExtract?.fields && (tplForExtract.fields as any[]).length > 0) {
-                              tplFieldsForDisplay = ensurePlaceVisitedField(tplForExtract.fields as TemplateField[]);
-                              const newExtracted = await extractFieldsWithGPT(updatedText, tplFieldsForDisplay, openaiApiKey);
-                              if (newExtracted) {
-                                for (const [key, value] of Object.entries(newExtracted)) {
-                                  if (value !== null && value !== undefined && String(value).trim() !== "") {
-                                    updatedFilledData[key] = value;
-                                  }
+                        let updatedFilledData = targetReport.filled_data || {};
+                        let tplFieldsForDisplay: TemplateField[] = [];
+                        if (targetReport.template_id) {
+                          const { data: tplForExtract } = await adminClient
+                            .from("user_templates")
+                            .select("fields")
+                            .eq("id", targetReport.template_id)
+                            .maybeSingle();
+                          if (
+                            tplForExtract?.fields &&
+                            (tplForExtract.fields as any[]).length > 0
+                          ) {
+                            tplFieldsForDisplay = ensurePlaceVisitedField(
+                              tplForExtract.fields as TemplateField[],
+                            );
+                            const newExtracted = await extractFieldsWithGPT(
+                              updatedText,
+                              tplFieldsForDisplay,
+                              openaiApiKey,
+                            );
+                            if (newExtracted) {
+                              for (const [key, value] of Object.entries(
+                                newExtracted,
+                              )) {
+                                if (
+                                  value !== null &&
+                                  value !== undefined &&
+                                  String(value).trim() !== ""
+                                ) {
+                                  updatedFilledData[key] = value;
                                 }
                               }
                             }
                           }
+                        }
 
-                          await adminClient
-                            .from("voice_transcripts")
-                            .update({ modified_transcript: updatedText, filled_data: updatedFilledData })
-                            .eq("id", targetReport.id);
-                          await adminClient
-                            .from("voice_transcripts")
-                            .update({ conversation_state: "awaiting_modification_confirmation" })
-                            .eq("id", modInputConv.id);
-                          // Build a structured preview respecting the template (same as creation flow)
-                          const modPreviewText = tplFieldsForDisplay.length > 0
-                            ? buildConfirmationMessage(updatedFilledData, tplFieldsForDisplay)
+                        await adminClient
+                          .from("voice_transcripts")
+                          .update({
+                            modified_transcript: updatedText,
+                            filled_data: updatedFilledData,
+                          })
+                          .eq("id", targetReport.id);
+                        await adminClient
+                          .from("voice_transcripts")
+                          .update({
+                            conversation_state:
+                              "awaiting_modification_confirmation",
+                          })
+                          .eq("id", modInputConv.id);
+                        // Build a structured preview respecting the template (same as creation flow)
+                        const modPreviewText =
+                          tplFieldsForDisplay.length > 0
+                            ? buildConfirmationMessage(
+                                updatedFilledData,
+                                tplFieldsForDisplay,
+                              )
                             : updatedText;
-                          await sendModifiedReportTemplate(from, modPreviewText);
+                        await sendModifiedReportTemplate(from, modPreviewText);
                       } else {
                         await sendWAMessage({
                           messaging_product: "whatsapp",
                           recipient_type: "individual",
                           to: normalizePhoneNumber(from),
                           type: "text",
-                          text: { body: "❌ No se pudo procesar la modificación. Por favor, inténtalo de nuevo o escribe *menu*." },
+                          text: {
+                            body: "❌ No se pudo procesar la modificación. Por favor, inténtalo de nuevo o escribe *menu*.",
+                          },
                         });
                       }
                       continue;
@@ -995,7 +1155,9 @@ serve(async (req) => {
 
                       // Ensure place_visited field is present
                       if (template) {
-                        template.fields = ensurePlaceVisitedField(template.fields);
+                        template.fields = ensurePlaceVisitedField(
+                          template.fields,
+                        );
                       }
 
                       const missingFields: TemplateField[] =
@@ -1009,7 +1171,12 @@ serve(async (req) => {
                         // Check if response is valid
                         if (!isValidFieldResponse(textBody)) {
                           console.log("Invalid field response, re-asking");
-                          const label = currentField.label || (currentField as any).title || currentField.name || (currentField as any).key || "this field";
+                          const label =
+                            currentField.label ||
+                            (currentField as any).title ||
+                            currentField.name ||
+                            (currentField as any).key ||
+                            "this field";
                           const reaskPayload = {
                             messaging_product: "whatsapp",
                             recipient_type: "individual",
@@ -1076,7 +1243,10 @@ serve(async (req) => {
                         } else {
                           // All fields collected, merge data and send confirmation
                           const gptData = activeTranscript.filled_data || {};
-                          const mergedData = mergeFieldData(gptData, collectedData);
+                          const mergedData = mergeFieldData(
+                            gptData,
+                            collectedData,
+                          );
 
                           await adminClient
                             .from("voice_transcripts")
@@ -1171,7 +1341,10 @@ serve(async (req) => {
                             .from("voice_transcripts")
                             .select("id")
                             .eq("phone_number", from)
-                            .eq("conversation_state", "awaiting_modification_input")
+                            .eq(
+                              "conversation_state",
+                              "awaiting_modification_input",
+                            )
                             .limit(1)
                             .maybeSingle();
                           await sendWAMessage({
@@ -1251,7 +1424,10 @@ serve(async (req) => {
                           `audio.${fileExtension}`,
                         );
                         formData.append("model", "whisper-1");
-                        formData.append("prompt", "Transcripción profesional en español de un informe de visita de ventas. Mantén la terminología empresarial y un tono profesional.");
+                        formData.append(
+                          "prompt",
+                          "Transcripción profesional en español de un informe de visita de ventas. Mantén la terminología empresarial y un tono profesional.",
+                        );
                         formData.append("language", "es");
                         formData.append("response_format", "verbose_json");
 
@@ -1279,49 +1455,73 @@ serve(async (req) => {
                         // Upload audio to Supabase Storage
                         let audioUrl: string | null = null;
                         try {
-                          const fileName = `${userId || 'anonymous'}/${Date.now()}.${fileExtension}`;
-                          console.log(`Uploading audio to storage: audio-transcripts/${fileName} (${mimeType}, ${audioBuffer.byteLength} bytes)`);
+                          const fileName = `${userId || "anonymous"}/${Date.now()}.${fileExtension}`;
+                          console.log(
+                            `Uploading audio to storage: audio-transcripts/${fileName} (${mimeType}, ${audioBuffer.byteLength} bytes)`,
+                          );
 
-                          const { data: buckets } = await adminClient.storage.listBuckets();
-                          const bucketExists = buckets?.some((b: any) => b.name === 'audio-transcripts');
-                          
+                          const { data: buckets } =
+                            await adminClient.storage.listBuckets();
+                          const bucketExists = buckets?.some(
+                            (b: any) => b.name === "audio-transcripts",
+                          );
+
                           if (!bucketExists) {
                             console.log("Creating audio-transcripts bucket...");
-                            const { error: createBucketError } = await adminClient.storage.createBucket('audio-transcripts', { 
-                              public: true,
-                              fileSizeLimit: 52428800
-                            });
+                            const { error: createBucketError } =
+                              await adminClient.storage.createBucket(
+                                "audio-transcripts",
+                                {
+                                  public: true,
+                                  fileSizeLimit: 52428800,
+                                },
+                              );
                             if (createBucketError) {
-                              console.error("Failed to create bucket:", createBucketError);
+                              console.error(
+                                "Failed to create bucket:",
+                                createBucketError,
+                              );
                             } else {
-                              console.log("Successfully created audio-transcripts bucket");
+                              console.log(
+                                "Successfully created audio-transcripts bucket",
+                              );
                             }
                           }
 
-                          const { data: uploadData, error: uploadError } = await adminClient
-                            .storage
-                            .from('audio-transcripts')
-                            .upload(fileName, audioBuffer, {
-                              contentType: mimeType,
-                              upsert: true
-                            });
+                          const { data: uploadData, error: uploadError } =
+                            await adminClient.storage
+                              .from("audio-transcripts")
+                              .upload(fileName, audioBuffer, {
+                                contentType: mimeType,
+                                upsert: true,
+                              });
 
                           if (uploadError) {
-                            console.error("Storage upload error:", JSON.stringify(uploadError));
+                            console.error(
+                              "Storage upload error:",
+                              JSON.stringify(uploadError),
+                            );
                           } else {
-                            const { data: urlData } = adminClient
-                              .storage
-                              .from('audio-transcripts')
+                            const { data: urlData } = adminClient.storage
+                              .from("audio-transcripts")
                               .getPublicUrl(fileName);
                             audioUrl = urlData?.publicUrl || null;
-                            console.log("Audio uploaded successfully. Public URL:", audioUrl);
+                            console.log(
+                              "Audio uploaded successfully. Public URL:",
+                              audioUrl,
+                            );
                           }
                         } catch (storageErr) {
-                          console.error("Error managing audio storage:", storageErr);
+                          console.error(
+                            "Error managing audio storage:",
+                            storageErr,
+                          );
                         }
 
                         if (!audioUrl) {
-                          console.warn("⚠️ Audio URL is null - audio will not be playable for this transcript");
+                          console.warn(
+                            "⚠️ Audio URL is null - audio will not be playable for this transcript",
+                          );
                         }
 
                         if (!transcript || transcript.trim().length === 0) {
@@ -1361,13 +1561,19 @@ serve(async (req) => {
                           .from("voice_transcripts")
                           .select("*")
                           .eq("phone_number", from)
-                          .eq("conversation_state", "awaiting_modification_input")
+                          .eq(
+                            "conversation_state",
+                            "awaiting_modification_input",
+                          )
                           .order("created_at", { ascending: false })
                           .limit(1)
                           .maybeSingle();
 
                         if (voiceModConv?.modification_target_id) {
-                          console.log("Voice modification received, applying to report:", voiceModConv.modification_target_id);
+                          console.log(
+                            "Voice modification received, applying to report:",
+                            voiceModConv.modification_target_id,
+                          );
                           const { data: targetReport } = await adminClient
                             .from("voice_transcripts")
                             .select("*")
@@ -1375,11 +1581,20 @@ serve(async (req) => {
                             .single();
 
                           if (targetReport) {
-                            const originalText = targetReport.modified_transcript || targetReport.transcript || "";
-                            const updatedText = await applyModificationWithGPT(originalText, transcript, openaiApiKey, targetReport.filled_data);
+                            const originalText =
+                              targetReport.modified_transcript ||
+                              targetReport.transcript ||
+                              "";
+                            const updatedText = await applyModificationWithGPT(
+                              originalText,
+                              transcript,
+                              openaiApiKey,
+                              targetReport.filled_data,
+                            );
 
                             // Re-extract filled_data from the updated transcript so report fields are also updated
-                            let updatedFilledData = targetReport.filled_data || {};
+                            let updatedFilledData =
+                              targetReport.filled_data || {};
                             let voiceTplFields: TemplateField[] = [];
                             if (targetReport.template_id) {
                               const { data: tplForExtract } = await adminClient
@@ -1387,13 +1602,28 @@ serve(async (req) => {
                                 .select("fields")
                                 .eq("id", targetReport.template_id)
                                 .maybeSingle();
-                              if (tplForExtract?.fields && (tplForExtract.fields as any[]).length > 0) {
-                                voiceTplFields = ensurePlaceVisitedField(tplForExtract.fields as TemplateField[]);
-                                const newExtracted = await extractFieldsWithGPT(updatedText, voiceTplFields, openaiApiKey);
+                              if (
+                                tplForExtract?.fields &&
+                                (tplForExtract.fields as any[]).length > 0
+                              ) {
+                                voiceTplFields = ensurePlaceVisitedField(
+                                  tplForExtract.fields as TemplateField[],
+                                );
+                                const newExtracted = await extractFieldsWithGPT(
+                                  updatedText,
+                                  voiceTplFields,
+                                  openaiApiKey,
+                                );
                                 if (newExtracted) {
                                   // Smart merge: only overwrite fields where GPT extracted a non-null, non-empty value
-                                  for (const [key, value] of Object.entries(newExtracted)) {
-                                    if (value !== null && value !== undefined && String(value).trim() !== "") {
+                                  for (const [key, value] of Object.entries(
+                                    newExtracted,
+                                  )) {
+                                    if (
+                                      value !== null &&
+                                      value !== undefined &&
+                                      String(value).trim() !== ""
+                                    ) {
                                       updatedFilledData[key] = value;
                                     }
                                   }
@@ -1404,24 +1634,39 @@ serve(async (req) => {
                             // Store updated transcript AND updated filled_data
                             await adminClient
                               .from("voice_transcripts")
-                              .update({ modified_transcript: updatedText, filled_data: updatedFilledData })
+                              .update({
+                                modified_transcript: updatedText,
+                                filled_data: updatedFilledData,
+                              })
                               .eq("id", targetReport.id);
                             await adminClient
                               .from("voice_transcripts")
-                              .update({ conversation_state: "awaiting_modification_confirmation" })
+                              .update({
+                                conversation_state:
+                                  "awaiting_modification_confirmation",
+                              })
                               .eq("id", voiceModConv.id);
                             // Build structured preview respecting the template
-                            const voiceModPreviewText = voiceTplFields.length > 0
-                              ? buildConfirmationMessage(updatedFilledData, voiceTplFields)
-                              : updatedText;
-                            await sendModifiedReportTemplate(from, voiceModPreviewText);
+                            const voiceModPreviewText =
+                              voiceTplFields.length > 0
+                                ? buildConfirmationMessage(
+                                    updatedFilledData,
+                                    voiceTplFields,
+                                  )
+                                : updatedText;
+                            await sendModifiedReportTemplate(
+                              from,
+                              voiceModPreviewText,
+                            );
                           } else {
                             await sendWAMessage({
                               messaging_product: "whatsapp",
                               recipient_type: "individual",
                               to: normalizePhoneNumber(from),
                               type: "text",
-                              text: { body: "❌ No se pudo encontrar el informe original. Por favor, escribe *menu* para empezar de nuevo." },
+                              text: {
+                                body: "❌ No se pudo encontrar el informe original. Por favor, escribe *menu* para empezar de nuevo.",
+                              },
                             });
                           }
                           continue;
@@ -1482,11 +1727,12 @@ serve(async (req) => {
 
                           if (template) {
                             // Ensure place_visited field is present
-                            template.fields = ensurePlaceVisitedField(template.fields);
+                            template.fields = ensurePlaceVisitedField(
+                              template.fields,
+                            );
 
                             // Merge transcripts
-                            const mergedTranscript =
-                              `${ongoingConversation.transcript}\n\n[Additional Voice Message]\n${transcript}`;
+                            const mergedTranscript = `${ongoingConversation.transcript}\n\n[Additional Voice Message]\n${transcript}`;
 
                             console.log("Merged transcript:", mergedTranscript);
 
@@ -1497,14 +1743,18 @@ serve(async (req) => {
                               template.fields &&
                               Array.isArray(template.fields)
                             ) {
-                              filledData = await extractFieldsWithGPT(
-                                mergedTranscript,
-                                template.fields,
-                                openaiApiKey,
-                              ) || {};
+                              filledData =
+                                (await extractFieldsWithGPT(
+                                  mergedTranscript,
+                                  template.fields,
+                                  openaiApiKey,
+                                )) || {};
                             }
 
-                            console.log("Re-extracted fields after merge:", filledData);
+                            console.log(
+                              "Re-extracted fields after merge:",
+                              filledData,
+                            );
 
                             // Merge with already collected data
                             const collectedData =
@@ -1552,7 +1802,11 @@ serve(async (req) => {
                                 mergedFilledData,
                                 template.fields,
                               );
-                              await sendModifiedReportTemplate(from, reportText, true);
+                              await sendModifiedReportTemplate(
+                                from,
+                                reportText,
+                                true,
+                              );
 
                               console.log(
                                 "All fields collected via voice merge, sent confirmation via sales_modified_report template",
@@ -1578,10 +1832,10 @@ serve(async (req) => {
                                 .eq("id", ongoingConversation.id);
 
                               // Ask for the current missing field
-                              const currentField = missingFields[nextFieldIndex];
-                              const promptMessage = buildFieldPromptMessage(
-                                currentField,
-                              );
+                              const currentField =
+                                missingFields[nextFieldIndex];
+                              const promptMessage =
+                                buildFieldPromptMessage(currentField);
 
                               const fieldPromptPayload = {
                                 messaging_product: "whatsapp",
@@ -1661,7 +1915,9 @@ serve(async (req) => {
                         }
 
                         // Ensure place_visited is always present (handles templates created before this feature)
-                        activeTemplate.fields = ensurePlaceVisitedField(activeTemplate.fields);
+                        activeTemplate.fields = ensurePlaceVisitedField(
+                          activeTemplate.fields,
+                        );
 
                         // Extract fields from transcript using GPT
                         let filledData: Record<string, any> = {};
@@ -1671,11 +1927,12 @@ serve(async (req) => {
                           activeTemplate.fields &&
                           Array.isArray(activeTemplate.fields)
                         ) {
-                          filledData = await extractFieldsWithGPT(
-                            transcript,
-                            activeTemplate.fields,
-                            openaiApiKey,
-                          ) || {};
+                          filledData =
+                            (await extractFieldsWithGPT(
+                              transcript,
+                              activeTemplate.fields,
+                              openaiApiKey,
+                            )) || {};
                         }
 
                         console.log("GPT extracted fields:", filledData);
@@ -1700,7 +1957,10 @@ serve(async (req) => {
                           .eq("is_session_record", true);
 
                         if (cleanupError) {
-                          console.error("Failed to clean up stale sessions during creation:", cleanupError);
+                          console.error(
+                            "Failed to clean up stale sessions during creation:",
+                            cleanupError,
+                          );
                         }
 
                         // Store transcript with conversation state
@@ -1729,7 +1989,7 @@ serve(async (req) => {
                               is_session_record: false, // Explicitly false to ensures it shows on dashboard and is found by lookups
                               audio_url: audioUrl,
                               audio_duration: transcriptionResult.duration
-                                ? `${Math.floor(transcriptionResult.duration / 60)}:${String(Math.floor(transcriptionResult.duration % 60)).padStart(2, '0')}`
+                                ? `${Math.floor(transcriptionResult.duration / 60)}:${String(Math.floor(transcriptionResult.duration % 60)).padStart(2, "0")}`
                                 : null,
                             })
                             .select()
@@ -1751,9 +2011,8 @@ serve(async (req) => {
                         if (conversationState === "collecting_fields") {
                           // Ask for first missing field
                           const firstField = missingFields[0];
-                          const promptMessage = buildFieldPromptMessage(
-                            firstField,
-                          );
+                          const promptMessage =
+                            buildFieldPromptMessage(firstField);
 
                           const fieldPromptPayload = {
                             messaging_product: "whatsapp",
@@ -1788,7 +2047,11 @@ serve(async (req) => {
                             filledData,
                             activeTemplate.fields,
                           );
-                          await sendModifiedReportTemplate(from, reportText, true);
+                          await sendModifiedReportTemplate(
+                            from,
+                            reportText,
+                            true,
+                          );
 
                           console.log(
                             "Sent new-report confirmation via sales_modified_report template",
@@ -1806,7 +2069,10 @@ serve(async (req) => {
                   }
 
                   // Handle interactive button responses
-                  if (messageType === "interactive" || messageType === "button") {
+                  if (
+                    messageType === "interactive" ||
+                    messageType === "button"
+                  ) {
                     const buttonText = (
                       message.interactive?.button_reply?.title ||
                       (message as any).button?.text ||
@@ -1817,10 +2083,16 @@ serve(async (req) => {
                       (message as any).button?.payload ||
                       "";
 
-                    console.log(`Button clicked: ${buttonText} (ID: ${buttonId})`);
+                    console.log(
+                      `Button clicked: ${buttonText} (ID: ${buttonId})`,
+                    );
 
                     // ── CREATE REPORT (from menu template) ───────────────
-                    if (buttonId === "create_report" || buttonText.includes("create report") || buttonText.includes("crear informe")) {
+                    if (
+                      buttonId === "create_report" ||
+                      buttonText.includes("create report") ||
+                      buttonText.includes("crear informe")
+                    ) {
                       await sendWAMessage({
                         messaging_product: "whatsapp",
                         recipient_type: "individual",
@@ -1837,7 +2109,11 @@ serve(async (req) => {
                     }
 
                     // ── MODIFY REPORT (from menu template) ───────────────
-                    if (buttonId === "modify_report" || buttonText.includes("modify report") || buttonText.includes("modificar informe")) {
+                    if (
+                      buttonId === "modify_report" ||
+                      buttonText.includes("modify report") ||
+                      buttonText.includes("modificar informe")
+                    ) {
                       // Fetch recent confirmed reports for this salesperson
                       const { data: userReports } = await adminClient
                         .from("voice_transcripts")
@@ -1862,16 +2138,20 @@ serve(async (req) => {
 
                       // List reports
                       let listMsg = "Aquí están tus informes recientes:\n\n";
-                      userReports.forEach((report:any, index:number) => {
-                        const date = new Date(report.created_at).toLocaleDateString("es-ES", {
+                      userReports.forEach((report: any, index: number) => {
+                        const date = new Date(
+                          report.created_at,
+                        ).toLocaleDateString("es-ES", {
                           year: "numeric",
                           month: "short",
                           day: "numeric",
                         });
-                        const placeVisited = report.filled_data?.place_visited || "Sin lugar";
+                        const placeVisited =
+                          report.filled_data?.place_visited || "Sin lugar";
                         listMsg += `${index + 1}. ${placeVisited} (${date})\n`;
                       });
-                      listMsg += "\n💬 Responde con el *número* del informe que deseas modificar (1, 2, 3, etc.)";
+                      listMsg +=
+                        "\n💬 Responde con el *número* del informe que deseas modificar (1, 2, 3, etc.)";
 
                       // Persist awaiting_report_selection state (is_session_record=true keeps it off the dashboard)
                       await adminClient.from("voice_transcripts").insert({
@@ -1882,7 +2162,11 @@ serve(async (req) => {
                         is_session_record: true,
                         conversation_state: "awaiting_report_selection",
                         flow_action: "modify_report",
-                        collected_data: { report_list: userReports.map((r: any) => ({ id: r.id })) },
+                        collected_data: {
+                          report_list: userReports.map((r: any) => ({
+                            id: r.id,
+                          })),
+                        },
                         filled_data: {},
                         missing_required_fields: [],
                         current_field_index: 0,
@@ -1902,16 +2186,21 @@ serve(async (req) => {
                     // Intercept ANY confirm-like button: check if there's a pending
                     // modification awaiting confirmation in the DB — if so, handle it.
                     // If not, fall through to the standard new-report confirm flow.
-                    if (buttonId === "confirm_modification" ||
-                        buttonId === "Confirm" ||
-                        buttonText.includes("confirm") ||
-                        buttonText.includes("confirmar")) {
+                    if (
+                      buttonId === "confirm_modification" ||
+                      buttonId === "Confirm" ||
+                      buttonText.includes("confirm") ||
+                      buttonText.includes("confirmar")
+                    ) {
                       // Check for modification confirmation state first
                       const { data: modConfConv } = await adminClient
                         .from("voice_transcripts")
                         .select("*")
                         .eq("phone_number", from)
-                        .eq("conversation_state", "awaiting_modification_confirmation")
+                        .eq(
+                          "conversation_state",
+                          "awaiting_modification_confirmation",
+                        )
                         .order("created_at", { ascending: false })
                         .limit(1)
                         .maybeSingle();
@@ -1927,13 +2216,19 @@ serve(async (req) => {
                           // Mark session record as confirmed
                           await adminClient
                             .from("voice_transcripts")
-                            .update({ status: "session", conversation_state: "confirmed" })
+                            .update({
+                              status: "session",
+                              conversation_state: "confirmed",
+                            })
                             .eq("id", modConfConv.id);
 
                           // Mark original target report as confirmed
                           await adminClient
                             .from("voice_transcripts")
-                            .update({ status: "confirmed", conversation_state: "confirmed" })
+                            .update({
+                              status: "confirmed",
+                              conversation_state: "confirmed",
+                            })
                             .eq("id", targetReport.id);
 
                           // Re-fetch the target report to get the absolute latest
@@ -1944,18 +2239,26 @@ serve(async (req) => {
                             .eq("id", targetReport.id)
                             .single();
 
-                          const latestReport = freshTargetReport || targetReport;
+                          const latestReport =
+                            freshTargetReport || targetReport;
 
                           // Use modified_transcript for PDF; fall back to original
-                          const finalTranscript = latestReport.modified_transcript || latestReport.transcript || "";
+                          const finalTranscript =
+                            latestReport.modified_transcript ||
+                            latestReport.transcript ||
+                            "";
                           const filledDataMod = latestReport.filled_data || {};
 
                           // Full-quality PDF (same as new-report flow)
                           try {
                             const pdfDocM = await PDFDocument.create();
                             const pageM = pdfDocM.addPage([612, 792]);
-                            const fontM = await pdfDocM.embedFont(StandardFonts.Helvetica);
-                            const boldFontM = await pdfDocM.embedFont(StandardFonts.HelveticaBold);
+                            const fontM = await pdfDocM.embedFont(
+                              StandardFonts.Helvetica,
+                            );
+                            const boldFontM = await pdfDocM.embedFont(
+                              StandardFonts.HelveticaBold,
+                            );
                             const pageWidth = 612;
                             const pageHeight = 792;
                             const margin = 50;
@@ -1963,93 +2266,277 @@ serve(async (req) => {
                             const sectionSpacing = 30;
                             let yPositionM = 750;
 
-                            const addTextM = (text: string, x: number, y: number, size: number, fontType: any, maxWidth?: number, color?: any) => {
+                            const addTextM = (
+                              text: string,
+                              x: number,
+                              y: number,
+                              size: number,
+                              fontType: any,
+                              maxWidth?: number,
+                              color?: any,
+                            ) => {
                               const drawOpts: any = { x, size, font: fontType };
                               if (color) drawOpts.color = color;
-                              let proc = text.replace(/\n/g, " ").replace(/\r/g, "").replace(/\t/g, " ");
-                              try { fontType.widthOfTextAtSize(proc, size); } catch { proc = proc.replace(/[^\x20-\x7E\x80-\xFF]/g, ""); }
+                              let proc = text
+                                .replace(/\n/g, " ")
+                                .replace(/\r/g, "")
+                                .replace(/\t/g, " ");
+                              try {
+                                fontType.widthOfTextAtSize(proc, size);
+                              } catch {
+                                proc = proc.replace(
+                                  /[^\x20-\x7E\x80-\xFF]/g,
+                                  "",
+                                );
+                              }
                               if (maxWidth) {
-                                const words = proc.split(" ").filter((w: string) => w.length > 0);
-                                let line = ""; let curY = y;
+                                const words = proc
+                                  .split(" ")
+                                  .filter((w: string) => w.length > 0);
+                                let line = "";
+                                let curY = y;
                                 for (const word of words) {
                                   const test = line + (line ? " " : "") + word;
                                   try {
-                                    if (fontType.widthOfTextAtSize(test, size) > maxWidth && line) {
-                                      pageM.drawText(line, { ...drawOpts, y: curY }); line = word; curY -= lineHeight;
-                                    } else { line = test; }
-                                  } catch { line += " [...]"; }
+                                    if (
+                                      fontType.widthOfTextAtSize(test, size) >
+                                        maxWidth &&
+                                      line
+                                    ) {
+                                      pageM.drawText(line, {
+                                        ...drawOpts,
+                                        y: curY,
+                                      });
+                                      line = word;
+                                      curY -= lineHeight;
+                                    } else {
+                                      line = test;
+                                    }
+                                  } catch {
+                                    line += " [...]";
+                                  }
                                 }
-                                if (line) { try { pageM.drawText(line, { ...drawOpts, y: curY }); } catch {} curY -= lineHeight; }
+                                if (line) {
+                                  try {
+                                    pageM.drawText(line, {
+                                      ...drawOpts,
+                                      y: curY,
+                                    });
+                                  } catch {}
+                                  curY -= lineHeight;
+                                }
                                 return curY;
                               } else {
-                                try { pageM.drawText(proc, { ...drawOpts, y }); } catch {
-                                  pageM.drawText(proc.replace(/[^\x20-\x7E]/g, "?"), { ...drawOpts, y });
+                                try {
+                                  pageM.drawText(proc, { ...drawOpts, y });
+                                } catch {
+                                  pageM.drawText(
+                                    proc.replace(/[^\x20-\x7E]/g, "?"),
+                                    { ...drawOpts, y },
+                                  );
                                 }
                                 return y - lineHeight;
                               }
                             };
 
-                            pageM.drawRectangle({ x: 0, y: pageHeight - 100, width: pageWidth, height: 100, color: rgb(0.1, 0.1, 0.1) });
+                            pageM.drawRectangle({
+                              x: 0,
+                              y: pageHeight - 100,
+                              width: pageWidth,
+                              height: 100,
+                              color: rgb(0.1, 0.1, 0.1),
+                            });
                             yPositionM = pageHeight - 50;
-                            const titleStrM = (filledDataMod.place_visited && !isValEmpty(filledDataMod.place_visited)) 
-                              ? `${filledDataMod.place_visited} - Informe (Actualizado)` 
-                              : "Informe de Visita (Actualizado)";
-                            addTextM(titleStrM, margin, yPositionM, 22, boldFontM, undefined, rgb(1, 1, 1));
+                            const titleStrM =
+                              filledDataMod.place_visited &&
+                              !isValEmpty(filledDataMod.place_visited)
+                                ? `${filledDataMod.place_visited} - Informe (Actualizado)`
+                                : "Informe de Visita (Actualizado)";
+                            addTextM(
+                              titleStrM,
+                              margin,
+                              yPositionM,
+                              22,
+                              boldFontM,
+                              undefined,
+                              rgb(1, 1, 1),
+                            );
                             yPositionM -= 35;
-                            addTextM(`Generado: ${new Date().toLocaleString()}`, margin, yPositionM, 10, fontM, undefined, rgb(0.8, 0.8, 0.8));
+                            addTextM(
+                              `Generado: ${new Date().toLocaleString()}`,
+                              margin,
+                              yPositionM,
+                              10,
+                              fontM,
+                              undefined,
+                              rgb(0.8, 0.8, 0.8),
+                            );
                             yPositionM = pageHeight - 130;
 
                             // Rep details
-                            yPositionM = addTextM("Detalles del Representante de Ventas", margin, yPositionM, 14, boldFontM, undefined, rgb(0, 0, 0));
+                            yPositionM = addTextM(
+                              "Detalles del Representante de Ventas",
+                              margin,
+                              yPositionM,
+                              14,
+                              boldFontM,
+                              undefined,
+                              rgb(0, 0, 0),
+                            );
                             yPositionM -= 15;
-                            const repNameM = userName || "(Nombre no disponible)";
+                            const repNameM =
+                              userName || "(Nombre no disponible)";
                             // Use profile phone_number or fall back to the WhatsApp 'from' number
-                            const repPhoneM = profile?.phone_number || from || "(Teléfono no disponible)";
-                            addTextM("Nombre:", margin, yPositionM, 11, boldFontM); addTextM(repNameM, margin + 50, yPositionM, 11, fontM);
+                            const repPhoneM =
+                              profile?.phone_number ||
+                              from ||
+                              "(Teléfono no disponible)";
+                            addTextM(
+                              "Nombre:",
+                              margin,
+                              yPositionM,
+                              11,
+                              boldFontM,
+                            );
+                            addTextM(
+                              repNameM,
+                              margin + 50,
+                              yPositionM,
+                              11,
+                              fontM,
+                            );
                             yPositionM -= 20;
-                            addTextM("Teléfono:", margin, yPositionM, 11, boldFontM); addTextM(repPhoneM, margin + 50, yPositionM, 11, fontM);
+                            addTextM(
+                              "Teléfono:",
+                              margin,
+                              yPositionM,
+                              11,
+                              boldFontM,
+                            );
+                            addTextM(
+                              repPhoneM,
+                              margin + 50,
+                              yPositionM,
+                              11,
+                              fontM,
+                            );
                             yPositionM -= sectionSpacing;
 
                             // Template info
-                            const { data: tplM } = await adminClient.from("user_templates").select("name,fields").eq("id", targetReport.template_id).maybeSingle();
-                            const tplName = tplM?.name || "Standard Sales Report";
-                            yPositionM = addTextM(`Plantilla: ${tplName}`, margin, yPositionM, 12, boldFontM);
+                            const { data: tplM } = await adminClient
+                              .from("user_templates")
+                              .select("name,fields")
+                              .eq("id", targetReport.template_id)
+                              .maybeSingle();
+                            const tplName =
+                              tplM?.name || "Standard Sales Report";
+                            yPositionM = addTextM(
+                              `Plantilla: ${tplName}`,
+                              margin,
+                              yPositionM,
+                              12,
+                              boldFontM,
+                            );
                             yPositionM -= sectionSpacing;
 
                             // Filled data
-                            const entriesMod = Object.entries(filledDataMod).filter(([_, v]) => !isValEmpty(v));
+                            const entriesMod = Object.entries(
+                              filledDataMod,
+                            ).filter(([_, v]) => !isValEmpty(v));
                             if (entriesMod.length > 0) {
-                              yPositionM = addTextM("Detalles del Informe", margin, yPositionM, 14, boldFontM);
-                              pageM.drawLine({ start: { x: margin, y: yPositionM + 5 }, end: { x: pageWidth - margin, y: yPositionM + 5 }, thickness: 1, color: rgb(0.8, 0.8, 0.8) });
+                              yPositionM = addTextM(
+                                "Detalles del Informe",
+                                margin,
+                                yPositionM,
+                                14,
+                                boldFontM,
+                              );
+                              pageM.drawLine({
+                                start: { x: margin, y: yPositionM + 5 },
+                                end: {
+                                  x: pageWidth - margin,
+                                  y: yPositionM + 5,
+                                },
+                                thickness: 1,
+                                color: rgb(0.8, 0.8, 0.8),
+                              });
                               yPositionM -= 15;
                               const fieldMap: Record<string, string> = {};
-                              if (tplM?.fields) { for (const f of (tplM.fields as any[])) { if (f.name) fieldMap[f.name] = f.label || f.name; } }
+                              if (tplM?.fields) {
+                                for (const f of tplM.fields as any[]) {
+                                  if (f.name)
+                                    fieldMap[f.name] = f.label || f.name;
+                                }
+                              }
                               for (const [k, v] of entriesMod) {
-                                const lbl = fieldMap[k] || k.charAt(0).toUpperCase() + k.slice(1).replace(/_/g, " ");
-                                const valStr = Array.isArray(v) ? v.join(", ") : String(v).trim();
-                                yPositionM = addTextM(`${lbl}:`, margin, yPositionM, 11, boldFontM);
-                                yPositionM = addTextM(valStr, margin + 20, yPositionM, 10, fontM, pageWidth - 2 * margin - 20);
+                                const lbl =
+                                  fieldMap[k] ||
+                                  k.charAt(0).toUpperCase() +
+                                    k.slice(1).replace(/_/g, " ");
+                                const valStr = Array.isArray(v)
+                                  ? v.join(", ")
+                                  : String(v).trim();
+                                yPositionM = addTextM(
+                                  `${lbl}:`,
+                                  margin,
+                                  yPositionM,
+                                  11,
+                                  boldFontM,
+                                );
+                                yPositionM = addTextM(
+                                  valStr,
+                                  margin + 20,
+                                  yPositionM,
+                                  10,
+                                  fontM,
+                                  pageWidth - 2 * margin - 20,
+                                );
                                 yPositionM -= 10;
                               }
                               yPositionM -= sectionSpacing;
                             }
 
                             // Modified transcript
-                            yPositionM = addTextM("Transcripción Actualizada", margin, yPositionM, 14, boldFontM);
-                            pageM.drawLine({ start: { x: margin, y: yPositionM + 5 }, end: { x: pageWidth - margin, y: yPositionM + 5 }, thickness: 1, color: rgb(0.8, 0.8, 0.8) });
+                            yPositionM = addTextM(
+                              "Transcripción Actualizada",
+                              margin,
+                              yPositionM,
+                              14,
+                              boldFontM,
+                            );
+                            pageM.drawLine({
+                              start: { x: margin, y: yPositionM + 5 },
+                              end: { x: pageWidth - margin, y: yPositionM + 5 },
+                              thickness: 1,
+                              color: rgb(0.8, 0.8, 0.8),
+                            });
                             yPositionM -= 15;
-                            yPositionM = addTextM(finalTranscript, margin, yPositionM, 10, fontM, pageWidth - 2 * margin);
+                            yPositionM = addTextM(
+                              finalTranscript,
+                              margin,
+                              yPositionM,
+                              10,
+                              fontM,
+                              pageWidth - 2 * margin,
+                            );
 
                             const pdfBytesM = await pdfDocM.save();
-                            const pdfBlobM = new Blob([pdfBytesM], { type: "application/pdf" });
+                            const pdfBlobM = new Blob([pdfBytesM], {
+                              type: "application/pdf",
+                            });
                             const fdM = new FormData();
                             fdM.append("file", pdfBlobM, "updated_report.pdf");
                             fdM.append("messaging_product", "whatsapp");
-                            const upRespM = await fetch(`https://graph.facebook.com/${apiVersion}/${phoneNumberId}/media`, {
-                              method: "POST",
-                              headers: { Authorization: `Bearer ${accessToken}` },
-                              body: fdM,
-                            });
+                            const upRespM = await fetch(
+                              `https://graph.facebook.com/${apiVersion}/${phoneNumberId}/media`,
+                              {
+                                method: "POST",
+                                headers: {
+                                  Authorization: `Bearer ${accessToken}`,
+                                },
+                                body: fdM,
+                              },
+                            );
                             const upResultM = await upRespM.json();
                             if (upRespM.ok && upResultM.id) {
                               await sendWAMessage({
@@ -2057,20 +2544,34 @@ serve(async (req) => {
                                 recipient_type: "individual",
                                 to: normalizePhoneNumber(from),
                                 type: "document",
-                                document: { id: upResultM.id, caption: "✅ ¡Tu informe actualizado está listo! 📄", filename: "informe_actualizado.pdf" },
+                                document: {
+                                  id: upResultM.id,
+                                  caption:
+                                    "✅ ¡Tu informe actualizado está listo! 📄",
+                                  filename: "informe_actualizado.pdf",
+                                },
                               });
-                              
-                              await new Promise((resolve) => setTimeout(resolve, 2000));
+
+                              await new Promise((resolve) =>
+                                setTimeout(resolve, 2000),
+                              );
                               await sendMenuTemplate(from);
-                            } else { throw new Error(JSON.stringify(upResultM)); }
+                            } else {
+                              throw new Error(JSON.stringify(upResultM));
+                            }
                           } catch (pdfErrM) {
-                            console.error("PDF generation error for modified report:", pdfErrM);
+                            console.error(
+                              "PDF generation error for modified report:",
+                              pdfErrM,
+                            );
                             await sendWAMessage({
                               messaging_product: "whatsapp",
                               recipient_type: "individual",
                               to: normalizePhoneNumber(from),
                               type: "text",
-                              text: { body: "✅ Report updated! PDF generation failed. Check the portal for your report." },
+                              text: {
+                                body: "✅ Report updated! PDF generation failed. Check the portal for your report.",
+                              },
                             });
                             await sendMenuTemplate(from);
                           }
@@ -2081,13 +2582,20 @@ serve(async (req) => {
                     }
 
                     // ── MODIFY AGAIN (from modified report template) ──────
-                    if (buttonId === "modify_again" || buttonText.includes("modify") || buttonText.includes("modificar")) {
+                    if (
+                      buttonId === "modify_again" ||
+                      buttonText.includes("modify") ||
+                      buttonText.includes("modificar")
+                    ) {
                       // Case 1: Modify pressed after a modification — session record already exists
                       const { data: modAgainConv } = await adminClient
                         .from("voice_transcripts")
                         .select("*")
                         .eq("phone_number", from)
-                        .eq("conversation_state", "awaiting_modification_confirmation")
+                        .eq(
+                          "conversation_state",
+                          "awaiting_modification_confirmation",
+                        )
                         .order("created_at", { ascending: false })
                         .limit(1)
                         .maybeSingle();
@@ -2096,7 +2604,9 @@ serve(async (req) => {
                         // Reset back to awaiting_modification_input
                         await adminClient
                           .from("voice_transcripts")
-                          .update({ conversation_state: "awaiting_modification_input" })
+                          .update({
+                            conversation_state: "awaiting_modification_input",
+                          })
                           .eq("id", modAgainConv.id);
                         await sendWAMessage({
                           messaging_product: "whatsapp",
@@ -2121,13 +2631,18 @@ serve(async (req) => {
                         .select("*")
                         .eq("phone_number", from)
                         .eq("conversation_state", "awaiting_confirmation")
-                        .or("is_session_record.is.null,is_session_record.eq.false")
+                        .or(
+                          "is_session_record.is.null,is_session_record.eq.false",
+                        )
                         .order("created_at", { ascending: false })
                         .limit(1)
                         .maybeSingle();
 
                       if (newReportConv) {
-                        console.log("Modify pressed on new report, setting up modification session:", newReportConv.id);
+                        console.log(
+                          "Modify pressed on new report, setting up modification session:",
+                          newReportConv.id,
+                        );
 
                         // Create a session record targeting this new report
                         // (same pattern as the menu modify flow)
@@ -2174,14 +2689,26 @@ serve(async (req) => {
 
                     // ── Standard confirm / retake flow ────────────────────
                     let action: "confirm" | "retake" | null = null;
-                    if (buttonId === "Confirm" || buttonText.includes("confirm") || buttonText.includes("confirmar")) {
+                    if (
+                      buttonId === "Confirm" ||
+                      buttonText.includes("confirm") ||
+                      buttonText.includes("confirmar")
+                    ) {
                       action = "confirm";
-                    } else if (buttonId === "Retake" || buttonText.includes("retake") || buttonText.includes("volver a grabar")) {
+                    } else if (
+                      buttonId === "Retake" ||
+                      buttonText.includes("retake") ||
+                      buttonText.includes("volver a grabar")
+                    ) {
                       action = "retake";
                     }
 
                     if (!action) {
-                      console.log("Unknown button clicked:", buttonText, buttonId);
+                      console.log(
+                        "Unknown button clicked:",
+                        buttonText,
+                        buttonId,
+                      );
                       continue;
                     }
 
@@ -2196,16 +2723,22 @@ serve(async (req) => {
                       try {
                         // Get the awaiting_confirmation transcript (exclude session/state records)
                         // Using a more robust lookup to handle NULLs and format variations
-                        const { data: transcriptRecord, error: transcriptError } =
-                          await adminClient
-                            .from("voice_transcripts")
-                            .select("*")
-                            .or(`phone_number.eq."${from}",phone_number.eq."${normalizePhoneNumber(from)}"`)
-                            .eq("conversation_state", "awaiting_confirmation")
-                            .or('is_session_record.is.null,is_session_record.eq.false')
-                            .order("created_at", { ascending: false })
-                            .limit(1)
-                            .maybeSingle();
+                        const {
+                          data: transcriptRecord,
+                          error: transcriptError,
+                        } = await adminClient
+                          .from("voice_transcripts")
+                          .select("*")
+                          .or(
+                            `phone_number.eq."${from}",phone_number.eq."${normalizePhoneNumber(from)}"`,
+                          )
+                          .eq("conversation_state", "awaiting_confirmation")
+                          .or(
+                            "is_session_record.is.null,is_session_record.eq.false",
+                          )
+                          .order("created_at", { ascending: false })
+                          .limit(1)
+                          .maybeSingle();
 
                         let pendingRecord: any = null;
                         if (!transcriptRecord) {
@@ -2214,9 +2747,13 @@ serve(async (req) => {
                           const { data: pendingData } = await adminClient
                             .from("voice_transcripts")
                             .select("*")
-                            .or(`phone_number.eq."${from}",phone_number.eq."${normalizePhoneNumber(from)}"`)
+                            .or(
+                              `phone_number.eq."${from}",phone_number.eq."${normalizePhoneNumber(from)}"`,
+                            )
                             .eq("status", "pending")
-                            .or('is_session_record.is.null,is_session_record.eq.false')
+                            .or(
+                              "is_session_record.is.null,is_session_record.eq.false",
+                            )
                             .order("created_at", { ascending: false })
                             .limit(1)
                             .maybeSingle();
@@ -2350,7 +2887,10 @@ serve(async (req) => {
                           const drawOptions: any = { x, size, font: fontType };
                           if (color) drawOptions.color = color;
 
-                          let processedText = text.replace(/\n/g, " ").replace(/\r/g, "").replace(/\t/g, " ");
+                          let processedText = text
+                            .replace(/\n/g, " ")
+                            .replace(/\r/g, "")
+                            .replace(/\t/g, " ");
 
                           const ensureSafeText = (t: string) => {
                             try {
@@ -2364,7 +2904,9 @@ serve(async (req) => {
                           processedText = ensureSafeText(processedText);
 
                           if (maxWidth) {
-                            const words = processedText.split(" ").filter(word => word.length > 0);
+                            const words = processedText
+                              .split(" ")
+                              .filter((word) => word.length > 0);
                             let line = "";
                             let currentY = y;
                             for (const word of words) {
@@ -2402,9 +2944,15 @@ serve(async (req) => {
                             return currentY;
                           } else {
                             try {
-                              page.drawText(processedText, { ...drawOptions, y });
+                              page.drawText(processedText, {
+                                ...drawOptions,
+                                y,
+                              });
                             } catch (e) {
-                              const flatText = processedText.replace(/[^\x20-\x7E]/g, "?");
+                              const flatText = processedText.replace(
+                                /[^\x20-\x7E]/g,
+                                "?",
+                              );
                               page.drawText(flatText, { ...drawOptions, y });
                             }
                             return y - lineHeight;
@@ -2420,9 +2968,12 @@ serve(async (req) => {
                         });
 
                         yPosition = pageHeight - 50;
-                        const titleStrNew = (typeof filledData === 'object' && filledData.place_visited && !isValEmpty(filledData.place_visited))
-                          ? `${filledData.place_visited} - Informe`
-                          : "Informe de Visita Comercial";
+                        const titleStrNew =
+                          typeof filledData === "object" &&
+                          filledData.place_visited &&
+                          !isValEmpty(filledData.place_visited)
+                            ? `${filledData.place_visited} - Informe`
+                            : "Informe de Visita Comercial";
                         addText(
                           titleStrNew,
                           margin,
@@ -2478,7 +3029,9 @@ serve(async (req) => {
                         yPosition -= sectionSpacing;
 
                         // Add filled data section
-                        const activeEntries = Object.entries(filledData).filter(([_, v]) => !isValEmpty(v));
+                        const activeEntries = Object.entries(filledData).filter(
+                          ([_, v]) => !isValEmpty(v),
+                        );
                         if (activeEntries.length > 0) {
                           yPosition = addText(
                             "Detalles del Informe",
@@ -2499,17 +3052,28 @@ serve(async (req) => {
                           const fieldLabelMap: Record<string, string> = {};
                           if (activeTemplate.fields) {
                             for (const field of activeTemplate.fields) {
-                              const name = field.name || (field as any).key || (field as any).id || "";
-                              const label = field.label || (field as any).title || name || "Campo";
+                              const name =
+                                field.name ||
+                                (field as any).key ||
+                                (field as any).id ||
+                                "";
+                              const label =
+                                field.label ||
+                                (field as any).title ||
+                                name ||
+                                "Campo";
                               if (name) fieldLabelMap[name] = label;
                             }
                           }
 
                           for (const [key, value] of activeEntries) {
-                            const label = fieldLabelMap[key] ||
+                            const label =
+                              fieldLabelMap[key] ||
                               key.charAt(0).toUpperCase() +
-                              key.slice(1).replace(/_/g, " ");
-                            const valStr = Array.isArray(value) ? value.join(", ") : String(value).trim();
+                                key.slice(1).replace(/_/g, " ");
+                            const valStr = Array.isArray(value)
+                              ? value.join(", ")
+                              : String(value).trim();
 
                             yPosition = addText(
                               `${label}:`,
@@ -2612,7 +3176,9 @@ serve(async (req) => {
                         );
 
                         // Wait briefly so WhatsApp delivers the PDF before the menu
-                        await new Promise((resolve) => setTimeout(resolve, 2000));
+                        await new Promise((resolve) =>
+                          setTimeout(resolve, 2000),
+                        );
                         // Send the menu after the PDF so the user can take further actions
                         await sendMenuTemplate(from);
 
