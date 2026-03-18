@@ -2496,29 +2496,7 @@ serve(async (req) => {
                               yPositionM -= sectionSpacing;
                             }
 
-                            // Modified transcript
-                            yPositionM = addTextM(
-                              "Transcripción Actualizada",
-                              margin,
-                              yPositionM,
-                              14,
-                              boldFontM,
-                            );
-                            pageM.drawLine({
-                              start: { x: margin, y: yPositionM + 5 },
-                              end: { x: pageWidth - margin, y: yPositionM + 5 },
-                              thickness: 1,
-                              color: rgb(0.8, 0.8, 0.8),
-                            });
-                            yPositionM -= 15;
-                            yPositionM = addTextM(
-                              finalTranscript,
-                              margin,
-                              yPositionM,
-                              10,
-                              fontM,
-                              pageWidth - 2 * margin,
-                            );
+
 
                             const pdfBytesM = await pdfDocM.save();
                             const pdfBlobM = new Blob([pdfBytesM], {
@@ -3096,29 +3074,7 @@ serve(async (req) => {
                           yPosition -= sectionSpacing;
                         }
 
-                        yPosition = addText(
-                          "Transcripción",
-                          margin,
-                          yPosition,
-                          14,
-                          boldFont,
-                        );
-                        page.drawLine({
-                          start: { x: margin, y: yPosition + 5 },
-                          end: { x: pageWidth - margin, y: yPosition + 5 },
-                          thickness: 1,
-                          color: rgb(0.8, 0.8, 0.8),
-                        });
-                        yPosition -= 15;
 
-                        yPosition = addText(
-                          finalRecord.transcript,
-                          margin,
-                          yPosition,
-                          10,
-                          font,
-                          pageWidth - 2 * margin,
-                        );
 
                         const pdfBytes = await pdfDoc.save();
                         const pdfBlob = new Blob([pdfBytes], {
