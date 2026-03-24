@@ -135,26 +135,28 @@ async function extractFieldsWithGPT(
           `- ${field.name || (field as any).key || (field as any).id || "field"} (${field.type}${field.required ? ", required" : ", optional"})`,
       )
       .join("\n");
-
-    const systemPrompt = `Eres un asistente especializado en extraer datos estructurados de transcripciones de voz de informes de visitas comerciales/ventas.
-Dado un texto de transcripción y una lista de campos de plantilla, extrae la información relevante y completa los campos de la plantilla.
+    const systemPrompt = `Eres un asistente especializado en extraer y redactar informes comerciales profesionales a partir de transcripciones de voz de visitas de ventas.
+Dado un texto de transcripción y una lista de campos de plantilla, extrae la información relevante y redáctala de forma profesional, clara y orientada al negocio.
 Devuelve ÚNICAMENTE un objeto JSON válido con los nombres de los campos como claves y los valores extraídos como valores.
 
-REGLAS CRÍTICAS DE EXTRACCIÓN:
-1. Extrae ÚNICAMENTE lo que está explícitamente mencionado en la transcripción. NO inventes, NO inferas, NO combines información.
-2. Reproduce el contenido fielmente: si el vendedor dice que un producto "está sin stock" o "está pendiente", escríbelo exactamente así. NO lo reformules como una conclusión diferente.
-3. Si la transcripción dice que hay falta de disponibilidad temporal (ej: "llevan 2 semanas sin género"), escríbelo como falta de stock temporal, NO como que el producto no se venderá más.
-4. Para campos marcados como "required" (obligatorio): si la información NO está en la transcripción, devuelve null.
-5. Para campos marcados como "optional" (opcional): devuelve null si no está presente.
-6. NUNCA uses "N/A" como cadena de texto. Usa null o array vacío [] según corresponda.
+REGLAS CRÍTICAS DE EXTRACCIÓN Y REDACCIÓN:
+1. EXHAUSTIVIDAD: extrae y refleja TODOS los temas mencionados en la transcripción, sin excepción. Si el vendedor menciona un producto o tema aunque sea brevemente o sin novedad, inclúyelo. NO omitas nada.
+2. Redacta cada ítem de forma profesional y clara: frases concisas, directas, con contexto comercial suficiente para que el manager entienda la situación sin necesidad de más explicaciones.
+3. Incluye siempre los datos clave: producto, precio, cantidad, plazo, condición, motivo o impacto comercial cuando estén disponibles en la transcripción.
+4. EMOJIS – ESTILO TRAILING: coloca el emoji relevante INMEDIATAMENTE DESPUÉS del nombre del producto o sujeto principal, no al inicio de la frase. Ejemplos correctos: "Rape 🐟 en liquidación para menú a 5,95", "Picantones 🍗: 2 semanas sin género", "Aceite 🫒: cliente pide mejor precio". Ejemplos incorrectos: "🐟 Se vendió rape..." (NO pongas el emoji al principio de la frase).
+5. Usa emojis de producto apropiados: 🐟 pescado/rape, 🍗 ave/picantones/pollo, 🥩 menudos/carne, 🫒 aceite, 🍦 helado, 🧅 verduras, 🦐 marisco, etc.
+6. Para campos marcados como "required" (obligatorio): si la información NO está en la transcripción, devuelve null.
+7. Para campos marcados como "optional" (opcional): devuelve null si no está presente.
+8. NUNCA uses "N/A" como cadena de texto. Usa null o array vacío [] según corresponda.
+9. Cuando haya un riesgo comercial claro (cliente buscando alternativas, stock agotado, malestar del cliente), mencionarlo de forma concisa en el ítem correspondiente.
 
-ADEMÁS de los campos de la plantilla, SIEMPRE debes extraer estos 6 campos adicionales:
-- "novedades": Array de strings. Novedades o actualizaciones mencionadas (productos presentados, catálogos mostrados, eventos, cambios, etc.). Array vacío [] si no hay. NO uses "N/A".
-- "ventas_realizadas": Array de strings. Ventas concretas realizadas o pedidos tomados durante la visita (producto, precio, cantidad, condiciones especiales). Array vacío [] si no hay ventas.
-- "stock_disponibilidad": Array de strings. Problemas de stock o disponibilidad mencionados (productos sin existencias, tiempos de espera, desabastecimiento). Array vacío [] si no hay.
-- "objeciones": Array de strings. Objeciones, quejas o preocupaciones que el cliente expresó (precio alto, competencia, insatisfacción, falta de algo). Array vacío [] si no hay.
-- "proximos_pasos": Array de strings. Próximas acciones acordadas o tareas pendientes mencionadas por el vendedor (volver la próxima semana, enviar tarifa, llamar, etc.). Array vacío [] si no hay.
-- "sugerencias": Array de strings. Sugerencias de acción explícitamente mencionadas por el vendedor en la transcripción ÚNICAMENTE. Si el vendedor no da consejos explícitos, devuelve array vacío []. NO generes sugerencias inventadas.`;
+ADEMÁS de los campos de la plantilla, SIEMPRE debes extraer estos 6 campos adicionales con MÁXIMA EXHAUSTIVIDAD. Cada elemento del array debe ser una FRASE COMPLETA, profesional, con todo el contexto necesario. Recuerda: emoji DESPUÉS del nombre del producto, no al inicio.
+- "novedades": Array de strings. Captura TODOS los temas mencionados por el vendedor: presentaciones realizadas, interés del cliente en productos, y también temas pendientes o sin novedad (ej: "Helados 🍦: tema pendiente; sin novedades y sin ventas activas"). NO omitas ningún producto o tema mencionado aunque no haya habido acción. Array vacío [] SOLO si no se menciona absolutamente ninguna novedad o tema.
+- "ventas_realizadas": Array de strings. Frases profesionales con: nombre del producto + emoji de producto + precio + condición especial (liquidación, oferta puntual, urgencia de consumo). Array vacío [] si no hay ventas.
+- "stock_disponibilidad": Array de strings. Frases profesionales con: nombre del producto + emoji + dos puntos + descripción del problema (duración, tipo de incidencia, riesgo comercial). Formato: "Picantones 🍗: 2 semanas sin género; el cliente se abastece por su cuenta". Array vacío [] si no hay.
+- "objeciones": Array de strings. Captura TODAS las objeciones e insatisfacciones, incluyendo: (a) objeciones de precio con referencia comparativa, (b) malestar o búsqueda de alternativas causada por falta de stock. Redacta cada una como una frase profesional que transmita la urgencia comercial. Array vacío [] si no hay.
+- "proximos_pasos": Array de strings. Frases profesionales con la acción concreta, plazo y material necesario. Añade el emoji del producto al que se refiere la acción si aplica (p.ej. "Llevar tarifa de aceite 🫒 la semana que viene"). Array vacío [] si no hay.
+- "sugerencias": Array de strings. Sugerencias de acción explícitamente mencionadas por el vendedor en la transcripción ÚNICAMENTE, redactadas de forma profesional con contexto. Si el vendedor no da consejos explícitos, devuelve array vacío []. NO generes sugerencias inventadas.`;
 
     const userPrompt = `Transcripción:
 ${transcript}
@@ -162,7 +164,8 @@ ${transcript}
 Campos de la Plantilla:
 ${fieldsDescription}
 
-Extrae y completa todos los campos de la plantilla a partir de la transcripción, e incluye siempre los campos "novedades", "ventas_realizadas", "stock_disponibilidad", "objeciones", "proximos_pasos" y "sugerencias". Devuelve un objeto JSON con los nombres de los campos como claves. Sé fiel a la transcripción: no interpretes ni reformules el contenido.`;
+Extrae y completa todos los campos de la plantilla a partir de la transcripción, e incluye siempre los campos "novedades", "ventas_realizadas", "stock_disponibilidad", "objeciones", "proximos_pasos" y "sugerencias".
+IMPORTANTE: sé EXHAUSTIVO. Refleja TODOS los temas, productos y situaciones mencionados en la transcripción sin omitir ninguno, aunque sean pendientes o sin novedad. Devuelve un objeto JSON con los nombres de los campos como claves.`;
 
     const gptResponse = await fetch(OPENAI_API_URL, {
       method: "POST",
@@ -171,7 +174,7 @@ Extrae y completa todos los campos de la plantilla a partir de la transcripción
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: Deno.env.get("OPENAI_GPT_MODEL") || "gpt-4o-mini",
+        model: Deno.env.get("OPENAI_GPT_MODEL") || "gpt-4o",
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: userPrompt },
@@ -286,7 +289,9 @@ function buildConfirmationMessage(
   // Build the summary line using place_visited
   const placeVisited =
     filledData.place_visited || filledData.Place_visited || "";
+  
   let message = "";
+  
   if (placeVisited && !isValEmpty(placeVisited)) {
     message += `📌 *Resumen cliente: ${capitalizeFirst(String(placeVisited))}*\n\n`;
   }
@@ -389,16 +394,21 @@ function buildConfirmationMessage(
   }
 
   // If everything is empty (rare), show at least one identifier or fallback
-  if (!message.trim()) {
-    message = "Aquí tienes los detalles recopilados:\n\n";
-    for (const field of templateFields) {
-      const name = field.name || "";
-      if (name && !isValEmpty(filledData[name])) {
-        const label = field.label || name;
-        message += `• *${label}*: ${capitalizeFirst(String(filledData[name]))}\n`;
+  if (message.trim() === "" || message.trim().startsWith("📌 *Resumen cliente:") && message.trim().split("\n").length <= 2) {
+    // Check if it's truly empty (besides client name)
+    const hasMoreContent = novedades.length || ventas_realizadas.length || stock_disponibilidad.length || objeciones.length || proximos_pasos.length || sugerencias.length || remainingFields.length;
+    
+    if (!hasMoreContent) {
+      message = "Aquí tienes los detalles recopilados:\n\n";
+      for (const field of templateFields) {
+        const name = field.name || "";
+        if (name && !isValEmpty(filledData[name])) {
+          const label = field.label || name;
+          message += `• *${label}*: ${capitalizeFirst(String(filledData[name]))}\n`;
+        }
       }
+      message += "\n";
     }
-    message += "\n";
   }
 
   message += "¿Está todo correcto o ajusto algo antes de enviar al manager?";
@@ -765,7 +775,7 @@ serve(async (req) => {
                       },
                       body: JSON.stringify({
                         model:
-                          Deno.env.get("OPENAI_GPT_MODEL") || "gpt-4o-mini",
+                          Deno.env.get("OPENAI_GPT_MODEL") || "gpt-4o",
                         messages: [
                           {
                             role: "system",
@@ -1272,7 +1282,7 @@ serve(async (req) => {
                             interactive: {
                               type: "button",
                               body: {
-                                text: confirmationMessage,
+                                text: `📝 *REPORTE CREADO*\n\n${confirmationMessage}`,
                               },
                               action: {
                                 buttons: [
