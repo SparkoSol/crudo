@@ -189,11 +189,67 @@ export default function ReportDetail() {
 
     const placeVisited: string = String(filledData['place_visited'] || filledData['Place_visited'] || '');
     const placeVisitedDisplay = placeVisited ? placeVisited.charAt(0).toUpperCase() + placeVisited.slice(1) : '';
-    const filledFields = fields.filter((f) => {
-        const val = filledData[f.name];
-        return val !== null && val !== undefined && String(val).trim() !== '' && String(val).trim().toLowerCase() !== 'n/a';
+
+    const isValMissing = (v: any): boolean => {
+        if (v === null || v === undefined) return true;
+        if (Array.isArray(v)) return v.length === 0 || v.every(item => isValMissing(item));
+        const s = String(v).trim().toLowerCase();
+        return s === '' || s === 'n/a' || s === 'na' || s === 'none' || s === 'no aplica' || s === '[]' || s === 'null';
+    };
+
+    const getFieldVal = (fieldName: string) => {
+        // Try exact match first, then common variations
+        if (!isValMissing(filledData[fieldName])) return filledData[fieldName];
+        
+        const capitalized = fieldName.charAt(0).toUpperCase() + fieldName.slice(1);
+        if (!isValMissing(filledData[capitalized])) return filledData[capitalized];
+        
+        const upper = fieldName.toUpperCase();
+        if (!isValMissing(filledData[upper])) return filledData[upper];
+        
+        const lower = fieldName.toLowerCase();
+        if (!isValMissing(filledData[lower])) return filledData[lower];
+        
+        return null;
+    };
+
+    const formatVal = (val: any): string => {
+        if (Array.isArray(val)) {
+            return val.filter(v => !isValMissing(v)).join(', ');
+        }
+        return String(val);
+    };
+
+    const processedKeys = new Set(['place_visited', 'Place_visited', 'PLACE_VISITED']);
+    const displayFields: { label: string; value: any }[] = [];
+
+    // First, process fields defined in the template to maintain template order
+    fields.forEach(f => {
+        const val = getFieldVal(f.name);
+        if (!isValMissing(val)) {
+            displayFields.push({
+                label: f.label,
+                value: val
+            });
+            // Mark this field and common variations as processed
+            processedKeys.add(f.name);
+            processedKeys.add(f.name.toLowerCase());
+            processedKeys.add(f.name.charAt(0).toUpperCase() + f.name.slice(1));
+            processedKeys.add(f.name.toUpperCase());
+        }
     });
-    const hasAnything = !!placeVisited || filledFields.length > 0;
+
+    // Next, process any leftover keys in filledData (dynamic fields from LLM)
+    Object.entries(filledData).forEach(([key, val]) => {
+        if (!processedKeys.has(key) && !isValMissing(val)) {
+            displayFields.push({
+                label: key.charAt(0).toUpperCase() + key.slice(1).replace(/_/g, ' '),
+                value: val
+            });
+        }
+    });
+    
+    const hasAnything = !!placeVisited || displayFields.length > 0;
 
     return (
         <div className="min-h-screen bg-gray-50/50">
@@ -256,13 +312,13 @@ export default function ReportDetail() {
                                         </div>
                                     )}
                                     {/* Template fields that have a real value */}
-                                    {filledFields.map((field) => (
-                                        <div key={field.name}>
+                                    {displayFields.map((field: { label: string; value: any }, index: number) => (
+                                        <div key={`${field.label}-${index}`}>
                                             <h3 className="text-xs font-semibold text-gray-400 mb-1 uppercase tracking-wider">
                                                 {field.label}
                                             </h3>
                                             <p className="text-gray-700 text-[15px] leading-relaxed whitespace-pre-wrap">
-                                                {String(filledData[field.name])}
+                                                {formatVal(field.value)}
                                             </p>
                                         </div>
                                     ))}
