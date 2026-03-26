@@ -225,6 +225,9 @@ export default function ReportDetail() {
 
     // First, process fields defined in the template to maintain template order
     fields.forEach(f => {
+        // Skip place_visited if it's already shown in the special header at the top
+        if (processedKeys.has(f.name)) return;
+
         const val = getFieldVal(f.name);
         if (!isValMissing(val)) {
             displayFields.push({
@@ -239,7 +242,30 @@ export default function ReportDetail() {
         }
     });
 
-    // Next, process any leftover keys in filledData (dynamic fields from LLM)
+    // Smart sections that we want to show in a specific order with consistent labels
+    const smartSections = [
+        { key: 'novedades', label: 'Novedades' },
+        { key: 'ventas_realizadas', label: 'Ventas Realizadas' },
+        { key: 'stock_disponibilidad', label: 'Stock / Disponibilidad' },
+        { key: 'objeciones', label: 'Objeciones' },
+        { key: 'proximos_pasos', label: 'Próximos Pasos' },
+        { key: 'sugerencias', label: 'Sugerencias' }
+    ];
+
+    smartSections.forEach(section => {
+        const val = getFieldVal(section.key);
+        if (!isValMissing(val) && !processedKeys.has(section.key)) {
+            displayFields.push({
+                label: section.label,
+                value: val
+            });
+            processedKeys.add(section.key);
+            processedKeys.add(section.key.toLowerCase());
+            processedKeys.add(section.key.toUpperCase());
+        }
+    });
+
+    // Finally, process any leftover keys in filledData (dynamic fields from LLM)
     Object.entries(filledData).forEach(([key, val]) => {
         if (!processedKeys.has(key) && !isValMissing(val)) {
             displayFields.push({

@@ -114,13 +114,23 @@ export const deleteProfile = async (profileId: string): Promise<void> => {
     throw new Error("No authenticated user");
   }
 
-  const { error } = await supabase
-    .from("profiles")
-    .delete()
-    .eq("id", profileId)
-    .eq("manager_id", session.user.id);
+  const functionUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/delete-user`;
 
-  if (error) {
-    throw error;
+  const res = await fetch(functionUrl, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${session.access_token}`,
+      apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
+    },
+    body: JSON.stringify({ profileId }),
+  });
+
+  const json = await res.json();
+
+  if (!res.ok) {
+    throw new Error(
+      json?.error || json?.message || "Failed to delete user",
+    );
   }
 };

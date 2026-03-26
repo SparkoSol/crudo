@@ -67,9 +67,9 @@ export default function Settings() {
   return (
     <div className="p-6 lg:p-8 pt-20 lg:pt-6 max-w-7xl mx-auto">
       <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900 mb-2">Settings</h1>
+        <h1 className="text-3xl font-bold text-gray-900 mb-2">Configuración</h1>
         <p className="text-gray-600">
-          Manage your account settings, profile information, and security preferences
+          Gestiona la configuración de tu cuenta, información de perfil y preferencias de seguridad
         </p>
       </div>
 

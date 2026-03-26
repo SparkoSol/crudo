@@ -337,7 +337,7 @@ export default function Templates() {
               </div>
 
               <div className="space-y-4">
-                <div className="p-4 border-2 border-brand-primary-200 rounded-xl bg-brand-primary-50/40 space-y-3 relative">
+                  <div className="p-4 border-2 border-brand-primary-200 rounded-xl bg-brand-primary-50/40 space-y-3 relative">
                   <div className="absolute -top-2.5 left-3 bg-white px-2 flex items-center gap-1">
                     <MapPin className="h-3.5 w-3.5 text-brand-primary-600" />
                     <span className="text-xs font-bold text-brand-primary-600 uppercase tracking-wider">Campo del Sistema — Siempre Obligatorio</span>
@@ -360,6 +360,32 @@ export default function Templates() {
                   </div>
                   <p className="text-xs text-gray-500">
                     El nombre del lugar/ubicación visitado. Se usa para identificar cada informe en el Panel y WhatsApp.
+                  </p>
+                </div>
+
+                {/* Information about auto-extracted fields */}
+                <div className="p-4 border border-brand-primary-100 rounded-xl bg-brand-primary-50/20 space-y-3 relative">
+                  <div className="absolute -top-2.5 left-3 bg-white px-2 flex items-center gap-1">
+                    <span className="text-xs font-bold text-brand-primary-500 uppercase tracking-wider italic">Secciones de Extracción Inteligente</span>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-y-2 gap-x-4 mt-2">
+                    {[
+                      { key: 'novedades', label: 'Novedades', emoji: '🆕' },
+                      { key: 'ventas_realizadas', label: 'Ventas Realizadas', emoji: '🧾' },
+                      { key: 'stock_disponibilidad', label: 'Stock / Disponibilidad', emoji: '🚨' },
+                      { key: 'objeciones', label: 'Objeciones', emoji: '🧩' },
+                      { key: 'proximos_pasos', label: 'Próximos Pasos', emoji: '📅' },
+                      { key: 'sugerencias', label: 'Sugerencias', emoji: '💡' }
+                    ].map((field) => (
+                      <div key={field.key} className="flex items-center gap-2 text-sm text-gray-600">
+                        <span className="text-base">{field.emoji}</span>
+                        <span className="font-semibold text-gray-500 min-w-[140px]">{field.label}:</span>
+                        <span className="text-xs text-brand-primary-600/70 font-medium bg-brand-primary-50 px-2 py-0.5 rounded-full">Auto-extraído</span>
+                      </div>
+                    ))}
+                  </div>
+                  <p className="text-xs text-gray-400 italic">
+                    * Estas secciones se extraen automáticamente de forma exhaustiva independientemente de los campos personalizados abajo.
                   </p>
                 </div>
 
