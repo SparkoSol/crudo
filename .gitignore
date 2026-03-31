@@ -11,8 +11,6 @@ node_modules
 dist
 dist-ssr
 *.local
-.env
-.env.*
 
 # Editor directories and files
 .vscode/*
@@ -25,3 +23,7 @@ dist-ssr
 *.sln
 *.sw?
 docs/*
+temp_auto_push.bat
+temp_interactive_push.bat
+config.bat
+branch_structure.json
