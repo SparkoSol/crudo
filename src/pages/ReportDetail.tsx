@@ -187,95 +187,123 @@ export default function ReportDetail() {
     const fields: any[] = transcript.user_templates?.fields || [];
     const isUpdated = !!(transcript.modified_transcript);
 
-    const placeVisited: string = String(filledData['place_visited'] || filledData['Place_visited'] || '');
-    const placeVisitedDisplay = placeVisited ? placeVisited.charAt(0).toUpperCase() + placeVisited.slice(1) : '';
-
     const isValMissing = (v: any): boolean => {
         if (v === null || v === undefined) return true;
-        if (Array.isArray(v)) return v.length === 0 || v.every(item => isValMissing(item));
+        if (Array.isArray(v)) return v.length === 0 || v.every((item: any) => isValMissing(item));
         const s = String(v).trim().toLowerCase();
         return s === '' || s === 'n/a' || s === 'na' || s === 'none' || s === 'no aplica' || s === '[]' || s === 'null';
     };
 
-    const getFieldVal = (fieldName: string) => {
-        // Try exact match first, then common variations
+    // Normalize a key for fuzzy matching: lowercase + remove underscores/hyphens/spaces
+    const normalizeKey = (k: string) => k.toLowerCase().replace(/[_\-\s]+/g, '');
+
+    // Build a normalized lookup map from filledData for robust matching
+    const filledDataNormMap: Record<string, string> = {};
+    Object.keys(filledData).forEach(k => {
+        filledDataNormMap[normalizeKey(k)] = k;
+    });
+
+    // Get value from filledData using fuzzy matching
+    const getFieldVal = (fieldName: string): any => {
+        // 1. Exact match
         if (!isValMissing(filledData[fieldName])) return filledData[fieldName];
-        
-        const capitalized = fieldName.charAt(0).toUpperCase() + fieldName.slice(1);
-        if (!isValMissing(filledData[capitalized])) return filledData[capitalized];
-        
-        const upper = fieldName.toUpperCase();
-        if (!isValMissing(filledData[upper])) return filledData[upper];
-        
+        // 2. Case variations
         const lower = fieldName.toLowerCase();
-        if (!isValMissing(filledData[lower])) return filledData[lower];
-        
+        const upper = fieldName.toUpperCase();
+        const capitalized = fieldName.charAt(0).toUpperCase() + fieldName.slice(1);
+        for (const variant of [lower, upper, capitalized]) {
+            if (!isValMissing(filledData[variant])) return filledData[variant];
+        }
+        // 3. Normalized fuzzy match (strip underscores + lowercase)
+        const normKey = normalizeKey(fieldName);
+        const matchedKey = filledDataNormMap[normKey];
+        if (matchedKey && !isValMissing(filledData[matchedKey])) return filledData[matchedKey];
         return null;
     };
 
     const formatVal = (val: any): string => {
         if (Array.isArray(val)) {
-            return val.filter(v => !isValMissing(v)).join(', ');
+            return val.filter((v: any) => !isValMissing(v)).join(', ');
         }
         return String(val);
     };
 
-    const processedKeys = new Set(['place_visited', 'Place_visited', 'PLACE_VISITED']);
-    const displayFields: { label: string; value: any }[] = [];
+    // Normalize place_visited — try all common variants
+    const placeVisited: string = String(
+        filledData['place_visited'] ||
+        filledData['Place_visited'] ||
+        filledData['Place Visited'] ||
+        filledData['lugar_visitado'] ||
+        filledData['Lugar_visitado'] ||
+        filledData['lugarvisitado'] ||
+        ''
+    );
+    const placeVisitedDisplay = placeVisited ? placeVisited.charAt(0).toUpperCase() + placeVisited.slice(1) : '';
 
-    // First, process fields defined in the template to maintain template order
-    fields.forEach(f => {
-        // Skip place_visited if it's already shown in the special header at the top
-        if (processedKeys.has(f.name)) return;
+    // Track which filledData keys have been rendered (using the original key)
+    const renderedOrigKeys = new Set<string>();
 
-        const val = getFieldVal(f.name);
-        if (!isValMissing(val)) {
-            displayFields.push({
-                label: f.label,
-                value: val
-            });
-            // Mark this field and common variations as processed
-            processedKeys.add(f.name);
-            processedKeys.add(f.name.toLowerCase());
-            processedKeys.add(f.name.charAt(0).toUpperCase() + f.name.slice(1));
-            processedKeys.add(f.name.toUpperCase());
-        }
+    // Mark place_visited variants as already handled
+    ['place_visited', 'Place_visited', 'Place Visited', 'lugar_visitado',
+     'Lugar_visitado', 'lugarvisitado', 'PLACE_VISITED', 'LUGAR_VISITADO'].forEach(k => {
+        renderedOrigKeys.add(k);
     });
 
-    // Smart sections that we want to show in a specific order with consistent labels
+    const displayFields: { label: string; value: any }[] = [];
+
+    // Smart sections — always shown first if data present, with clean labels
     const smartSections = [
         { key: 'novedades', label: 'Novedades' },
         { key: 'ventas_realizadas', label: 'Ventas Realizadas' },
         { key: 'stock_disponibilidad', label: 'Stock / Disponibilidad' },
         { key: 'objeciones', label: 'Objeciones' },
         { key: 'proximos_pasos', label: 'Próximos Pasos' },
-        { key: 'sugerencias', label: 'Sugerencias' }
+        { key: 'sugerencias', label: 'Sugerencias' },
     ];
 
-    smartSections.forEach(section => {
-        const val = getFieldVal(section.key);
-        if (!isValMissing(val) && !processedKeys.has(section.key)) {
-            displayFields.push({
-                label: section.label,
-                value: val
-            });
-            processedKeys.add(section.key);
-            processedKeys.add(section.key.toLowerCase());
-            processedKeys.add(section.key.toUpperCase());
+    // 1. Process template fields (maintains template order, uses labels from template)
+    fields.forEach(f => {
+        const normF = normalizeKey(f.name);
+        // Skip place_visited variants
+        if (normF === 'placevisited' || normF === 'lugarvisitado') return;
+
+        const val = getFieldVal(f.name);
+        // Find & mark the actual matched key so we don't double-render it later
+        const matchedOrigKey = filledDataNormMap[normF] || f.name;
+        renderedOrigKeys.add(matchedOrigKey);
+        renderedOrigKeys.add(f.name);
+
+        if (!isValMissing(val) && f.label && f.label.trim() !== '') {
+            displayFields.push({ label: f.label, value: val });
         }
     });
 
-    // Finally, process any leftover keys in filledData (dynamic fields from LLM)
-    Object.entries(filledData).forEach(([key, val]) => {
-        if (!processedKeys.has(key) && !isValMissing(val)) {
-            displayFields.push({
-                label: key.charAt(0).toUpperCase() + key.slice(1).replace(/_/g, ' '),
-                value: val
-            });
+    // 2. Smart sections — show if not already rendered by template fields
+    smartSections.forEach(section => {
+        const normSection = normalizeKey(section.key);
+        const matchedOrigKey = filledDataNormMap[normSection];
+        if (matchedOrigKey && renderedOrigKeys.has(matchedOrigKey)) return;
+
+        const val = getFieldVal(section.key);
+        if (!isValMissing(val)) {
+            displayFields.push({ label: section.label, value: val });
+            if (matchedOrigKey) renderedOrigKeys.add(matchedOrigKey);
+            renderedOrigKeys.add(section.key);
         }
+    });
+
+    // 3. Catch-all: render any remaining filled_data keys not yet shown
+    Object.entries(filledData).forEach(([key, val]) => {
+        if (renderedOrigKeys.has(key)) return;
+        if (isValMissing(val)) return;
+        // Skip purely numeric or blank keys
+        const derivedLabel = key.trim().replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+        if (!derivedLabel.trim()) return;
+        displayFields.push({ label: derivedLabel, value: val });
     });
     
     const hasAnything = !!placeVisited || displayFields.length > 0;
+    const totalFilledKeys = Object.keys(filledData).filter(k => !isValMissing(filledData[k])).length;
 
     return (
         <div className="min-h-screen bg-gray-50/50">
@@ -338,7 +366,9 @@ export default function ReportDetail() {
                                         </div>
                                     )}
                                     {/* Template fields that have a real value */}
-                                    {displayFields.map((field: { label: string; value: any }, index: number) => (
+                                    {displayFields
+                                        .filter(field => field.label && field.label.trim() !== '')
+                                        .map((field: { label: string; value: any }, index: number) => (
                                         <div key={`${field.label}-${index}`}>
                                             <h3 className="text-xs font-semibold text-gray-400 mb-1 uppercase tracking-wider">
                                                 {field.label}
@@ -348,6 +378,25 @@ export default function ReportDetail() {
                                             </p>
                                         </div>
                                     ))}
+                                    {/* Debug info: show raw keys if template fields matched nothing */}
+                                    {placeVisited && displayFields.length === 0 && totalFilledKeys > 1 && (
+                                        <div className="mt-4 space-y-3">
+                                            {Object.entries(filledData)
+                                                .filter(([k]) => normalizeKey(k) !== 'placevisited' && normalizeKey(k) !== 'lugarvisitado')
+                                                .filter(([, v]) => !isValMissing(v))
+                                                .map(([key, val], idx) => (
+                                                    <div key={idx}>
+                                                        <h3 className="text-xs font-semibold text-gray-400 mb-1 uppercase tracking-wider">
+                                                            {key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}
+                                                        </h3>
+                                                        <p className="text-gray-700 text-[15px] leading-relaxed whitespace-pre-wrap">
+                                                            {Array.isArray(val) ? (val as any[]).join(', ') : String(val)}
+                                                        </p>
+                                                    </div>
+                                                ))
+                                            }
+                                        </div>
+                                    )}
                                     {/* Empty state */}
                                     {!hasAnything && (
                                         <div className="flex flex-col items-center py-6 text-center">

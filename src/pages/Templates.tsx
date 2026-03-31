@@ -245,38 +245,98 @@ export default function Templates() {
 
       {/* TEMPLATE CARDS */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mt-10">
-        {filteredTemplates.map((template) => (
-          <Card key={template.id}>
-            <CardHeader>
-              <div className="flex justify-between">
+        {filteredTemplates.map((template) => {
+          const customFields = (template.fields as TemplateField[]).filter(
+            (f) => f.name !== "place_visited"
+          );
+          return (
+            <Card key={template.id} className="border-gray-200 shadow-sm hover:shadow-md transition-shadow duration-200">
+              <CardHeader className="pb-3">
+                <div className="flex justify-between items-start gap-2">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap mb-1">
+                      <CardTitle className="text-base font-bold text-gray-900 leading-tight">{template.name}</CardTitle>
+                      {template.is_default && (
+                        <Badge className="text-[10px] px-2 py-0.5 bg-brand-primary-50 text-brand-primary-700 border border-brand-primary-200 rounded-full font-semibold">
+                          Predeterminada
+                        </Badge>
+                      )}
+                    </div>
+                    <CardDescription className="text-xs text-gray-400">
+                      Creada el {format(new Date(template.created_at), "PP", { locale: es })}
+                      {template.template_type && template.template_type !== "regular" && (
+                        <span className="ml-2 capitalize text-brand-primary-500 font-medium">· {template.template_type}</span>
+                      )}
+                    </CardDescription>
+                  </div>
+                  <div className="flex gap-1 flex-shrink-0">
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => openEditDialog(template)}
+                      className="h-8 w-8 p-0 text-gray-500 hover:text-gray-800 hover:bg-gray-100"
+                    >
+                      <Edit className="h-3.5 w-3.5" />
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => handleDelete(template.id)}
+                      className="h-8 w-8 p-0 text-red-400 hover:text-red-600 hover:bg-red-50"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent className="pt-0 pb-4 px-6 space-y-3">
+                {/* Description */}
+                {template.description && (
+                  <p className="text-sm text-gray-500 leading-snug line-clamp-2">{template.description}</p>
+                )}
+
+                {/* Place visited — always present */}
                 <div>
-                  <CardTitle>{template.name}</CardTitle>
-                  {template.is_default && <Badge>Predeterminada</Badge>}
+                  <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-1.5 flex items-center gap-1">
+                    <MapPin className="h-3 w-3" /> Campo del Sistema
+                  </p>
+                  <span className="inline-flex items-center gap-1 text-xs font-medium bg-brand-primary-50 text-brand-primary-700 border border-brand-primary-200 rounded-full px-2.5 py-0.5">
+                    📍 Lugar Visitado
+                  </span>
                 </div>
-                <div className="flex gap-2">
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={() => openEditDialog(template)}
-                  >
-                    <Edit className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={() => handleDelete(template.id)}
-                    className="text-red-600"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
+
+                {/* Custom fields */}
+                {customFields.length > 0 ? (
+                  <div>
+                    <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-1.5">
+                      Campos Personalizados ({customFields.length})
+                    </p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {customFields.map((f, i) => (
+                        <span
+                          key={i}
+                          className="inline-flex items-center text-xs text-gray-600 bg-gray-100 border border-gray-200 rounded-full px-2.5 py-0.5 font-medium"
+                        >
+                          {f.label || f.name}
+                          {f.required && <span className="ml-1 text-red-400 text-[10px]">*</span>}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-xs text-gray-400 italic">Solo extracción inteligente automática</p>
+                )}
+
+                {/* Smart auto-extracted fields note */}
+                <div className="pt-1 border-t border-gray-100">
+                  <p className="text-[10px] text-gray-400">
+                    + 6 secciones auto-extraídas (Novedades, Ventas, Stock, Objeciones, Próximos Pasos, Sugerencias)
+                  </p>
                 </div>
-              </div>
-              <CardDescription>
-                Creada el {format(new Date(template.created_at), "PP", { locale: es })}
-              </CardDescription>
-            </CardHeader>
-          </Card>
-        ))}
+              </CardContent>
+            </Card>
+          );
+        })}
       </div>
 
       {/* DIALOG */}
